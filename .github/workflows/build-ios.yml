@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Builds an UNSIGNED iOS .ipa on a GitHub-hosted macOS runner.
+# Download the artifact and sign/install it with Sideloadly or AltStore.
+#
+# This file must live at <repo>/.github/workflows/build-ios.yml.
+name: Build iOS (unsigned IPA)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "ios-*"
+
+jobs:
+  build:
+    name: Build iOS arm64
+    runs-on: macos-14
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          brew install cmake swig
+          python3 -m pip install --user aqtinstall
+
+      - name: Cache Qt and native dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Qt/6.8.3/ios
+            ios-deps
+          key: fk-ios-deps-${{ runner.os }}-qt683-openssl351-git2-197-v1
+
+      - name: Install Qt for iOS
+        run: |
+          if [ ! -x "$HOME/Qt/6.8.3/ios/bin/qt-cmake" ]; then
+            python3 -m aqt install-qt mac ios 6.8.3 ios \
+              -m qtmultimedia qt5compat qtshadertools -O "$HOME/Qt"
+          fi
+
+      - name: Build Lua / OpenSSL / libgit2
+        run: bash scripts/build_deps.sh --prefix "$PWD/ios-deps"
+
+      - name: Build app and package unsigned IPA
+        run: bash scripts/build_ios.sh --qt "$HOME/Qt/6.8.3/ios" --deps "$PWD/ios-deps"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: xinyuesha-ios-unsigned
+          path: build-ios/ipa/*.ipa
+          if-no-files-found: error
+          retention-days: 30

@@ -7,7 +7,7 @@
 cmake_minimum_required(VERSION 3.22)
 
 project(FreeKill VERSION 0.5.25)
-if (IOS)
+if (IOS OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
   # src/platform/ioshelper.mm is Objective-C++.
   enable_language(OBJCXX)
 endif()

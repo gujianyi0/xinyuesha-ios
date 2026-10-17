@@ -265,22 +265,23 @@ elseif (IOS)
   set(LUA_LIB "${FK_IOS_DEPS}/lib/liblua54.a")
   set(CRYPTO_LIB "${FK_IOS_DEPS}/lib/libcrypto.a")
   set(SSL_LIB "${FK_IOS_DEPS}/lib/libssl.a")
-  find_library(FK_SQLITE3 sqlite3 REQUIRED)
-  find_library(FK_ZLIB z REQUIRED)
-  find_library(FK_ICONV iconv REQUIRED)
-  set(SQLITE3_LIB "${FK_SQLITE3}")
+  # iOS SDK provides sqlite3, zlib and iconv as system stubs; -l names are
+  # resolved against the iPhoneOS SDK selected by the Qt toolchain.
+  set(SQLITE3_LIB sqlite3)
+  set(FK_ZLIB z)
+  set(FK_ICONV iconv)
   set(GIT_LIB "${FK_IOS_DEPS}/lib/libgit2.a;${FK_ZLIB};${FK_ICONV}")
   set(READLINE_LIB "")
-  find_library(FK_AVFOUNDATION AVFoundation REQUIRED)
-  find_library(FK_UIKIT UIKit REQUIRED)
-  find_library(FK_FOUNDATION Foundation REQUIRED)
-  find_library(FK_AUDIOTOOLBOX AudioToolbox REQUIRED)
-  find_library(FK_COREAUDIO CoreAudio REQUIRED)
-  find_library(FK_COREFOUNDATION CoreFoundation REQUIRED)
-  find_library(FK_SECURITY Security REQUIRED)
+  # Linking "-framework X" as two list items is more reliable than
+  # find_library() when cross-compiling from a macOS host to iOS.
   set(IOS_FRAMEWORKS
-    "${FK_AVFOUNDATION}" "${FK_UIKIT}" "${FK_FOUNDATION}" "${FK_AUDIOTOOLBOX}"
-    "${FK_COREAUDIO}" "${FK_COREFOUNDATION}" "${FK_SECURITY}")
+    -framework AVFoundation
+    -framework UIKit
+    -framework Foundation
+    -framework AudioToolbox
+    -framework CoreAudio
+    -framework CoreFoundation
+    -framework Security)
   include_directories("${FK_IOS_DEPS}/include")
   include_directories("${FK_IOS_DEPS}/include/lua")
 elseif (APPLE)
