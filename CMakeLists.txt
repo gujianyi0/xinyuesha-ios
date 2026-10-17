@@ -129,6 +129,12 @@ if (IOS)
   # -------------------------------------------------------------------------
   # iOS application bundle
   # -------------------------------------------------------------------------
+  # Qt's multimedia FFmpeg backend on iOS ships as dynamic xcframeworks
+  # inside the Qt installation. This helper links them and adds an Xcode
+  # "Embed Frameworks" phase (rpath @executable_path/Frameworks).
+  if (COMMAND qt6_add_ios_ffmpeg_libraries)
+    qt6_add_ios_ffmpeg_libraries(FreeKill)
+  endif()
   set(FK_IOS_BUNDLE_ID "com.cui.freekill.ios" CACHE STRING "iOS bundle identifier")
   set(FK_IOS_DEPLOYMENT_TARGET "16.0" CACHE STRING "Minimum iOS version")
 
