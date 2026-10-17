@@ -69,6 +69,7 @@ rm -rf "$BUILD"
   -DCMAKE_OSX_ARCHITECTURES=arm64 \
   -DCMAKE_OSX_DEPLOYMENT_TARGET="$MIN_IOS" \
   -DQT_HOST_PATH="$QT_HOST_PATH" \
+  -DQT_NO_FFMPEG_XCODE_EMBED_FRAMEWORKS_CODE_SIGN_ON_COPY=ON \
   -DFK_IOS_DEPS="$DEPS" \
   -DFK_IOS_DEPLOYMENT_TARGET="$MIN_IOS" \
   -DFK_IOS_BUNDLE_ID="$BUNDLE_ID"
@@ -91,6 +92,16 @@ fi
 APP="$(find "$BUILD" -type d -name 'FreeKill.app' -prune -print | head -n 1)"
 [[ -n "$APP" ]] || { echo "ERROR: FreeKill.app not found under $BUILD" >&2; exit 1; }
 echo "==> App bundle: $APP"
+
+# The Qt FFmpeg xcframeworks are dynamic; Xcode embeds them but code signing
+# is disabled for this unsigned build. Ad-hoc sign them so the bundle is
+# internally consistent; Sideloadly replaces the signature with the Apple ID
+# certificate when installing.
+if [[ -d "$APP/Frameworks" ]]; then
+  while IFS= read -r -d '' fw; do
+    /usr/bin/codesign --force --sign - "$fw" >/dev/null 2>&1 || echo "warning: ad-hoc codesign failed for $fw" >&2
+  done < <(find "$APP/Frameworks" -maxdepth 1 -name '*.framework' -print0)
+fi
 
 bash "$ROOT/scripts/verify_app.sh" "$APP"
 
