@@ -1,0 +1,11 @@
+module Fk
+singleton Config 1.0 Config.qml
+singleton Cpp 1.0 Cpp.qml
+singleton Lua 1.0 Lua.qml
+singleton App 1.0 App.qml
+singleton RoomInvites 1.0 RoomInvites.qml
+singleton Backend 1.0 Backend.qml
+singleton TitleBank 1.0 TitleBank.qml
+singleton Mediator 1.0 Mediator.qml
+ToastManager 1.0 ToastManager.qml
+Toast 1.0 Toast.qml

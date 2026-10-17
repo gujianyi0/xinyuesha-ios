@@ -1,0 +1,38 @@
+* text=auto
+
+# Scripts must keep LF so macOS can execute them.
+*.sh text eol=lf
+*.lua text eol=lf
+*.qml text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.i text eol=lf
+*.storyboard text eol=lf
+*.plist text eol=lf
+*.in text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.txt text eol=lf
+*.sql text eol=lf
+*.json text eol=lf
+*.cmake text eol=lf
+*.ts text eol=lf
+
+# Binary assets: never normalize
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.mp3 binary
+*.ogg binary
+*.wav binary
+*.ttf binary
+*.ttc binary
+*.woff binary
+*.woff2 binary
+*.otf binary
+*.qm binary
+*.db binary
+*.zip binary
+*.7z binary

@@ -1,0 +1,15 @@
+module Fk.Pages.Common
+
+Init 1.0 Init.qml
+Tutorial 1.0 Tutorial.qml
+
+About 1.0 About.qml
+ModesOverview 1.0 ModesOverview.qml
+PackageManage 1.0 PackageManage.qml
+PackageDownload 1.0 PackageDownload.qml
+ResourcePackManage 1.0 ResourcePackManage.qml
+WaitingRoom 1.0 WaitingRoom.qml
+RoomPage 1.0 RoomPage.qml
+RoomInfoContainer 1.0 RoomInfoContainer.qml
+RoomOverlay 1.0 RoomOverlay.qml
+RoomMediaBg 1.0 RoomMediaBg.qml

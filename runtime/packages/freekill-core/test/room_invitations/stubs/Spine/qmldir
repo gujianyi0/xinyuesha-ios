@@ -1,0 +1,3 @@
+module Spine
+SkeletonAnimation 1.0 SkeletonAnimation.qml
+singleton SpineVersion 1.0 SpineVersion.qml

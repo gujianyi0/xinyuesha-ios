@@ -1,0 +1,259 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+import QtQuick
+import QtQml.WorkerScript
+
+QtObject {
+  id: api
+  readonly property string defaultEndpoint: "https://freekill-friends.pages.dev"
+  property string endpoint: defaultEndpoint
+  property string token: ""
+  property string recoveryCode: ""
+  property string accountKey: "" // Memory only: never persisted, displayed or logged.
+  property string credentialScope: ""
+  property int credentialGeneration: 0
+  property bool deriving: false
+  property bool accountBound: false
+  property bool accountConnected: false
+  property bool authenticating: false
+  property string inviteMode: ""
+  property bool policyReady: false
+  property string profileKey: ""
+  property string generationKey: profileKey + "|" + endpoint + "|" + token
+  property bool enabled: false
+  property bool busy: false
+  property bool presenceDirty: false
+  onBusyChanged: if (!busy && enabled && context.valid) {
+    if (accountKey && !accountConnected && !authenticating) Qt.callLater(connectService);
+    else if (presenceDirty && token) Qt.callLater(refresh);
+  }
+  property string error: ""
+  property var context: ({ valid: false, state: "offline", server: "", gameId: 0, roomId: 0, roomName: "" })
+  property var me: ({})
+  property var friends: []
+  property var requests: []
+  property var invitations: []
+  property var calls: []
+  property var readProfile: function(key) { return {}; }
+  property var writeProfile: function(key, value) {}
+  signal roomAccepted(var target)
+  signal message(string text)
+  signal identityCreated()
+  signal identityRestored()
+  signal policyUpdated()
+
+  function validEndpoint(value) {
+    return /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:[0-9]{1,5})?$/.test(value) ||
+      /^https:\/\/[a-zA-Z0-9.\-\[\]:]+(\/[a-zA-Z0-9._~%\/-]*)?$/.test(value);
+  }
+  function clearSession() {
+    presenceDirty = false;
+    for (const entry of calls) entry.xhr.abort();
+    calls = []; busy = false; token = ""; recoveryCode = ""; me = ({});
+    credentialGeneration++; credentialScope = ""; accountKey = ""; deriving = false;
+    accountBound = false; accountConnected = false; authenticating = false;
+    inviteMode = ""; policyReady = false;
+    friends = []; requests = []; invitations = []; error = "";
+  }
+  function bind(value) {
+    const changed = context.server !== value.server || context.gameId !== value.gameId ||
+      context.state !== value.state || context.roomId !== value.roomId || context.valid !== value.valid;
+    const key = value.valid ? value.server + "/" + value.gameId : "";
+    if (key !== profileKey) {
+      // Invalidate callbacks before aborting requests from the previous account.
+      profileKey = key;
+      clearSession(); enabled = false;
+      if (key) {
+        const saved = readProfile(key) || {};
+        const previousEndpoint = saved.endpoint || "";
+        // This published service contains the migrated local identities.
+        // Preserve tokens only for that known migration; custom services stay separate.
+        const migratedService = /^http:\/\/(127\.0\.0\.1|localhost):19528\/?$/.test(previousEndpoint) ||
+          previousEndpoint === "https://freekill-friends.c2115259095.workers.dev";
+        endpoint = !previousEndpoint || migratedService ? defaultEndpoint : previousEndpoint;
+        token = saved.token || "";
+        recoveryCode = saved.recoveryCode || "";
+        enabled = saved.enabled !== false;
+        accountBound = saved.accountBound === true;
+        inviteMode = ["original","friends","none"].indexOf(saved.inviteMode) >= 0 ? saved.inviteMode : "";
+      }
+    }
+    context = value;
+    if (key && endpoint === defaultEndpoint) persist();
+    if (changed) {
+      presenceDirty = true;
+      if (enabled && token && value.valid) Qt.callLater(refresh);
+    }
+  }
+  function persist() {
+    if (profileKey) writeProfile(profileKey, {endpoint: endpoint, token: token, recoveryCode: recoveryCode, enabled: enabled, accountBound: accountBound, inviteMode: inviteMode});
+  }
+  function applyMe(value) {
+    if (!value || !value.id) return;
+    inviteMode = ["original","friends","none"].indexOf(value.inviteMode) >= 0 ? value.inviteMode : value.blocked === 1 ? "none" : "original";
+    policyReady = true; me = value; persist(); policyUpdated();
+  }
+  function setInvitationMode(mode, blocked, callback) {
+    action("settings", {inviteMode:mode, blocked:blocked}, function(data) {
+      if (data.me) applyMe(data.me);
+      if (callback) callback();
+    });
+  }
+  function setCredentials(server, username, password) {
+    if (!context.valid || endpoint !== defaultEndpoint || !username || !password) return;
+    // The authenticated game account ID also separates local profiles. Never use
+    // a public nickname or game ID as a social authentication secret.
+    const scope = profileKey + "|" + username;
+    if (credentialScope === scope) return;
+    credentialScope = scope; credentialGeneration++; deriving = true;
+    authWorker.sendMessage({generation:credentialGeneration, server:server,
+      username:username, password:password});
+  }
+  property WorkerScript authWorker: WorkerScript {
+    source: Qt.resolvedUrl("SocialAuth.js")
+    onMessage: function(message) {
+      if (message.generation !== api.credentialGeneration) return;
+      api.deriving = false;
+      if (message.error) { api.error = "账号好友身份认证失败，请重试或使用恢复码"; api.credentialScope = ""; return; }
+      api.accountKey = message.key;
+      if (api.enabled) api.connectService();
+    }
+  }
+  function configure(url) {
+    url = url.trim().replace(/\/$/, "");
+    if (!validEndpoint(url)) { error = "请输入 HTTPS 服务地址；本机测试可用 http://127.0.0.1:19528"; return false; }
+    if (url !== endpoint) {
+      endpoint = url; clearSession(); enabled = false; persist();
+    }
+    return true;
+  }
+  function call(method, path, payload, callback, anonymous) {
+    if (!validEndpoint(endpoint)) { error = "好友服务地址不正确"; return; }
+    const key = generationKey;
+    const request = new XMLHttpRequest();
+    const entry = {xhr: request, deadline: Date.now() + 10000};
+    calls = calls.concat([entry]); busy = true;
+    request.onreadystatechange = function() {
+      if (request.readyState !== XMLHttpRequest.DONE) return;
+      calls = calls.filter(item => item !== entry); busy = calls.length > 0;
+      if (key !== generationKey) return;
+      let data = {};
+      try { data = JSON.parse(request.responseText || "{}"); } catch (_) {}
+      if (request.status < 200 || request.status >= 300) {
+        if (path === "/v1/accounts/login") authenticating = false;
+        error = data.error || "暂时连不上好友服务，请检查地址或服务是否启动";
+        if (request.status === 401) {
+          token = ""; accountConnected = false; friends = []; requests = []; invitations = []; me = ({});
+          if (!accountKey) enabled = false;
+          persist();
+        }
+        return;
+      }
+      error = "";
+      if (callback) callback(data);
+    };
+    request.open(method, endpoint + path);
+    if (!anonymous && token) request.setRequestHeader("Authorization", "Bearer " + token);
+    if (method === "POST") request.setRequestHeader("Content-Type", "application/json");
+    request.send(method === "POST" ? JSON.stringify(payload || {}) : "");
+  }
+  function connectService() {
+    if (!context.valid || busy || deriving) return;
+    enabled = true;
+    if (endpoint === defaultEndpoint && accountKey && !accountConnected) {
+      authenticating = true;
+      call("POST", "/v1/accounts/login", {key:accountKey, name:context.name || "新月杀玩家"}, function(data) {
+        token = data.token; applyMe(data.me); accountBound = true; accountConnected = true; authenticating = false;
+        persist(); identityRestored(); refresh();
+      });
+      return;
+    }
+    if (token) { persist(); refresh(); return; }
+    if (recoveryCode.length === 32) { linkDevice(recoveryCode); return; }
+    if (endpoint === defaultEndpoint) { error = "请先登录游戏账号；也可使用已有恢复码恢复好友"; return; }
+    call("POST", "/v1/register", {name: context.name || "新月杀玩家"}, function(data) {
+      token = data.token; applyMe(data.me); recoveryCode = data.recoveryCode || ""; accountConnected = false;
+      persist(); if (recoveryCode) identityCreated(); refresh();
+    }, true);
+  }
+  function pauseService() {
+    if (token && context.valid)
+      call("POST", "/v1/presence", Object.assign({}, context, {state: "offline", roomId: 0}), null);
+    enabled = false; friends = []; requests = []; invitations = []; persist();
+  }
+  function refresh() {
+    if (!enabled || !token || !context.valid || busy) return;
+    presenceDirty = false;
+    const presence = {server: context.server, gameId: context.gameId, state: context.state,
+      roomId: context.roomId, roomName: context.roomName};
+    const receive = function(data) {
+      applyMe(data.me); friends = data.friends || []; requests = data.requests || [];
+      invitations = data.invitations || [];
+    };
+    if (endpoint === defaultEndpoint) call("POST", "/v1/sync", presence, receive);
+    else call("POST", "/v1/presence", presence, function() {
+      call("GET", "/v1/state", null, receive);
+    });
+  }
+  function action(path, payload, callback) {
+    if (!enabled || !token || busy) return;
+    const perform = function() {
+      call("POST", "/v1/" + path, payload, function(data) {
+        if (callback) callback(data);
+        refresh();
+      });
+    };
+    if (path.indexOf("invitations") === 0) {
+      // Sync current room/game state before deciding where an invitation leads.
+      presenceDirty = false;
+      call("POST", "/v1/presence", {server:context.server, gameId:context.gameId,
+        state:context.state, roomId:context.roomId, roomName:context.roomName}, perform);
+    } else perform();
+  }
+  function addFriend(code) {
+    action("friends/request", {code: code.trim().toUpperCase()}, function() { message("好友申请已发送"); });
+  }
+  function respondRequest(id, accept) { action("friends/respond", {id: id, accept: accept}); }
+  function invite(friendId) { action("invitations", {friendId: friendId}, function() { message("邀请已发送，有效期 60 秒"); }); }
+  function respondInvite(id, accept) {
+    if (accept && context.state === "playing") { error = "请结束当前对局后再加入，邀请不会中断当前游戏"; return; }
+    action("invitations/respond", {id: id, accept: accept}, function(data) {
+      if (accept) roomAccepted(Object.assign({}, data, {profileKey: profileKey}));
+    });
+  }
+  function deviceCode() {
+    action("devices/code", {}, function(data) { message("迁移码：" + data.code + "（5 分钟内使用，请勿发给他人）"); });
+  }
+  function ensureRecoveryCode() {
+    if (recoveryCode || !token || busy) return;
+    action("recovery/code", {}, function(data) { recoveryCode = data.code; persist(); });
+  }
+  function linkDevice(code) {
+    if (busy || !context.valid) return;
+    code = code.trim().replace(/[\s-]/g, "").toUpperCase();
+    const permanent = /^[A-F0-9]{32}$/.test(code);
+    call("POST", permanent ? "/v1/recovery/restore" : "/v1/devices/link", {code: code}, function(data) {
+      token = data.token; applyMe(data.me); recoveryCode = data.recoveryCode || ""; accountConnected = false;
+      enabled = true; persist(); identityRestored();
+      if (accountKey && endpoint === defaultEndpoint) connectService(); else refresh();
+    }, true);
+  }
+  property Timer poll: Timer {
+    interval: api.endpoint === api.defaultEndpoint ? 15000 : 5000; repeat: true; running: api.enabled && api.token !== "" && api.context.valid
+    onTriggered: api.refresh()
+  }
+  property Timer accountRetry: Timer {
+    interval: 15000; repeat: true; running: api.enabled && api.context.valid && api.accountKey !== "" && !api.accountConnected
+    onTriggered: api.connectService()
+  }
+  property Timer watchdog: Timer {
+    interval: 500; repeat: true; running: api.calls.length > 0
+    onTriggered: {
+      const expired = api.calls.filter(item => item.deadline < Date.now());
+      for (const entry of expired) entry.xhr.abort();
+      api.calls = api.calls.filter(item => item.deadline >= Date.now());
+      api.busy = api.calls.length > 0;
+      if (expired.length) api.error = "好友服务请求超时，请稍后重试";
+      if (expired.length) api.authenticating = false;
+    }
+  }
+}

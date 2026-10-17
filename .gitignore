@@ -1,0 +1,17 @@
+# Build outputs
+build-ios/
+build-deps/
+ios-deps/
+build-check/
+DerivedData/
+*.ipa
+*.app/
+*.xcarchive
+*.dSYM/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/

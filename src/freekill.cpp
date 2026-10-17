@@ -1,0 +1,625 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#include "client/client.h"
+#include "core/util.h"
+#include "core/c-wrapper.h"
+using namespace fkShell;
+
+#include "core/packman.h"
+#include "server/server.h"
+#include "server/cli/shell.h"
+
+#if defined(Q_OS_WIN32)
+#include <windows.h>
+#include "applink.c"
+#endif
+
+#ifndef FK_SERVER_ONLY
+ #include <QFileDialog>
+ #include <QScreen>
+ #include <QMediaPlayer>
+ #include <QSplashScreen>
+ #include <QtQuick/QQuickWindow>
+ #include <QSurfaceFormat>
+ #ifndef Q_OS_ANDROID
+  #include <QQuickStyle>
+ #else
+  // #include <QNativeInterface>
+ #endif
+ #include "ui/qmlbackend.h"
+ #include "ui/spine/spineregister.h"
+#ifdef Q_OS_IOS
+ #include "platform/ioshelper.h"
+#endif
+#endif
+
+#include <QStandardPaths>
+#include <QTextStream>
+
+#if defined(Q_OS_ANDROID) || defined(Q_OS_IOS)
+static bool copyPath(const QString &srcFilePath, const QString &tgtFilePath) {
+  QFileInfo srcFileInfo(srcFilePath);
+  if (srcFileInfo.isDir()) {
+    QDir targetDir(tgtFilePath);
+    if (!targetDir.exists()) {
+      targetDir.cdUp();
+      if (!targetDir.mkdir(QFileInfo(tgtFilePath).fileName()))
+        return false;
+    }
+    QDir sourceDir(srcFilePath);
+    QStringList fileNames =
+        sourceDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot |
+                            QDir::Hidden | QDir::System);
+    for (const QString &fileName : fileNames) {
+      const QString newSrcFilePath = srcFilePath + QLatin1Char('/') + fileName;
+      const QString newTgtFilePath = tgtFilePath + QLatin1Char('/') + fileName;
+      if (!copyPath(newSrcFilePath, newTgtFilePath))
+        return false;
+    }
+  } else {
+    QFile::remove(tgtFilePath);
+    if (!QFile::copy(srcFilePath, tgtFilePath))
+      return false;
+  }
+  return true;
+}
+#endif
+
+#ifdef Q_OS_IOS
+// Copy a tree, optionally skipping files that already have the same size.
+// The resume mode is used only for a first/partial install (no fk_ver marker
+// yet): if iOS kills the app during the initial copy, the next launch skips
+// the files that made it to disk. Updates always do a full overwrite.
+static bool copyPathIOS(const QString &src, const QString &dst, bool resume) {
+  const QFileInfo srcInfo(src);
+  if (srcInfo.isDir()) {
+    if (!QDir().mkpath(dst)) return false;
+    const QDir dir(src);
+    const QStringList entries = dir.entryList(
+        QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System);
+    for (const QString &name : entries) {
+      if (!copyPathIOS(src + QLatin1Char('/') + name,
+                       dst + QLatin1Char('/') + name, resume))
+        return false;
+    }
+    return true;
+  }
+  if (resume) {
+    const QFileInfo dstInfo(dst);
+    if (dstInfo.exists() && dstInfo.size() == srcInfo.size())
+      return true;
+  }
+  QFile::remove(dst);
+  return QFile::copy(src, dst);
+}
+
+// Copy everything except fk_ver first, and the version marker last. If the
+// process is killed halfway (or the device runs out of space), the old marker
+// remains and the next launch retries the copy instead of trusting a partial
+// install.
+static bool installFkAssetsIOS(const QString &src, const QString &dest) {
+  if (!QDir().mkpath(dest)) {
+    qWarning("iOS assets: cannot create %s", qUtf8Printable(dest));
+    return false;
+  }
+  const bool resume = !QFile::exists(dest + QLatin1String("/fk_ver"));
+  const QDir sourceDir(src);
+  const QStringList entries = sourceDir.entryList(
+      QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System);
+  for (const QString &name : entries) {
+    if (name == QLatin1String("fk_ver")) continue;
+    const QString from = src + QLatin1Char('/') + name;
+    const QString to = dest + QLatin1Char('/') + name;
+    if (!copyPathIOS(from, to, resume)) {
+      qWarning("iOS assets: failed to copy %s", qUtf8Printable(from));
+      return false;
+    }
+  }
+  const QString marker = src + QLatin1String("/fk_ver");
+  if (!copyPathIOS(marker, dest + QLatin1String("/fk_ver"), false)) {
+    qWarning("iOS assets: failed to copy fk_ver");
+    return false;
+  }
+  qInfo("iOS assets: installed %s", qUtf8Printable(dest));
+  return true;
+}
+#endif
+
+static void installFkAssets(const QString &src, const QString &dest) {
+  QFile f(dest + "/fk_ver");
+  if (f.exists() && f.open(QIODevice::ReadOnly)) {
+    auto ver = f.readLine().simplified();
+    if (ver == FK_VERSION) {
+      return;
+    }
+  }
+#ifdef Q_OS_ANDROID
+  copyPath(src, dest);
+#elif defined(Q_OS_IOS)
+  installFkAssetsIOS(src, dest);
+#elif defined(Q_OS_LINUX)
+  system(QString("cp -r %1 %2/..").arg(src).arg(dest).toUtf8());
+#endif
+}
+
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+#include <stdlib.h>
+#include <unistd.h>
+static void prepareForLinux() {
+  // 如果用户执行的是 /usr/bin/FreeKill，那么这意味着 freekill 是被包管理器安装
+  // 的，所以我们就需要把资源文件都复制到 ~/.local 中，并且切换当前目录
+  // TODO: AppImage
+  char buf[256] = {0};
+  int len = readlink("/proc/self/exe", buf, 256);
+  const char *home = getenv("HOME");
+  if (!strcmp(buf, "/usr/bin/FreeKill")) {
+    system("mkdir -p ~/.local/share/FreeKill");
+    installFkAssets("/usr/share/FreeKill", QString("%1/.local/share/FreeKill").arg(home));
+    chdir(home);
+    chdir(".local/share/FreeKill");
+  } else if (!strcmp(buf, "/usr/local/bin/FreeKill")) {
+    system("mkdir -p ~/.local/share/FreeKill");
+    installFkAssets("/usr/local/share/FreeKill", QString("%1/.local/share/FreeKill").arg(home));
+    chdir(home);
+    chdir(".local/share/FreeKill");
+  }
+}
+#endif
+
+static std::unique_ptr<QFile> log_file(nullptr);
+
+void fkMsgHandler(QtMsgType type, const QMessageLogContext &context,
+                  const QString &msg) {
+  auto date = QDate::currentDate();
+
+  std::unique_ptr<QTextStream> ofs(nullptr);
+  if (log_file && log_file->isOpen())
+    ofs.reset(new QTextStream(log_file.get()));
+
+#ifdef FK_USE_READLINE
+  if (ShellInstance) ShellInstance->clearLine();
+#else
+  printf("\r");
+#endif
+
+  auto threadName = QThread::currentThread()->objectName();
+  QString levelMark = "D";
+  const char *levelMarkNoColor = "D";
+
+  switch (type) {
+  case QtDebugMsg:
+    break;
+  case QtInfoMsg:
+    levelMark = Color("I", Green);
+    levelMarkNoColor = "I";
+    break;
+  case QtWarningMsg:
+    levelMark = Color("W", Yellow, Bold);
+    levelMarkNoColor = "W";
+    break;
+  case QtCriticalMsg:
+    levelMark = Color("C", Red, Bold);
+    levelMarkNoColor = "C";
+#ifndef FK_SERVER_ONLY
+    if (Backend != nullptr) {
+      Backend->notifyUI("ErrorDialog",
+          QString("⛔ %1/Error occured!\n  %2").arg(threadName).arg(msg));
+    }
+#endif
+    break;
+  case QtFatalMsg:
+    levelMark = Color("E", Red, Bold);
+    levelMarkNoColor = "E";
+    break;
+  }
+
+  auto dateStr = QString::asprintf("%02d-%02d-%02d", date.year(), date.month(), date.day());
+  auto timeStr = QTime::currentTime().toString("hh:mm:ss.zzz");
+#ifndef Q_OS_WIN32
+  QTextStream out(stdout);
+  out << dateStr << " " << timeStr << " " << threadName <<
+    "[" << levelMark << "] " << msg << Qt::endl;
+#else
+  // Use UTF-8 for Windows console
+  printf("%s %s %s[%s] %s\n", qUtf8Printable(dateStr),
+         qUtf8Printable(timeStr), qUtf8Printable(threadName),
+         qUtf8Printable(levelMark), qUtf8Printable(msg));
+  fflush(stdout);
+#endif
+  if (ofs)
+    *ofs << dateStr << " " << timeStr << " " << threadName <<
+      "[" << levelMarkNoColor << "] " << msg << Qt::endl;
+
+#ifdef FK_USE_READLINE
+  if (ShellInstance && !ShellInstance->lineDone()) {
+    ShellInstance->redisplay();
+  }
+#endif
+}
+
+#ifndef FK_SERVER_ONLY
+static QQmlApplicationEngine *engine = nullptr;
+#endif
+
+static void cleanUpGlobalStates() {
+#ifndef FK_SERVER_ONLY
+  if (engine) delete engine;
+  if (Backend) delete Backend;
+#endif
+
+  if (ClientInstance) delete ClientInstance;
+  // if (ServerInstance) delete ServerInstance;
+  if (ShellInstance) delete ShellInstance;
+  if (Pacman) delete Pacman;
+
+  qInstallMessageHandler(nullptr);
+  qApp->deleteLater();
+}
+
+static int runSkillTest(const QString &val, const QString &filepath) {
+  Pacman = new PackMan;
+  auto L = new Lua;
+  L->eval("__os = os; __io = io; __package = package; __dofile = dofile"); // 保存一下
+
+  QString script;
+
+  bool using_core = false;
+  if (Pacman->shouldUseCore()) {
+    using_core = true;
+    QDir::setCurrent("packages/freekill-core");
+  }
+  int ret = 1;
+  if (!L->dofile("lua/freekill.lua")) goto RET;
+  if (using_core) QDir::setCurrent("../..");
+
+  if (val == "") {
+    if (filepath != "") {
+      QString fp = filepath;
+      fp.replace("\\", "\\\\");
+      script = QStringLiteral(
+        R"(
+        local skels = { __dofile('%1') }
+        skels = table.map(skels, function(skel)
+          local skill = Skill:new(skel.name)
+          return string.format('Test%s', skill.name)
+        end)
+        return lu.LuaUnit.run(table.unpack(skels))
+      )").arg(fp);
+    } else {
+      script = QStringLiteral("return lu.LuaUnit.run()");
+    }
+  } else {
+    auto splitted = QStringList();
+    for (auto s : val.split(',')) {
+      splitted << ("\"Test" + s + '"');
+    }
+    script = QStringLiteral("return lu.LuaUnit.run( %1 )").arg(splitted.join(", "));
+  }
+
+  if (!L->dofile("test/lua/cpp_run_skill.lua")) goto RET;
+  ret = L->eval(script).toInt();
+
+RET:
+  delete L;
+  delete Pacman;
+  return ret;
+}
+
+// FreeKill 的程序主入口。整个程序就是从这里开始执行的。
+int freekill_main(int argc, char *argv[]) {
+  // 初始化一下各种杂项信息
+  QThread::currentThread()->setObjectName("Main");
+
+  qInstallMessageHandler(fkMsgHandler);
+  QCoreApplication *app;
+  QCoreApplication::setApplicationName("FreeKill");
+  QCoreApplication::setApplicationVersion(FK_VERSION);
+
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+  prepareForLinux();
+#endif
+
+#ifndef Q_OS_IOS
+  // iOS opens the log only after the writable data directory is known
+  // (see the Q_OS_IOS startup branch below).
+  if (!log_file) {
+    log_file.reset(new QFile("freekill.server.log"));
+    if (!log_file->open(QIODevice::WriteOnly | QIODevice::Text)) {
+      qFatal("Cannot open info.log");
+    }
+  }
+#endif
+
+  // 分析命令行，如果有 -s 或者 --server 就在命令行直接开服务器
+  QCommandLineParser parser;
+  parser.setApplicationDescription("FreeKill server");
+  parser.setSingleDashWordOptionMode(QCommandLineParser::ParseAsLongOptions);
+  parser.addVersionOption();
+  parser.addOption({{"s", "server"}, "start server at <port>", "port"});
+  parser.addOption({{"h", "help"}, "display help information"});
+  parser.addOption({{"q", "quick-start"}, "quick start a single-player room with <gameMode>", "gameMode"});
+  parser.addOption({"testskills", "run test case of skills", "testskills"});
+  parser.addOption({"testfile", "run test case of a skill file", "testfile"});
+  QStringList cliOptions;
+  for (int i = 0; i < argc; i++)
+    cliOptions << argv[i];
+
+  parser.parse(cliOptions);
+  if (parser.isSet("version")) {
+    parser.showVersion();
+    return 0;
+  } else if (parser.isSet("help")) {
+    parser.showHelp();
+    return 0;
+  } else if (parser.isSet("testskills")) {
+    auto val = parser.value("testskills");
+    return runSkillTest(val, "");
+  } else if (parser.isSet("testfile")) {
+    auto val = parser.value("testfile");
+    return runSkillTest("", val);
+  }
+
+  bool startServer = parser.isSet("server");
+  ushort serverPort = 9527;
+
+  if (startServer) {
+    app = new QCoreApplication(argc, argv);
+    app->connect(app, &QCoreApplication::aboutToQuit, cleanUpGlobalStates);
+    QTranslator translator;
+    Q_UNUSED(translator.load("zh_CN.qm"));
+    QCoreApplication::installTranslator(&translator);
+
+    bool ok = false;
+    if (parser.value("server").toInt(&ok) && ok)
+      serverPort = parser.value("server").toInt();
+
+    Pacman = new PackMan;
+    Server *server = new Server;
+    if (!server->listen(QHostAddress::Any, serverPort)) {
+      qFatal("cannot listen on port %d!\n", serverPort);
+      app->exit(1);
+    } else {
+      auto shell = new Shell;
+      shell->start();
+    }
+    return app->exec();
+  }
+
+#ifdef FK_SERVER_ONLY
+  // 根本没编译 GUI 相关的功能，直接在此退出
+  qFatal("This is server-only build and have no GUI support.\n\
+      Please use ./FreeKill -s to start a server in command line.");
+#else
+
+  // Windows 桌面：Qt 6.5+ 的视频播放统一走 FFmpeg 后端
+#ifdef Q_OS_WIN32
+  qputenv("QT_MEDIA_BACKEND", "ffmpeg");
+  qputenv("QT_FFMPEG_DECODING_HW_DEVICE_TYPES", "d3d11va");
+#endif
+
+  app = new QApplication(argc, argv);
+  app->connect(app, &QCoreApplication::aboutToQuit, cleanUpGlobalStates);
+#ifdef Q_OS_IOS
+  // Playback category + keep the screen awake while a match is open.
+  fkIosPrepare();
+#endif
+#ifdef DESKTOP_BUILD
+  ((QApplication *)app)->setWindowIcon(QIcon("image/icon.png"));
+#endif
+
+#ifdef Q_OS_WIN32
+  // Spine 渲染已迁移到 QSGRenderNode（RHI 抽象），不再依赖 OpenGL。
+  // 不强制图形 API，交由 Qt 自动选择可用后端（D3D11 / Vulkan / OpenGL）。
+  // 如需手动指定可用环境变量：QSG_RHI_BACKEND=d3d11|vulkan|opengl
+#elif defined(Q_OS_ANDROID)
+  // 设置 QML 使用 OpenGL 渲染
+  QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+  // 在此基础上再指定使用OpenGL ES
+  {
+    auto fmt = QSurfaceFormat::defaultFormat();
+    fmt.setRenderableType(QSurfaceFormat::OpenGLES);
+    QSurfaceFormat::setDefaultFormat(fmt);
+  }
+#endif
+
+#ifdef Q_OS_IOS
+// The iOS launch storyboard stays on screen until the first Qt window is
+// created, so a QWidget-based QSplashScreen is unnecessary (and QWidget
+// windows are unusual on iOS).
+#define SHOW_SPLASH_MSG(msg) do { } while (0)
+#else
+#define SHOW_SPLASH_MSG(msg) splash.showMessage(msg, Qt::AlignHCenter | Qt::AlignBottom);
+#endif
+
+#ifdef Q_OS_ANDROID
+  // 投降喵，设为android根本无效
+  // 直接改用Android原生Mediaplayer了，不用你Qt家的
+  // qputenv("QT_MEDIA_BACKEND", "android");
+
+  // 禁用accessible（可能会流畅点但没有证据 纯抓瞎
+  qputenv("QT_ANDROID_DISABLE_ACCESSIBILITY", "1");
+
+  qputenv("ANDROID_OPENSSL_SUFFIX", "_3");
+
+  // 安卓：指定 FFmpeg 后端使用 MediaCodec 硬件解码
+  // （私有点环境变量，Qt 6.8+，必须在 QMediaPlayer 创建前设置）
+  qputenv("QT_FFMPEG_DECODING_HW_DEVICE_TYPES", "mediacodec");
+
+  // 安卓：从Qt 6.8起需要别的办法拿activity
+  // 参考文献 https://forum.qt.io/topic/159350/qt-6-8-0-replacement-for-qtnative-activity
+  QJniObject::callStaticMethod<void>(
+    "org/notify/FreeKill/Helper", "SetActivity",
+    "(Landroid/app/Activity;)V", QNativeInterface::QAndroidApplication::context().object()
+  );
+
+  // 安卓：获取系统语言需要使用Java才行
+  QString localeName = QJniObject::callStaticObjectMethod("org/notify/FreeKill/Helper", "GetLocaleCode", "()Ljava/lang/String;").toString();
+
+  // 安卓：先切换到我们安装程序的那个外部存储目录去
+  QJniObject::callStaticMethod<void>("org/notify/FreeKill/Helper", "InitView", "()V");
+  QDir::setCurrent("/storage/emulated/0/Android/data/org.notify.FreeKill/files");
+
+  // 切目录后重新设置log文件路径
+  log_file.reset(new QFile("freekill.server.log"));
+  if (!log_file->open(QIODevice::WriteOnly | QIODevice::Text)) {
+    qFatal("Cannot open info.log");
+  }
+
+  // 然后显示欢迎界面，并在需要时复制资源素材等
+  QScreen *screen = qobject_cast<QApplication *>(app)->primaryScreen();
+  QRect screenGeometry = screen->geometry();
+  int screenWidth = screenGeometry.width();
+  int screenHeight = screenGeometry.height();
+  QSplashScreen splash(QPixmap("assets:/res/image/splash.jpg")
+                           .scaled(screenWidth, screenHeight));
+  splash.showFullScreen();
+  SHOW_SPLASH_MSG("Copying resources...");
+  installFkAssets("assets:/res", QDir::currentPath());
+#elif defined(Q_OS_IOS)
+  // iOS sandbox: the .app bundle is read-only. Copy the bundled runtime into
+  // Documents/FreeKill on first launch (or after an app update), then run
+  // entirely from that writable directory, exactly like the desktop release.
+  QLocale l = QLocale::system();
+  auto localeName = l.name();
+
+  const QString bundleDir = QCoreApplication::applicationDirPath();
+  QString docsDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+  if (docsDir.isEmpty())
+    docsDir = QDir::homePath() + QLatin1String("/Documents");
+  const QString dataDir = docsDir + QLatin1String("/FreeKill");
+  QDir().mkpath(dataDir);
+
+  fkIosExcludeFromBackup(dataDir.toUtf8().constData());
+  qInfo("iOS: installing bundled runtime into %s", qUtf8Printable(dataDir));
+  installFkAssets(bundleDir + QLatin1String("/res"), dataDir);
+  QDir::setCurrent(dataDir);
+
+  log_file.reset(new QFile("freekill.server.log"));
+  if (!log_file->open(QIODevice::WriteOnly | QIODevice::Text)) {
+    qWarning("Cannot open info.log");
+  }
+#else
+  // 不是安卓，使用QLocale获得系统语言
+  QLocale l = QLocale::system();
+  auto localeName = l.name();
+
+  // 不是安卓，那么直接启动欢迎界面，也就是不复制东西了
+  QSplashScreen splash(QPixmap("image/splash.jpg"));
+  splash.show();
+#endif
+
+  SHOW_SPLASH_MSG("Loading qml files...");
+  engine = new QQmlApplicationEngine;
+
+#ifndef Q_OS_ANDROID
+  QQuickStyle::setStyle("Material");
+#endif
+
+  QTranslator translator;
+  if (localeName.startsWith("zh_")) {
+    Q_UNUSED(translator.load("zh_CN.qm"));
+  } else if (localeName.startsWith("vi")) {
+    Q_UNUSED(translator.load("vi_VN.qm"));
+  } else {
+    Q_UNUSED(translator.load("en_US.qm"));
+  }
+  QCoreApplication::installTranslator(&translator);
+
+  Backend = new QmlBackend;
+  Backend->setEngine(engine);
+
+  // 处理单机快速启动参数
+  QVariantMap quickStartConfig;
+  if (parser.isSet("quick-start")) {
+    QString mode = parser.value("quick-start");
+    if (mode.isEmpty()) {
+      // 未指定模式时从 quick_start.json 读取
+      QFile configFile("quick_start.json");
+      if (configFile.exists() && configFile.open(QIODevice::ReadOnly)) {
+        auto doc = QJsonDocument::fromJson(configFile.readAll());
+        if (doc.isObject()) {
+          quickStartConfig = doc.object().toVariantMap();
+          mode = quickStartConfig.value("gameMode").toString();
+        }
+        configFile.close();
+      }
+      if (mode.isEmpty()) {
+        // 文件不存在或无效则创建默认配置
+        quickStartConfig["gameMode"] = QStringLiteral("aaa_role_mode");
+        QJsonObject defaultConfig;
+        defaultConfig["gameMode"] = QStringLiteral("aaa_role_mode");
+        configFile.open(QIODevice::WriteOnly);
+        configFile.write(QJsonDocument(defaultConfig).toJson());
+        configFile.close();
+        mode = QStringLiteral("aaa_role_mode");
+      }
+    } else {
+      quickStartConfig["gameMode"] = mode;
+    }
+    Backend->setQuickStartMode(mode);
+    Backend->setQuickStartConfig(quickStartConfig);
+  }
+
+  Pacman = new PackMan;
+
+  // 向 Qml 中先定义几个全局变量
+  auto root = engine->rootContext();
+  root->setContextProperty("FkVersion", FK_VERSION);
+  root->setContextProperty("Backend", Backend);
+  root->setContextProperty("ModBackend", nullptr);
+  root->setContextProperty("Pacman", Pacman);
+  root->setContextProperty("SysLocale", localeName);
+  root->setContextProperty("_quickStartConfig", quickStartConfig);
+
+#ifdef QT_DEBUG
+  bool debugging = true;
+#else
+  bool debugging = false;
+#endif
+  engine->rootContext()->setContextProperty("Debugging", debugging);
+
+  QString system;
+#if defined(Q_OS_ANDROID)
+  system = QStringLiteral("Android");
+#elif defined(Q_OS_WIN32)
+  system = QStringLiteral("Win");
+  SetConsoleOutputCP(CP_UTF8);
+#elif defined(Q_OS_LINUX)
+  system = QStringLiteral("Linux");
+#elif defined(Q_OS_IOS)
+  system = QStringLiteral("iOS");
+#else
+  system = QStringLiteral("Other");
+#endif
+  root->setContextProperty("OS", system);
+
+  root->setContextProperty(
+      "AppPath", QUrl::fromLocalFile(QDir::currentPath()));
+
+  // 注册 Spine 动画类型（Spine 1.0 模块）
+  registerSpineQmlTypes();
+
+  // 加载GUI了，如果core有的话用core的
+  if (Pacman->shouldUseCore() &&
+      QFile::exists("packages/freekill-core/Fk")) {
+    // FIXME: 客户端更新core后提示重启
+    engine->addImportPath("packages/freekill-core");
+    engine->load("packages/freekill-core/Fk/main.qml");
+  } else {
+    engine->addImportPath(QDir::currentPath());
+    engine->load("Fk/main.qml");
+  }
+
+  // qml 报错了就直接退出吧
+  if (engine->rootObjects().isEmpty())
+    return -1;
+
+  // 关闭欢迎界面，然后进入Qt主循环
+#ifndef Q_OS_IOS
+  splash.close();
+#endif
+  int ret = app->exec();
+
+  return ret;
+#endif
+}

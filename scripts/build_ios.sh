@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Configure and build the iOS app, then package an UNSIGNED .ipa.
+#
+# Usage (on macOS):
+#   bash scripts/build_ios.sh \
+#     --qt "$HOME/Qt/6.8.3/ios" \
+#     --deps "$PWD/ios-deps"
+#
+# The .ipa can be signed and installed with Sideloadly/AltStore using a normal
+# Apple ID, or opened in Xcode with a development team.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+QT_ROOT="${QT_ROOT:-$HOME/Qt/6.8.3/ios}"
+DEPS="$ROOT/ios-deps"
+BUILD="$ROOT/build-ios"
+MIN_IOS="16.0"
+BUNDLE_ID="com.cui.freekill.ios"
+JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
+PACKAGE=1
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --qt) QT_ROOT="$2"; shift 2 ;;
+    --deps) DEPS="$2"; shift 2 ;;
+    --build) BUILD="$2"; shift 2 ;;
+    --min-ios) MIN_IOS="$2"; shift 2 ;;
+    --bundle-id) BUNDLE_ID="$2"; shift 2 ;;
+    --jobs) JOBS="$2"; shift 2 ;;
+    --no-package) PACKAGE=0; shift ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+if [[ "$(uname -s)" != "Darwin" ]]; then
+  echo "ERROR: iOS apps must be built on macOS with Xcode." >&2
+  exit 1
+fi
+[[ -x "$QT_ROOT/bin/qt-cmake" ]] || {
+  echo "ERROR: Qt for iOS not found at $QT_ROOT/bin/qt-cmake" >&2
+  echo "Install it with: python3 -m aqt install-qt mac ios 6.8.3 ios -m qtmultimedia qt5compat qtshadertools -O \"\$HOME/Qt\"" >&2
+  exit 1
+}
+[[ -f "$DEPS/lib/liblua54.a" && -f "$DEPS/lib/libgit2.a" ]] || {
+  echo "ERROR: iOS dependencies missing under $DEPS (run scripts/build_deps.sh)." >&2
+  exit 1
+}
+
+echo "==> Configuring (Qt: $QT_ROOT)"
+rm -rf "$BUILD"
+"$QT_ROOT/bin/qt-cmake" -S "$ROOT" -B "$BUILD" -G Xcode \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET="$MIN_IOS" \
+  -DFK_IOS_DEPS="$DEPS" \
+  -DFK_IOS_DEPLOYMENT_TARGET="$MIN_IOS" \
+  -DFK_IOS_BUNDLE_ID="$BUNDLE_ID"
+
+echo "==> Building (this may take a while)"
+if ! cmake --build "$BUILD" --config Release --target FreeKill --parallel "$JOBS" -- \
+  -sdk iphoneos \
+  -destination "generic/platform=iOS" \
+  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGN_IDENTITY="" \
+  DEVELOPMENT_TEAM=""; then
+  echo "==> cmake --build failed; retrying with xcodebuild -target"
+  xcodebuild -project "$BUILD/FreeKill.xcodeproj" -target FreeKill \
+    -configuration Release -sdk iphoneos \
+    CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+    DEVELOPMENT_TEAM="" build
+fi
+
+APP="$(find "$BUILD" -type d -name 'FreeKill.app' -prune -print | head -n 1)"
+[[ -n "$APP" ]] || { echo "ERROR: FreeKill.app not found under $BUILD" >&2; exit 1; }
+echo "==> App bundle: $APP"
+
+bash "$ROOT/scripts/verify_app.sh" "$APP"
+
+if [[ "$PACKAGE" == "1" ]]; then
+  echo "==> Packaging unsigned IPA"
+  IPA_DIR="$BUILD/ipa"
+  rm -rf "$IPA_DIR"
+  mkdir -p "$IPA_DIR/Payload"
+  cp -R "$APP" "$IPA_DIR/Payload/"
+  IPA="$IPA_DIR/新月杀测试版-0.5.25-ios-unsigned.ipa"
+  rm -f "$IPA"
+  (cd "$IPA_DIR" && /usr/bin/zip -qry "$(basename "$IPA")" Payload)
+  echo
+  echo "IPA: $IPA"
+  echo "SHA-256: $(shasum -a 256 "$IPA" | awk '{print $1}')"
+  echo "Size: $(du -h "$IPA" | awk '{print $1}')"
+else
+  echo "App only: $APP"
+fi

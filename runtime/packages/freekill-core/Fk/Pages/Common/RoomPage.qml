@@ -1,0 +1,1085 @@
+import QtQuick
+import QtQuick.Layouts
+import QtQuick.Controls
+import Qt5Compat.GraphicalEffects
+import QtQuick.Dialogs
+
+import Fk
+import Fk.Components.Common
+import Fk.Components.GameCommon
+import Fk.Widgets as W
+import Fk.Pages.Lobby as L
+
+import LunarLtk
+
+Item {
+  id: root
+
+  readonly property alias gameContent: gameLoader.item
+  property alias gameComponent: gameLoader.sourceComponent
+  readonly property real invitationFooterHeight: RoomInvites.canInvite && !!gameLoader.item &&
+    !("roomInviteButton" in gameLoader.item) ? 52 : 0
+
+  function refreshInvitationLayout() { RoomInvites.refreshHandcards(gameLoader.item); }
+
+  Connections {
+    target: RoomInvites
+    function onCanInviteChanged() { Qt.callLater(root.refreshInvitationLayout); }
+  }
+
+  property real replayerSpeed
+  property int replayerElapsed
+  property int replayerDuration
+  property string surrenderNegotiationId: ""
+  property bool surrenderNegotiationVisible: false
+
+  function refreshSurrenderNegotiationVisibility() {
+    const self = Lua.selfPlayer;
+    surrenderNegotiationVisible = !!(!Config.observing && !Config.replaying &&
+      Lua.client.gameStarted && !!self && !self.dead && !self.surrendered);
+  }
+
+  function onNegotiationGameStarted() {
+    refreshSurrenderNegotiationVisibility();
+  }
+
+  function onNegotiationPlayerStateChanged(_, data) {
+    const [playerId, propertyName, value] = data;
+    if (playerId !== Cpp.self.id || (propertyName !== "dead" && propertyName !== "surrendered")) {
+      return;
+    }
+    const self = Lua.selfPlayer;
+    const dead = propertyName === "dead" ? value : self.dead;
+    const surrendered = propertyName === "surrendered" ? value : self.surrendered;
+    surrenderNegotiationVisible = !!(!Config.observing && !Config.replaying &&
+      Lua.client.gameStarted && !dead && !surrendered);
+  }
+
+  Image {
+    id: bg
+    source: Config.lobbyBg
+    anchors.fill: parent
+    fillMode: Image.PreserveAspectCrop
+
+    layer.enabled: true
+    layer.effect: FastBlur {
+      radius: 72
+    }
+  }
+
+  Rectangle {
+    id: bgRect
+    anchors.fill: parent
+    color: "#AFFFFFFF"
+  }
+
+  Rectangle {
+    id: shadowRect
+    color: "black"
+    width: gameLoader.width
+    height: gameLoader.height
+    x: gameLoader.x
+    y: gameLoader.y
+    scale: gameLoader.scale
+
+    layer.enabled: true
+    layer.effect: DropShadow {
+      transparentBorder: true
+      radius: 12
+      samples: 16
+      color: "#000000"
+    }
+  }
+
+  Item {
+    id: topPanel
+    height: parent.height * (0.5 - shadowRect.scale / 2)
+    width: parent.width
+
+    Text {
+      anchors.centerIn: parent
+      text: Config.headerName !== "" ? Lua.tr("Current room: %1").arg(Config.headerName) : Lua.tr("Click The Game Scene to back")
+      font.pixelSize: 16
+    }
+  }
+
+  Item {
+    id: bottomPanel
+    height: parent.height * (0.5 - shadowRect.scale / 2)
+    width: parent.width
+    anchors.bottom: parent.bottom
+
+    Rectangle {
+      id: replayControls
+      visible: Config.replaying
+      anchors.centerIn: bottomPanel
+      width: childrenRect.width + 8
+      height: childrenRect.height + 8
+
+      // color: "#88EEEEEE"
+      // radius: 4
+      color: 'transparent'
+
+      RowLayout {
+        x: 4; y: 4
+        Text {
+          font.pixelSize: 20
+          font.bold: true
+          text: {
+            function addZero(temp) {
+              if (temp < 10) return "0" + temp;
+              else return temp;
+            }
+            const elapsedMin = Math.floor(replayerElapsed / 60);
+            const elapsedSec = addZero(replayerElapsed % 60);
+            const totalMin = Math.floor(replayerDuration / 60);
+            const totalSec = addZero(replayerDuration % 60);
+
+            return elapsedMin.toString() + ":" + elapsedSec + "/" + totalMin
+            + ":" + totalSec;
+          }
+        }
+
+        Switch {
+          text: Lua.tr("Show All Cards")
+          checked: Config.replayingShowCards
+          onCheckedChanged: Config.replayingShowCards = checked;
+        }
+
+        Switch {
+          text: Lua.tr("Speed Resume")
+          checked: false
+          onCheckedChanged: Backend.controlReplayer("uniform");
+        }
+
+        W.ButtonContent {
+          plainButton: false
+          Layout.preferredWidth: 40
+          // text: Lua.tr("Speed Down")
+          icon.source: Cpp.path + "/image/symbolic/actions/media-seek-backward-symbolic.svg"
+          onClicked: Backend.controlReplayer("slowdown");
+        }
+
+        Text {
+          font.pixelSize: 20
+          font.bold: true
+          text: "x" + replayerSpeed;
+        }
+
+        W.ButtonContent {
+          plainButton: false
+          Layout.preferredWidth: 40
+          // text: Lua.tr("Speed Up")
+          icon.source: Cpp.path + "/image/symbolic/actions/media-seek-forward-symbolic.svg"
+          onClicked: Backend.controlReplayer("speedup");
+        }
+
+        W.ButtonContent {
+          plainButton: false
+          property bool running: true
+          Layout.preferredWidth: 40
+          // text: Lua.tr(running ? "Pause" : "Resume")
+          icon.source: running ?
+            Cpp.path + "/image/symbolic/actions/media-playback-pause-symbolic.svg" :
+            Cpp.path + "/image/symbolic/actions/media-playback-start-symbolic.svg"
+          onClicked: {
+            running = !running;
+            Backend.controlReplayer("toggle");
+          }
+        }
+      }
+    }
+  }
+
+  ColumnLayout {
+    anchors.right: parent.right
+    anchors.rightMargin: 20
+    anchors.top: parent.top
+    anchors.topMargin: parent.height * 0.1
+    spacing: 8
+    width: parent.width - shadowRect.width * shadowRect.scale - 40 - 40
+    height: shadowRect.height * shadowRect.scale
+
+    W.ButtonContent {
+      id: quitButton
+      plainButton: false
+      text: Lua.tr("Quit")
+      icon.source: Cpp.path + "/image/symbolic/actions/application-exit-rtl-symbolic.svg"
+      font.bold: true
+      Layout.fillWidth: true
+      onClicked: {
+        root.tryQuitRoom();
+      }
+    }
+
+    W.ButtonContent {
+      id: volumeButton
+      plainButton: false
+      text: Lua.tr("Settings")
+      icon.source: Cpp.path + "/image/symbolic/categories/applications-system-symbolic.svg"
+      font.bold: true
+      Layout.fillWidth: true
+      onClicked: {
+        settingsDialog.open();
+      }
+    }
+
+    W.ButtonContent {
+      id: infoButton
+      plainButton: false
+      text: Lua.tr("Info")
+      icon.source: Cpp.path + "/image/symbolic/mimetypes/x-office-document-symbolic.svg"
+      font.bold: true
+      Layout.fillWidth: true
+      onClicked: {
+        roomInfoDialog.open();
+      }
+    }
+
+    W.ButtonContent {
+      id: surrenderButton
+      plainButton: false
+      enabled: !Config.observing && !Config.replaying
+      text: Lua.tr("Surrender")
+      icon.source: Cpp.path + "/image/misc/surrender"
+      font.bold: true
+      Layout.fillWidth: true
+      onClicked: {
+        if (!Lua.client.gameStarted) {
+          return;
+        }
+        const self = Lua.selfPlayer;
+        if (self.dead && self.rest <= 0) {
+          return;
+        }
+        const surrenderCheck = Lua.checkSurrenderAvailable();
+        if (!surrenderCheck.length) {
+          surrenderDialog.informativeText =
+          Lua.tr('Surrender is disabled in this mode');
+        } else {
+          surrenderDialog.informativeText = surrenderCheck
+          .map(str => `${Lua.tr(str.text)}（${str.passed ? '✓' : '✗'}）`)
+          .join('<br>');
+        }
+        surrenderDialog.open();
+      }
+    }
+
+    W.ButtonContent {
+      id: surrenderNegotiationButton
+      plainButton: false
+      visible: root.surrenderNegotiationVisible
+      enabled: !Config.observing && !Config.replaying
+      text: Lua.tr("Surrender Negotiation")
+      icon.source: Cpp.path + "/image/misc/surrender"
+      font.bold: true
+      Layout.fillWidth: true
+      onClicked: {
+        if (!Lua.client.gameStarted) {
+          return;
+        }
+        const self = Lua.selfPlayer;
+        if (self.dead && self.rest <= 0) {
+          return;
+        }
+        const surrenderCheck = Lua.checkSurrenderNegotiationAvailable();
+        if (!surrenderCheck.length) {
+          surrenderNegotiationDialog.informativeText =
+          Lua.tr('Surrender Negotiation is disabled in this mode');
+        } else {
+          surrenderNegotiationDialog.informativeText = surrenderCheck
+          .map(str => `${Lua.tr(str.text)}（${str.passed ? '✓' : '✗'}）`)
+          .join('<br>');
+        }
+        surrenderNegotiationDialog.open();
+      }
+    }
+
+    W.ButtonContent {
+      id: generalButton
+      plainButton: false
+      text: Lua.tr("Generals Overview")
+      icon.source: "http://175.178.66.93/symbolic/lunarltk/jiang.png"
+      font.bold: true
+      Layout.fillWidth: true
+      onClicked: {
+        overviewLoader.overviewSource = "LunarLtk.Pages";
+        overviewLoader.overviewType = "Generals";
+        overviewDialog.open();
+        overviewLoader.item.loadPackages();
+      }
+    }
+
+    W.ButtonContent {
+      id: cardslButton
+      plainButton: false
+      text: Lua.tr("Cards Overview")
+      icon.source: "http://175.178.66.93/symbolic/lunarltk/cards.svg"
+      font.bold: true
+      Layout.fillWidth: true
+      onClicked: {
+        overviewLoader.overviewSource = "LunarLtk.Pages";
+        overviewLoader.overviewType = "Cards";
+        overviewDialog.open();
+        overviewLoader.item.loadPackages();
+      }
+    }
+
+    W.ButtonContent {
+      id: modesButton
+      plainButton: false
+      text: Lua.tr("Modes Overview")
+      icon.source: Cpp.path + "/image/symbolic/categories/applications-games-symbolic.svg"
+      font.bold: true
+      Layout.fillWidth: true
+      onClicked: {
+        overviewLoader.overviewSource = "Fk.Pages.Common";
+        overviewLoader.overviewType = "Modes";
+        overviewDialog.open();
+      }
+    }
+
+    Item {
+      Layout.fillHeight: true
+    }
+
+    W.ButtonContent {
+      id: chatButton
+      plainButton: false
+      text: Lua.tr("Chat")
+      icon.source: Cpp.path + "/image/symbolic/actions/chat-message-new-symbolic.svg"
+      font.bold: true
+      Layout.fillWidth: true
+      onClicked: {
+        roomDrawer.loglessMode = false;
+        roomDrawer.open();
+      }
+    }
+  }
+
+  MessageDialog {
+    id: quitDialog
+    title: Lua.tr("Quit")
+    informativeText: Lua.tr("Are you sure to quit?")
+    buttons: MessageDialog.Ok | MessageDialog.Cancel
+    onButtonClicked: function (button) {
+      switch (button) {
+        case MessageDialog.Ok: {
+          Cpp.notifyServer("QuitRoom", "[]");
+          break;
+        }
+        case MessageDialog.Cancel: {
+          quitDialog.close();
+        }
+      }
+    }
+  }
+
+  MessageDialog {
+    id: surrenderDialog
+    title: Lua.tr("Surrender")
+    informativeText: ''
+    buttons: MessageDialog.Ok | MessageDialog.Cancel
+    onButtonClicked: function (button, role) {
+      switch (button) {
+        case MessageDialog.Ok: {
+          const surrenderCheck = Lua.checkSurrenderAvailable();
+          if (surrenderCheck.length &&
+          !surrenderCheck.find(check => !check.passed)) {
+
+            Cpp.notifyServer("PushRequest", [
+              "surrender", true
+            ].join(","));
+          }
+          surrenderDialog.close();
+          break;
+        }
+        case MessageDialog.Cancel: {
+          surrenderDialog.close();
+        }
+      }
+    }
+  }
+
+  MessageDialog {
+    id: surrenderNegotiationDialog
+    title: Lua.tr("Surrender Negotiation")
+    informativeText: ''
+    buttons: MessageDialog.Ok | MessageDialog.Cancel
+    onButtonClicked: function (button, role) {
+      switch (button) {
+        case MessageDialog.Ok: {
+          const surrenderCheck = Lua.checkSurrenderNegotiationAvailable();
+          if (surrenderCheck.length &&
+          !surrenderCheck.find(check => !check.passed)) {
+
+            Cpp.notifyServer("PushRequest", [
+              "surrender_negotiation", true
+            ].join(","));
+          }
+          surrenderNegotiationDialog.close();
+          break;
+        }
+        case MessageDialog.Cancel: {
+          surrenderNegotiationDialog.close();
+        }
+      }
+    }
+  }
+
+  MessageDialog {
+    id: surrenderNegotiationRequestDialog
+    title: Lua.tr("Surrender Negotiation")
+    informativeText: ""
+    buttons: MessageDialog.Ok | MessageDialog.Cancel
+    onButtonClicked: function (button, role) {
+      const accepted = button === MessageDialog.Ok;
+      if (root.surrenderNegotiationId !== "") {
+        Cpp.notifyServer("PushRequest", [
+          "reply_surrender_negotiation",
+          root.surrenderNegotiationId,
+          accepted
+        ].join(","));
+      }
+      root.surrenderNegotiationId = "";
+      surrenderNegotiationRequestDialog.close();
+    }
+  }
+
+  W.PopupLoader {
+    id: roomInfoDialog
+    width: Math.min(Config.winWidth * 0.72, 980 * Config.winScale)
+    height: Math.min(Config.winHeight * 0.72, 720 * Config.winScale)
+    anchors.centerIn: parent
+    background: Rectangle {
+      color: "#EEEEEEEE"
+      radius: 5
+      border.color: "#A6967A"
+      border.width: 1
+    }
+
+    onOpened: item?.refreshRoomInfo()
+
+    sourceComponent: Item {
+      id: roomInfoPage
+
+      function refreshRoomInfo() {
+        infoContainer.setDataList();
+      }
+
+      Text {
+        id: roomInfoTitle
+        width: parent.width
+        height: 30
+        y: 10
+        text: Lua.tr("Room Info")
+        font.bold: true
+        font.pixelSize: 20
+        horizontalAlignment: Text.AlignHCenter
+      }
+
+      Rectangle {
+        height: 2
+        color: "#A6967A"
+        width: parent.width - 4
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: roomInfoTitle.bottom
+      }
+
+      RoomInfoContainer {
+        id: infoContainer
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: roomInfoTitle.bottom
+        anchors.topMargin: 10
+        anchors.bottom: parent.bottom
+        width: parent.width - 30
+        scrollBarParent: roomInfoPage
+        switchBackgroundColor: "#EEEEEEEE"
+        // switchBorderColor: "#A6967A"
+
+        onGeneralPoolRequested: {
+          overviewLoader.overviewSource = "LunarLtk.Pages";
+          overviewLoader.overviewType = "GeneralPool";
+          overviewDialog.open();
+        }
+      }
+    }
+  }
+
+  W.PopupLoader {
+    id: overviewDialog
+    width: Config.winWidth * 0.8
+    height: Config.winHeight * 0.9
+    anchors.centerIn: parent
+    background: Rectangle {
+      color: "#EEEEEEEE"
+      radius: 5
+      border.color: "#A6967A"
+      border.width: 1
+    }
+    Loader {
+      id: overviewLoader
+      property string overviewSource: "LunarLtk.Pages"
+      property string overviewType: "GeneralPool"
+      anchors.centerIn: parent
+      width: parent.width / Config.winScale
+      height: parent.height / Config.winScale
+      scale: Config.winScale
+      sourceComponent: Qt.createComponent(overviewSource, overviewType + "Overview")
+    }
+  }
+
+  W.PopupLoader {
+    id: settingsDialog
+    padding: 0
+    width: Config.winWidth * 0.8
+    height: Config.winHeight * 0.9
+    anchors.centerIn: parent
+    background: Rectangle {
+      color: "#EEEEEEEE"
+      radius: 5
+      border.color: "#A6967A"
+      border.width: 1
+    }
+
+    sourceComponent: RowLayout {
+      W.SideBarSwitcher {
+        id: settingBar
+        Layout.preferredWidth: 200
+        Layout.fillHeight: true
+        model: ListModel {
+          ListElement { name: "Audio Settings" }
+          ListElement { name: "Control Settings" }
+        }
+      }
+
+      SwipeView {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        interactive: false
+        orientation: Qt.Vertical
+        currentIndex: settingBar.currentIndex
+        clip: true
+        L.AudioSetting {}
+        L.ControlSetting {}
+      }
+    }
+  }
+
+  Loader {
+    id: gameLoader
+    objectName: "roomGameLoader"
+    width: parent.width
+    height: parent.height - root.invitationFooterHeight
+    onHeightChanged: Qt.callLater(root.refreshInvitationLayout)
+    clip: true
+
+    Behavior on x { NumberAnimation { duration: 150 } }
+    Behavior on y { NumberAnimation { duration: 150 } }
+    Behavior on scale { NumberAnimation { duration: 150 } }
+
+    // Image {
+    //   source: Config.roomBg
+    //   anchors.fill: parent
+    //   fillMode: Image.PreserveAspectCrop
+    // }
+
+    MediaArea {
+      source: Config.roomBg
+      anchors.fill: parent
+      fillMode: Image.PreserveAspectCrop
+      pause: false
+    }
+  }
+
+  RoomOverlay {
+    id: overlay
+    anchors.fill: parent
+    gameContent: gameLoader
+  }
+
+  RoomInviteDialog { id: inviteDialog }
+
+  Connections {
+    target: gameLoader.item
+    ignoreUnknownSignals: true
+    function onInvitePlayersRequested() { if (RoomInvites.canInvite) inviteDialog.open(); }
+  }
+
+  // UI packages may expose their own matching button; all others retain this entry.
+  MetroButton {
+    objectName: "fallbackRoomInviteButton"
+    visible: root.invitationFooterHeight > 0 && !overlay.overlayOpened
+    anchors.right: parent.right
+    anchors.bottom: parent.bottom
+    anchors.rightMargin: 12
+    anchors.bottomMargin: 8
+    text: Lua.tr("Invite Players")
+    textFont.pixelSize: 18
+    width: 116
+    height: 40
+    onClicked: inviteDialog.open()
+  }
+
+  W.PopupLoader {
+    id: roomDrawer
+    width: Config.winWidth * 0.4
+    height: Config.winHeight * 0.95
+    x: Config.winHeight * 0.025
+    y: Config.winHeight * 0.025
+
+    property int rememberedIdx: 0
+    property int loglessRememberedIdx: 0
+    property bool loglessMode: false
+
+    background: Rectangle {
+      radius: 12 * Config.winScale
+      color: "#FAFAFB"
+      opacity: 0.9
+    }
+
+    ColumnLayout {
+      // anchors.fill: parent
+      width: parent.width / Config.winScale
+      height: parent.height / Config.winScale
+      scale: Config.winScale
+      transformOrigin: Item.TopLeft
+
+      W.ViewSwitcher {
+        id: drawerBar
+        Layout.alignment: Qt.AlignHCenter
+        model: roomDrawer.loglessMode ? [
+          Lua.tr("Chat"),
+          Lua.tr("PlayerList"),
+        ] : [
+          Lua.tr("Log"),
+          Lua.tr("Chat"),
+          Lua.tr("PlayerList"),
+        ]
+      }
+
+      SwipeView {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        interactive: false
+        currentIndex: roomDrawer.loglessMode ? drawerBar.currentIndex + 1 : drawerBar.currentIndex
+        clip: true
+
+        Item {
+          RoomGameLogEdit {
+            id: log
+            anchors.fill: parent
+          }
+        }
+
+        Item {
+          AvatarChatBox {
+            id: chat
+            anchors.fill: parent
+          }
+        }
+
+        ListView {
+          id: playerList
+
+          clip: true
+          ScrollBar.vertical: ScrollBar {}
+          model: ListModel {
+            id: playerListModel
+          }
+
+          delegate: ItemDelegate {
+            width: playerList.width
+            height: 30
+            text: {
+              let ret = screenName;
+              if (Config.hideScreenName) {
+                ret = seat !== -1 ? Lua.tr("seat#" + seat.toString()) : Lua.tr("Player") + (index + 1).toString();
+              }  // 如果有座位号，显示几号位；否则用序号
+              if (observing) {
+                ret = '*' + Lua.tr('Observe') + '* ' + ret;
+              }
+              if (netState == 2) {
+                ret = '<font color="blue">*' + Lua.tr('Trust') + '*</font> ' + ret;
+              } else if (netState == 3) {
+                ret = '<font color="red">*' + Lua.tr('Run Away') + '*</font> ' + ret;
+              } else if (netState == 5) {
+                ret = '<font color="blue">*' + Lua.tr('Robot') + '*</font> ' + ret;
+              } else if (netState == 6) {
+                ret = '<font color="gray">*' + Lua.tr('Offline') + '*</font> ' + ret;
+              }
+              return ret;
+            }
+
+            W.ButtonContent {
+              id: viewButton
+              text: Lua.tr("Observe")
+              visible: Config.observing && !observing
+              enabled: screenName != Self.screenName
+              font.pixelSize: 16
+              anchors.top: parent.top
+              anchors.topMargin: 3
+              anchors.right: blockButton.left
+              anchors.rightMargin: 5
+              width: 80
+              height: parent.height - 6
+              onClicked: {
+                Lua.client.changeSelf(pid);
+                ClientInstance.notifyServer("PushRequest", [
+                  "observe_player", pid
+                ].join(","));
+              }
+            }
+            W.ButtonContent {
+              id: blockButton
+              text: {
+                const blocked = !Config.blockedUsers.includes(screenName);
+                return blocked ? Lua.tr("Block Chatter") : Lua.tr("Unblock Chatter");
+              }
+              visible: !Config.replaying
+              enabled: pid > 0 && pid != Self.id
+              font.pixelSize: 16
+              anchors.top: parent.top
+              anchors.topMargin: 3
+              anchors.right: parent.right
+              anchors.rightMargin: 2
+              width: 80
+              height: parent.height - 6
+              onClicked: {
+                const idx = Config.blockedUsers.indexOf(screenName);
+                if (idx === -1) {
+                  if (screenName === "") return;
+                  Config.blockedUsers.push(screenName);
+                } else {
+                  Config.blockedUsers.splice(idx, 1);
+                }
+                Config.blockedUsersChanged();
+              }
+            }
+          }
+        }
+      }
+    }
+
+    onAboutToHide: {
+      // 安卓下在聊天时关掉Popup会在下一次点开时完全卡死
+      // 可能是Qt的bug 总之为了伺候安卓需要把聊天框赶走
+      if (loglessMode) {
+        loglessRememberedIdx = drawerBar.currentIndex;
+      } else {
+        rememberedIdx = drawerBar.currentIndex;
+      }
+      drawerBar.currentIndex = 0;
+    }
+
+    onAboutToShow: {
+      drawerBar.currentIndex = loglessMode ? loglessRememberedIdx : rememberedIdx;
+      playerListModel.clear();
+      const ps = Lua.getPlayersAndObservers();
+      ps.forEach(p => {
+        playerListModel.append({
+          pid: p.id,
+          screenName: p.name,
+          general: p.general ?? "",
+          deputyGeneral: p.deputy ?? "",
+          observing: p.observing,
+          netState: p.state,
+          avatar: p.avatar,
+          seat: p.seat,
+        });
+      });
+    }
+  }
+
+  Danmu {
+    id: danmu
+    width: parent.width
+  }
+
+  Shortcut {
+    sequence: "T"
+    onActivated: {
+      roomDrawer.loglessMode = false;
+      roomDrawer.open();
+    }
+  }
+
+  function canHandleCommand(cmd) {
+    return gameContent?.canHandleCommand(cmd) || overlay.canHandleCommand(cmd);
+  }
+
+  function handleCommand(sender, cmd, data) {
+    if (gameContent?.canHandleCommand(cmd)) {
+      gameContent.handleCommand(sender, cmd, data);
+    }
+    if (overlay.canHandleCommand(cmd)) {
+      overlay.handleCommand(sender, cmd, data);
+    }
+  }
+
+  function enterLobby(sender, data) {
+    App.quitPage();
+
+    App.setBusy(false);
+    Cpp.notifyServer("RefreshRoomList", "");
+    Config.saveConf();
+  }
+
+  function specialChat(pid, data, msg) {
+    // skill audio: %s%d[%s]
+    // death audio: ~%s
+    // something special: !%s:...
+
+    const time = data.time;
+    const userName = data.userName;
+    const general = Lua.tr(data.general);
+    const room = gameLoader.item;
+
+    if (msg.startsWith("@")) { // 蛋花
+      if (Config.hidePresents)
+        return true;
+
+      const splited = msg.split(":");
+      const type = splited[0].slice(1);
+      switch (type) {
+        case "Egg":
+        case "GiantEgg":
+        case "Shoe":
+        case "Wine":
+        case "Flower": {
+          const fromId = pid;
+          const toId = parseInt(splited[1]);
+          const component = Qt.createComponent("LunarLtk.Components.ChatAnim", type);
+          if (component.status !== Component.Ready) {
+            console.warn(component.errorString());
+            return false;
+          }
+
+          const fromGetter = room.getPhotoOrDashboard || room.getPhotoOrObserver || room.getPhoto || null;
+          const toGetter = room.getPhotoOrObserver || room.getPhoto || null;
+          if (!fromGetter || !toGetter) return false;
+          const fromItem = fromGetter(fromId);
+          const fromPos = mapFromItem(fromItem, fromItem.width / 2,
+                                      fromItem.height / 2);
+          const toItem = toGetter(toId);
+          const toPos = mapFromItem(toItem, toItem.width / 2,
+                                    toItem.height / 2);
+          const egg = component.createObject(room, { start: fromPos, end: toPos });
+          egg.finished.connect(() => egg.destroy());
+          egg.running = true;
+
+          return true;
+        }
+        default:
+          return false;
+      }
+    } else if (msg.startsWith("!") || msg.startsWith("~")) { // 胜利、阵亡
+      const g = msg.slice(1);
+      const extension = Ltk.getGeneralData(g).extension;
+      if (!Config.disableMsgAudio) {
+        const path = SkinBank.getAudio(g, extension, msg.startsWith("!") ? "win" : "death");
+        Backend.playSound(path);
+      }
+
+      const m = Lua.tr(msg);
+      data.msg = m;
+    } else { // 技能
+      const split = msg.split(":");
+      if (split.length < 2) return false;
+      const skill = split[0];
+      const idx = parseInt(split[1]);
+      const gene = split[2];
+
+      if (!Config.disableMsgAudio) {
+        let i = idx;
+        let general = gene;
+
+        // let extension = data.extension;
+        let extension;
+        let path;
+        let dat;
+        const tryPlaySound = (general) => {
+          if (general) {
+            const dat = Ltk.getGeneralData(general);
+            const extension = dat.extension;
+            const path = SkinBank.getAudio(skill + "_" + general, extension, "skill");
+            if (path !== undefined) {
+              Backend.playSound(path, i);
+              return true;
+            }
+          }
+          return false;
+        };
+
+        // Try main general first, then deputy general
+        if (!tryPlaySound(general)) {
+          // finally normal skill
+          dat = Ltk.getSkillData(skill);
+          extension = dat.extension;
+          path = SkinBank.getAudio(skill, extension, "skill");
+          Backend.playSound(path, i);
+        }
+      }
+
+      const m = Lua.tr("$" + skill + (gene ? "_" + gene : "")
+                          + (idx ? idx.toString() : ""));
+      data.msg = m;
+    }
+  }
+
+  function addToChat(pid, raw, msg) {
+    if (raw.type === 1) return;
+    const room = gameLoader.item;
+
+    const photo = typeof room.getPhoto === 'function' ? room.getPhoto(pid) : null;
+    if (!photo && Config.hideObserverChatter)
+      return;
+
+    msg = msg.replace(/\{emoji([0-9]+)\}/g,
+      `<img src="${Cpp.path}/image/emoji/$1.png" height="16" width="16" />`);
+    raw.msg = raw.msg.replace(/\{emoji([0-9]+)\}/g,
+      `<img src="${Cpp.path}/image/emoji/$1.png" height="16" width="16" />`);
+
+    if (raw.msg.startsWith("$")) {
+      if (specialChat(pid, raw, raw.msg.slice(1))) return; // 蛋花、语音
+    }
+
+    chat.append(msg, raw);
+
+    if (!photo) {
+      const user = raw.userName;
+      const m = raw.msg;
+      danmu.sendLog(`${user}: ${m}`);
+      return;
+    } else if (photo.chat) {
+      photo.chat(raw.msg);
+    }
+  }
+
+  function sendDanmu(msg) {
+    danmu.sendLog(msg);
+    chat.append(null, {
+      msg: msg,
+      general: "__server", // FIXME: 基于默认读取貂蝉的数据
+      userName: "",
+      time: "Server",
+    });
+  }
+
+  function addToLog(_, msg) {
+    log.append({ logText: msg });
+  }
+
+  function replyToServer(sender, data) {
+    ClientInstance.replyToServer("", data);
+    gameContent.state = "notactive";
+  }
+
+  function changeRoomPage(_, data) {
+    gameLoader.sourceComponent = data;
+  }
+
+  function resetRoomPage() {
+    surrenderNegotiationVisible = false;
+    Lua.resetClientLua();
+    gameLoader.sourceComponent = Qt.createComponent("Fk.Pages.Common", "WaitingRoom");
+    log.clear();
+    chat.clear();
+    Mediator.notify(this, Command.BackToRoom);
+  }
+
+  function continueGame() {
+    surrenderNegotiationVisible = false;
+    Lua.resetClientLua();
+    gameLoader.sourceComponent = Qt.createComponent("Fk.Pages.Common", "WaitingRoom");
+    log.clear();
+    chat.clear();
+    Mediator.notify(this, Command.RestartGame);
+  }
+
+  function tryQuitRoom() {
+    if (Config.replaying) {
+      App.quitPage();
+      Backend.controlReplayer("shutdown");
+    } else if (Config.observing || !Lua.client.gameStarted) {
+      Cpp.notifyServer("QuitRoom", "");
+    } else {
+      quitDialog.open();
+    }
+  }
+
+  function trySaveRecord() {
+    Lua.saveRecord();
+    App.showToast("OK.");
+  }
+
+  function tryBookmarkRecord() {
+    Backend.saveBlobRecordToFile(ClientInstance.getMyGameData()[0].id); // 建立在自动保存录像基础上
+    App.showToast("OK.");
+  }
+
+  function openChat() {
+    roomDrawer.loglessMode = gameContent?.objectName === "WaitingRoom";
+    roomDrawer.open();
+  }
+
+  function askForSurrenderNegotiation(sender, data) {
+    root.surrenderNegotiationId = data[0];
+    let name = data[2];
+    const room = gameLoader.item;
+    const photo = typeof room.getPhoto === 'function' ? room.getPhoto(data[1]) : null;
+    const roleShown = photo?.dataModel?.role_shown ?? photo?.role_shown ?? false;
+    if (!roleShown) // 需要配置role_shown且为真才能看到发起人的名字
+      name = Lua.tr("A friend");
+    surrenderNegotiationRequestDialog.informativeText =
+      Lua.tr("%1 wants to surrender. Agree?").arg(name);
+    surrenderNegotiationRequestDialog.open();
+  }
+
+  function closeSurrenderNegotiation(sender, data) {
+    if (root.surrenderNegotiationId === data[0]) {
+      root.surrenderNegotiationId = "";
+      surrenderNegotiationRequestDialog.close();
+    }
+  }
+
+  Component.onCompleted: {
+    overlay.addCallback(Command.EnterLobby, enterLobby);
+    overlay.addCallback(Command.GameLog, addToLog);
+    overlay.addCallback(Command.ReplyToServer, replyToServer);
+    overlay.addCallback(Command.ChangeRoomPage, changeRoomPage);
+    overlay.addCallback(Command.ResetRoomPage, resetRoomPage);
+    overlay.addCallback(Command.ContinueGame, continueGame);
+    overlay.addCallback(Command.StartGame, onNegotiationGameStarted);
+    overlay.addCallback(Command.PropertyUpdate, onNegotiationPlayerStateChanged);
+    overlay.addCallback(Command.GameOver, () => surrenderNegotiationVisible = false);
+
+    overlay.addCallback(Command.IWantToQuitRoom, tryQuitRoom);
+    overlay.addCallback(Command.IWantToSaveRecord, trySaveRecord);
+    overlay.addCallback(Command.IWantToBookmarkRecord, trySaveRecord);
+    overlay.addCallback(Command.IWantToChat, openChat);
+    overlay.addCallback("AskForSurrenderNegotiation", askForSurrenderNegotiation);
+    overlay.addCallback("CloseSurrenderNegotiation", closeSurrenderNegotiation);
+
+    refreshSurrenderNegotiationVisibility();
+
+    overlay.addCallback(Command.ReplayerDurationSet, (_, j) => {
+      root.replayerDuration = parseInt(j);
+    });
+    overlay.addCallback(Command.ReplayerElapsedChange, (_, j) => {
+      root.replayerElapsed = parseInt(j);
+    });
+    overlay.addCallback(Command.ReplayerSpeedChange, (_, j) => {
+      root.replayerSpeed = parseFloat(j);
+    });
+
+    overlay.addCallback("AddObserver", (_, d) => {
+      const wr = gameLoader.item;
+      if (wr && wr.addObserver) wr.addObserver(null, d);
+    });
+    overlay.addCallback("RemoveObserver", (_, d) => {
+      const wr = gameLoader.item;
+      if (wr && wr.removeObserver) wr.removeObserver(null, d);
+    });
+  }
+}

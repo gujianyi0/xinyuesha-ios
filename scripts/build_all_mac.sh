@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# One-command macOS build: installs Qt for iOS if needed, builds Lua/OpenSSL/
+# libgit2, compiles the app, and writes build-ios/ipa/*.ipa.
+#
+#   bash scripts/build_all_mac.sh
+#
+# Requires: macOS + Xcode (including command line tools), Homebrew, Python 3.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+QT_VERSION="${QT_VERSION:-6.8.3}"
+QT_ROOT="${QT_ROOT:-$HOME/Qt/$QT_VERSION/ios}"
+
+if [[ "$(uname -s)" != "Darwin" ]]; then
+  echo "ERROR: this script must run on macOS." >&2
+  exit 1
+fi
+xcode-select -p >/dev/null 2>&1 || {
+  echo "ERROR: Xcode command line tools not configured. Run: xcode-select --install" >&2
+  exit 1
+}
+
+if ! command -v brew >/dev/null; then
+  echo "ERROR: Homebrew not found (https://brew.sh)." >&2
+  exit 1
+fi
+command -v cmake >/dev/null || brew install cmake
+command -v swig >/dev/null || brew install swig
+
+if [[ ! -x "$QT_ROOT/bin/qt-cmake" ]]; then
+  echo "==> Installing Qt $QT_VERSION for iOS via aqtinstall"
+  python3 -m pip install --user aqtinstall
+  python3 -m aqt install-qt mac ios "$QT_VERSION" ios \
+    -m qtmultimedia qt5compat qtshadertools -O "$HOME/Qt"
+fi
+
+bash "$ROOT/scripts/build_deps.sh" --prefix "$ROOT/ios-deps"
+bash "$ROOT/scripts/build_ios.sh" --qt "$QT_ROOT" --deps "$ROOT/ios-deps"

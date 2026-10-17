@@ -1,0 +1,430 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+file(GLOB SWIG_FILES "${PROJECT_SOURCE_DIR}/src/swig/*.i")
+set(SWIG_SOURCE ${PROJECT_SOURCE_DIR}/src/swig/freekill.i)
+
+add_custom_command(
+  OUTPUT ${PROJECT_SOURCE_DIR}/src/swig/freekill-wrap.cxx
+  DEPENDS ${SWIG_FILES}
+  COMMENT "Generating freekill-wrap.cxx"
+  COMMAND swig -c++ -lua -Wall -o
+    ${PROJECT_SOURCE_DIR}/src/swig/freekill-wrap.cxx
+    ${SWIG_SOURCE}
+)
+
+set(freekill_EXESRCS
+  "main.cpp"
+)
+
+set(freekill_SRCS
+  # "main.cpp"
+  "freekill.cpp"
+
+  "core/player.cpp"
+  "core/util.cpp"
+  "core/c-wrapper.cpp"
+  "core/packman.cpp"
+
+  "client/client.cpp"
+  "client/clientplayer.cpp"
+
+  "network/server_socket.cpp"
+  "network/client_socket.cpp"
+  "network/router.cpp"
+
+  "server/server.cpp"
+
+  "server/user/auth.cpp"
+  "server/user/serverplayer.cpp"
+
+  "server/room/roombase.cpp"
+  "server/room/lobby.cpp"
+  "server/room/room.cpp"
+
+  "server/task/task_manager.cpp"
+  "server/task/task.cpp"
+
+  "server/gamelogic/roomthread.cpp"
+
+  "server/cli/shell.cpp"
+
+  "ui/qmlbackend.cpp"
+  "ui/soloudplayer.cpp"
+
+  "swig/freekill-wrap.cxx"
+)
+set_source_files_properties(
+  "swig/freekill-wrap.cxx" PROPERTIES GENERATED TRUE)
+
+if (IOS)
+  # Objective-C++ bridge: AVAudioSession category + idle timer.
+  list(APPEND freekill_SRCS "platform/ioshelper.mm")
+  set_source_files_properties("platform/ioshelper.mm" PROPERTIES
+    SKIP_PRECOMPILE_HEADERS ON)
+endif()
+
+if (NOT DEFINED FK_SERVER_ONLY)
+  list(APPEND freekill_SRCS
+    "client/replayer.cpp"
+    # "ui/mod.cpp"
+  )
+
+  # Spine 渲染器（版本无关接口 + 各版本后端 + RHI 渲染节点；纯 C 运行时在下方按版本编译为静态库）
+  set(SPINE_PLUGIN_SRCS
+    "ui/spine/texture.cpp"
+    "ui/spine/spinerendernode.cpp"
+    "ui/spine/skeletonanimationfbo.cpp"
+    "ui/spine/spineevent.cpp"
+    "ui/spine/spineregister.cpp"
+    "ui/spine/spineversion.cpp"
+    "ui/spine/spinebackend_factory.cpp"
+    "ui/spine/spinebackend_21.cpp"
+    "ui/spine/spinebackend_34.cpp"
+    "ui/spine/spinebackend_35.cpp"
+    "ui/spine/spinebackend_36.cpp"
+    "ui/spine/spinebackend_37.cpp"
+    "ui/spine/spinebackend_38.cpp"
+    "ui/spine/spinebackend_40.cpp"
+    "ui/spine/spinebackend_41.cpp"
+    "ui/spine/spinebackend_42.cpp"
+  )
+  list(APPEND freekill_SRCS ${SPINE_PLUGIN_SRCS})
+
+  # spine-c 头文件中使用了 `slots` 作为字段名，与 Qt 关键字宏冲突，
+  # 必须对这些文件关闭 Qt 关键字（代码已用 Q_SIGNALS/Q_EMIT 编写）。
+  set_source_files_properties(${SPINE_PLUGIN_SRCS} PROPERTIES
+    COMPILE_DEFINITIONS QT_NO_KEYWORDS
+    SKIP_PRECOMPILE_HEADERS ON
+  )
+
+  include_directories("${PROJECT_SOURCE_DIR}/src/ui/spine")
+
+  # SkeletonAnimation.qml 资源打进主程序（避免静态库资源需 Q_INIT_RESOURCE 的问题）
+  set_property(TARGET FreeKill PROPERTY AUTORCC ON)
+  list(APPEND freekill_EXESRCS "${PROJECT_SOURCE_DIR}/src/ui/spine/resource.qrc")
+
+  # Spine 骨骼 shader 用构建期预编译（qt_add_shaders → .qsb），而非运行期 QShaderBaker。
+  # 关键：GLSL 必须同时生成 300 es（GLES 3.0，Android 真机主流）。默认 qt_add_shaders
+  # 只生成 100 es / 120 / 150，Android GLES 3.0 真机会降级到低精度 ES2 shader，
+  # 导致坐标精度不足 → 骨骼移位、无视 clip/opacityMask（模拟器桌面 GPU 容错故正常）。
+  qt_add_shaders(FreeKill "spine_shaders"
+    PREFIX "/shaders"
+    BASE "${PROJECT_SOURCE_DIR}/src/ui/spine/shaders"
+    GLSL "100 es,300 es,120,150"
+    FILES
+      "${PROJECT_SOURCE_DIR}/src/ui/spine/shaders/spine.vert"
+      "${PROJECT_SOURCE_DIR}/src/ui/spine/shaders/spine_pma.frag"
+      "${PROJECT_SOURCE_DIR}/src/ui/spine/shaders/spine_straight.frag"
+      "${PROJECT_SOURCE_DIR}/src/ui/spine/shaders/spine_plain.frag"
+  )
+
+  # 多版本 spine-c 运行时（源码已按版本重命名符号，互不冲突）
+  # 支持 2.1 / 3.4~3.8 / 4.0~4.2，供版本自动/显式分发使用
+  set(SPINE_RUNTIME_VERSIONS 21 34 35 36 37 38 40 41 42)
+  foreach(SPINE_VER IN LISTS SPINE_RUNTIME_VERSIONS)
+    file(GLOB SPINE_VER_SRCS
+      "${PROJECT_SOURCE_DIR}/src/spine-versions/spine-c-${SPINE_VER}/src/spine/*.c")
+    add_library(spine${SPINE_VER} STATIC ${SPINE_VER_SRCS})
+    # BEFORE：确保优先搜索本版本头文件，而不是旧的 src/spine-c/include
+    target_include_directories(spine${SPINE_VER} BEFORE PRIVATE
+      "${PROJECT_SOURCE_DIR}/src/spine-versions/spine-c-${SPINE_VER}/include")
+    set_target_properties(spine${SPINE_VER} PROPERTIES
+      C_STANDARD 11
+      C_EXTENSIONS ON)
+    # 旧版 C 代码告警较多，降级为不报错
+    if(MSVC)
+      target_compile_options(spine${SPINE_VER} PRIVATE /W0)
+    else()
+      target_compile_options(spine${SPINE_VER} PRIVATE -w)
+    endif()
+    # 后端 .cpp 只包含对应版本的 <spine/spine.h>，按文件指定 include 路径
+    set_source_files_properties(
+      "${PROJECT_SOURCE_DIR}/src/ui/spine/spinebackend_${SPINE_VER}.cpp"
+      PROPERTIES INCLUDE_DIRECTORIES
+      "${PROJECT_SOURCE_DIR}/src/spine-versions/spine-c-${SPINE_VER}/include")
+    list(APPEND SPINE_LIBS spine${SPINE_VER})
+  endforeach()
+
+  # SoLoud 音频引擎（mp3/wav/flac 解码 + miniaudio 后端），用于播放短音效。
+  # Android 不参与（Android 走 Java MediaPlayer）；soloudplayer.cpp 在无 SoLoud
+  # 平台（FK_SERVER_ONLY / Android）编译为桩实现。
+  if (NOT ANDROID)
+    set(SOLOUD_ROOT "${PROJECT_SOURCE_DIR}/thirdparty/soloud")
+    # 桌面端编为动态库（soloud.dll）以缩小 exe；iOS 必须静态链接进 app。
+    if (IOS)
+      set(SOLOUD_LIBRARY_TYPE STATIC)
+    else()
+      set(SOLOUD_LIBRARY_TYPE SHARED)
+    endif()
+    add_library(soloud ${SOLOUD_LIBRARY_TYPE}
+      "${SOLOUD_ROOT}/src/core/soloud.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_audiosource.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_bus.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_core_3d.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_core_basicops.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_core_faderops.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_core_filterops.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_core_getters.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_core_setters.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_core_voicegroup.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_core_voiceops.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_fader.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_fft.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_fft_lut.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_file.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_filter.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_misc.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_queue.cpp"
+      "${SOLOUD_ROOT}/src/core/soloud_thread.cpp"
+      "${SOLOUD_ROOT}/src/audiosource/wav/soloud_wav.cpp"
+      "${SOLOUD_ROOT}/src/audiosource/wav/dr_impl.cpp"
+      "${SOLOUD_ROOT}/src/audiosource/wav/stb_vorbis.c"
+      "${SOLOUD_ROOT}/src/backend/miniaudio/soloud_miniaudio.cpp"
+    )
+    target_include_directories(soloud PRIVATE
+      "${SOLOUD_ROOT}/include"
+      "${SOLOUD_ROOT}/src/audiosource/wav"
+      "${SOLOUD_ROOT}/src/backend/miniaudio"
+    )
+    target_compile_definitions(soloud PRIVATE WITH_MINIAUDIO)
+    # stb_vorbis 单头实现：编译 .c 时展开实现
+    set_source_files_properties(
+      "${SOLOUD_ROOT}/src/audiosource/wav/stb_vorbis.c" PROPERTIES
+      COMPILE_DEFINITIONS "STB_VORBIS_IMPLEMENTATION")
+    set_target_properties(soloud PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+    # 导出全部符号（SoLoud 头无 dllexport 标记）并把 DLL 输出到 exe 同目录
+    if (NOT IOS)
+      set_target_properties(soloud PROPERTIES
+        WINDOWS_EXPORT_ALL_SYMBOLS ON
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+    endif()
+    if(MSVC)
+      target_compile_options(soloud PRIVATE /W0)
+    else()
+      target_compile_options(soloud PRIVATE -w)
+    endif()
+    set(SOLOUD_INCLUDE "${SOLOUD_ROOT}/include")
+    set(SOLOUD_LIB soloud)
+  endif()
+endif ()
+
+set(QT_LIB Qt6::Network)
+
+if (NOT DEFINED FK_SERVER_ONLY)
+  list(APPEND QT_LIB
+    Qt6::Qml
+    Qt6::Quick
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Multimedia
+    Qt6::QuickControls2
+    Qt6::Concurrent
+    Qt6::ShaderTools
+    Qt6::GuiPrivate
+  )
+  if (NOT IOS)
+    # Qt OpenGL is a desktop module; iOS uses Metal through RHI.
+    list(APPEND QT_LIB Qt6::OpenGL)
+  endif()
+endif()
+
+if (WIN32)
+  set(LUA_LIB ${PROJECT_SOURCE_DIR}/lib/win/lua54.dll)
+  set(SQLITE3_LIB ${PROJECT_SOURCE_DIR}/lib/win/sqlite3.dll)
+  set(CRYPTO_LIB OpenSSL::Crypto)
+  set(GIT_LIB ${PROJECT_SOURCE_DIR}/lib/win/libgit2.dll)
+  set(app_icon_resource_windows "${PROJECT_SOURCE_DIR}/image/icon.rc")
+  list(APPEND freekill_EXESRCS ${app_icon_resource_windows})
+elseif (ANDROID)
+  if (DEFINED ENV{FK_ANDROID_SSL_DIR})
+    set(SSL_DIR $ENV{FK_ANDROID_SSL_DIR})
+    message(STATUS "Using SSL libraries from environment variable: ${SSL_DIR}")
+    set(CRYPTO_LIB ${SSL_DIR}/libcrypto_3.so)
+    set(SSL_LIB ${SSL_DIR}/libssl_3.so)
+    set(GIT_LIB ${SSL_DIR}/libgit2.so)
+  else ()
+    set(CRYPTO_LIB ${PROJECT_SOURCE_DIR}/lib/android/libcrypto.so)
+    set(SSL_LIB ${PROJECT_SOURCE_DIR}/lib/android/libssl.so)
+    set(GIT_LIB ${PROJECT_SOURCE_DIR}/lib/android/libgit2.so)
+    set(SSH_LIB ${PROJECT_SOURCE_DIR}/lib/android/libssh2.so)
+  endif ()
+  set(LUA_LIB ${PROJECT_SOURCE_DIR}/lib/android/liblua54.so)
+  set(SQLITE3_LIB ${PROJECT_SOURCE_DIR}/lib/android/libsqlite3.so)
+
+  set_target_properties(FreeKill PROPERTIES
+    QT_ANDROID_PACKAGE_SOURCE_DIR ${PROJECT_SOURCE_DIR}/android
+    QT_ANDROID_EXTRA_LIBS "${LUA_LIB};${SQLITE3_LIB};${CRYPTO_LIB};${SSL_LIB};${GIT_LIB};${SSH_LIB}"
+  )
+  list(REMOVE_ITEM QT_LIB Qt6::QuickControls2)
+elseif (IOS)
+  if (NOT DEFINED FK_IOS_DEPS OR NOT EXISTS "${FK_IOS_DEPS}/lib/liblua54.a")
+    message(FATAL_ERROR
+      "iOS dependencies not found. Configure with -DFK_IOS_DEPS=<prefix> "
+      "(run scripts/build_deps.sh first).")
+  endif ()
+  set(LUA_LIB "${FK_IOS_DEPS}/lib/liblua54.a")
+  set(CRYPTO_LIB "${FK_IOS_DEPS}/lib/libcrypto.a")
+  set(SSL_LIB "${FK_IOS_DEPS}/lib/libssl.a")
+  find_library(FK_SQLITE3 sqlite3 REQUIRED)
+  find_library(FK_ZLIB z REQUIRED)
+  find_library(FK_ICONV iconv REQUIRED)
+  set(SQLITE3_LIB "${FK_SQLITE3}")
+  set(GIT_LIB "${FK_IOS_DEPS}/lib/libgit2.a;${FK_ZLIB};${FK_ICONV}")
+  set(READLINE_LIB "")
+  find_library(FK_AVFOUNDATION AVFoundation REQUIRED)
+  find_library(FK_UIKIT UIKit REQUIRED)
+  find_library(FK_FOUNDATION Foundation REQUIRED)
+  find_library(FK_AUDIOTOOLBOX AudioToolbox REQUIRED)
+  find_library(FK_COREAUDIO CoreAudio REQUIRED)
+  find_library(FK_COREFOUNDATION CoreFoundation REQUIRED)
+  find_library(FK_SECURITY Security REQUIRED)
+  set(IOS_FRAMEWORKS
+    "${FK_AVFOUNDATION}" "${FK_UIKIT}" "${FK_FOUNDATION}" "${FK_AUDIOTOOLBOX}"
+    "${FK_COREAUDIO}" "${FK_COREFOUNDATION}" "${FK_SECURITY}")
+  include_directories("${FK_IOS_DEPS}/include")
+  include_directories("${FK_IOS_DEPS}/include/lua")
+elseif (APPLE)
+  set(LUA_LIB ${LUA_LIBRARIES})
+  set(SQLITE3_LIB sqlite3)
+  set(CRYPTO_LIB OpenSSL::Crypto)
+  set(READLINE_LIB readline)
+
+  set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "/opt/homebrew/Cellar/libgit2")
+  find_package(PkgConfig)
+  if (PkgConfig_FOUND)
+    pkg_check_modules(LIBGIT2 libgit2)
+    if (LIBGIT2_FOUND)
+      message(STATUS "Found libgit2: ${LIBGIT2_LIBRARIES}")
+    else ()
+      message(WARNING "libgit2 not found, try to find libgit2 by CMake")
+      find_package(LibGit2)
+    endif ()
+  else ()
+    message(WARNING "PkgConfig not found, try to find libgit2 by CMake")
+    find_package(LibGit2)
+  endif ()
+  set(GIT_LIB ${LIBGIT2_LIBRARIES})
+  target_link_directories(FreeKill PRIVATE
+    ${LIBGIT2_LIBRARY_DIRS}
+  )
+else ()
+  set(LUA_LIB lua5.4)
+  set(SQLITE3_LIB sqlite3)
+  set(CRYPTO_LIB OpenSSL::Crypto)
+  set(READLINE_LIB readline)
+  set(GIT_LIB git2)
+endif ()
+
+add_library(libFreeKill STATIC ${freekill_SRCS})
+if (SOLOUD_LIB)
+  target_include_directories(libFreeKill PRIVATE ${SOLOUD_INCLUDE})
+  target_compile_definitions(libFreeKill PRIVATE FK_WITH_SOLOUD)
+endif()
+
+# RHI 渲染节点需要 Qt 私有 rhi 头（<rhi/qrhi.h> 由 Qt6::GuiPrivate 提供，
+# QShaderBaker 在 QtShaderTools 的私有 include 目录，需手工附加）。
+if (TARGET Qt6::ShaderTools AND Qt6ShaderTools_DIR)
+  get_filename_component(QT6_PREFIX "${Qt6ShaderTools_DIR}/../../.." ABSOLUTE)
+  set(QT6_PRIV_VER "${Qt6_VERSION_MAJOR}.${Qt6_VERSION_MINOR}.${Qt6_VERSION_PATCH}")
+  if (EXISTS "${QT6_PREFIX}/include/QtShaderTools/${QT6_PRIV_VER}/QtShaderTools/rhi/qshaderbaker.h")
+    target_include_directories(libFreeKill PRIVATE
+      "${QT6_PREFIX}/include/QtShaderTools/${QT6_PRIV_VER}/QtShaderTools")
+  elseif (EXISTS "${QT6_PREFIX}/include/QtShaderTools/rhi/qshaderbaker.h")
+    target_include_directories(libFreeKill PRIVATE
+      "${QT6_PREFIX}/include/QtShaderTools")
+  endif()
+endif()
+
+target_precompile_headers(libFreeKill PRIVATE "pch.h")
+target_link_libraries(libFreeKill PRIVATE
+  ${LUA_LIB}
+  ${SQLITE3_LIB}
+  # Static link order matters on iOS: libgit2 -> libssl -> libcrypto.
+  ${GIT_LIB}
+  ${SSL_LIB}
+  ${CRYPTO_LIB}
+  ${READLINE_LIB}
+  ${QT_LIB}
+  ${SSH_LIB}
+  ${IDBFS_LIB}
+  ${JEMALLOC_LIBRARIES}
+  ${SPINE_LIBS}
+  ${SOLOUD_LIB}
+  ${IOS_FRAMEWORKS}
+  ${FK_ZLIB}
+  ${FK_ICONV}
+)
+
+if (${CMAKE_BUILD_TYPE}0 STREQUAL "Debug0")
+  target_compile_definitions(libFreeKill PRIVATE QT_QML_DEBUG)
+endif ()
+
+target_sources(FreeKill PRIVATE ${freekill_EXESRCS})
+target_link_libraries(FreeKill PRIVATE
+  libFreeKill
+)
+
+install(TARGETS FreeKill DESTINATION usr/bin)
+install(DIRECTORY
+  ${PROJECT_SOURCE_DIR}/audio
+  ${PROJECT_SOURCE_DIR}/fonts
+  ${PROJECT_SOURCE_DIR}/image
+  ${PROJECT_SOURCE_DIR}/lua
+  ${PROJECT_SOURCE_DIR}/Fk
+  ${PROJECT_SOURCE_DIR}/server
+  ${PROJECT_SOURCE_DIR}/client
+  DESTINATION usr/share/FreeKill
+)
+install(DIRECTORY
+  ${PROJECT_SOURCE_DIR}/packages/standard
+  ${PROJECT_SOURCE_DIR}/packages/standard_cards
+  ${PROJECT_SOURCE_DIR}/packages/test
+  ${PROJECT_SOURCE_DIR}/packages/maneuvering
+  DESTINATION usr/share/FreeKill/packages
+)
+install(FILES
+  ${PROJECT_SOURCE_DIR}/fk_ver
+  DESTINATION usr/share/FreeKill
+)
+install(FILES
+  ${PROJECT_SOURCE_DIR}/packages/init.sql
+  DESTINATION usr/share/FreeKill/packages
+)
+install(FILES
+  ${PROJECT_SOURCE_DIR}/image/icon.png
+  DESTINATION usr/share/icons
+  RENAME FreeKill.png
+)
+install(FILES
+  ${PROJECT_SOURCE_DIR}/freekill.desktop
+  DESTINATION usr/share/applications
+)
+
+if (NOT DEFINED FK_SERVER_ONLY AND NOT IOS)
+  install(FILES
+    ${CMAKE_BINARY_DIR}/zh_CN.qm
+    ${CMAKE_BINARY_DIR}/en_US.qm
+    ${CMAKE_BINARY_DIR}/vi_VN.qm
+    DESTINATION usr/share/FreeKill
+  )
+endif()
+
+if(CPACK_GENERATOR STREQUAL "AppImage")
+  install(CODE "
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+                usr/share/icons/FreeKill.png
+                \${CMAKE_INSTALL_PREFIX}/FreeKill.png
+    )
+  ")
+
+  qt_generate_deploy_qml_app_script(
+    TARGET FreeKill
+    OUTPUT_SCRIPT deploy_script
+    NO_UNSUPPORTED_PLATFORM_ERROR
+  )
+  install(SCRIPT ${deploy_script})
+
+  set(CPACK_PACKAGE_ICON FreeKill)
+  include(CPack)
+endif()
