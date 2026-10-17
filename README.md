@@ -26,10 +26,10 @@ iOS 应用必须用 **macOS + Xcode** 编译和签名。Windows 上没有 iOS SD
 1. 完整的 iOS 工程（CMake + Qt 6.8.3 for iOS）
 2. Lua / OpenSSL / libgit2 的 iOS 静态库构建脚本
 3. 一条 GitHub Actions 流水线，在云端 macOS 上自动出 **未签名 IPA**
-4. 在 Windows 上用 Sideloadly 签名安装的完整步骤
+4. Windows 一键安装包（iTunes / Sideloadly / 一键脚本）
 
-也就是说：**代码和流水线已经做完，最后只差在一个 macOS 环境里跑一次构建**。
-**2026-10-17 更新：已在 GitHub Actions 的 macOS runner 上成功构建。**
+工程、构建脚本、GitHub Actions 流水线和 Windows 一键安装包都已就绪。
+**2026-10-17：已在 GitHub Actions 的 macOS runner 上成功构建。**
 本机下载的未签名 IPA：
 
 ```
@@ -41,22 +41,17 @@ SHA-256: a7209890b306c056e18fd820621433aed152b9b4cc4036f6a6dc44a7b3b49f5b
 
 ---
 
-## 最简安装（推荐）
+## 安装到 iPhone（推荐：整合包）
 
-`apk/整合包/` 里已经放好 IPA、iTunes、Sideloadly 和一个一键脚本：
+双击 `一键安装到iPhone.lnk`（或 `apk/整合包/一键安装到iPhone.cmd`）。
+脚本会自动安装 iTunes/Sideloadly、打开 Sideloadly 并带上 IPA；之后按
+`安装说明.txt` 完成 Apple ID 登录和信任证书即可。
 
-1. 双击 `apk/整合包/一键安装到iPhone.cmd`（需要管理员/UAC）；
-2. 脚本自动安装 iTunes 和 Sideloadly，并打开 Sideloadly、把 IPA 路径放进剪贴板；
-3. 连 iPhone、点“信任此电脑”；
-4. 在 Sideloadly 里填免费 Apple ID（双重认证用 App 专用密码），点 Start；
-5. iPhone 设置 → 通用 → VPN 与设备管理 → 信任证书。
-
-苹果强制的 Apple ID 授权和“信任证书”无法脚本化，其余步骤已合并。
-整合包只在本机，`apk/` 已在 `.gitignore` 中，不会上传 GitHub。
+苹果强制的 Apple ID 授权与“信任证书”无法脚本化；其余步骤已合并。
 
 ---
 
-## 方式 A：GitHub Actions 云端构建（推荐，不需要自己有 Mac）
+## 重新构建（开发者）：GitHub Actions
 
 1. 在 GitHub 新建一个仓库（public/private 都行；public 的 macOS 分钟免费）。
 2. 把 **本目录 `deepseek/ios/` 里的全部内容** 作为仓库根目录上传。
@@ -66,24 +61,12 @@ SHA-256: a7209890b306c056e18fd820621433aed152b9b4cc4036f6a6dc44a7b3b49f5b
 4. 构建约 30–60 分钟，完成后在 run 页面下载 artifact
    **`xinyuesha-ios-unsigned`**，里面是：
    `新月杀测试版-0.5.25-ios-unsigned.ipa`
-5. 在 Windows 上安装 Sideloadly（本目录 `apk/pc/` 已放好
-   `iTunes64Setup.exe` 和 `SideloadlySetup64.exe`；先装 iTunes 再装 Sideloadly），
-   USB 连接 iPhone：
-   - 把 IPA 拖进 Sideloadly；
-   - Apple ID 填自己的（免费账号即可）；
-   - 点 Start，输入 Apple ID 密码（如开启双重认证，用专用密码）；
-   - 首次安装后，iPhone → 设置 → 通用 → VPN 与设备管理 → 信任你的开发者证书。
-6. 免费 Apple ID 的限制：**7 天过期、最多 3 个自签 app**；过期后用同样的
-   IPA 重新签一次即可。付费开发者账号（$99/年）可 1 年有效。
-
-> 如果 Sideloadly 提示需要卸载旧版本才能安装，卸载会一并删除
-> `Documents/FreeKill`（账号、录像、皮肤）。重要数据请先在
-> 「文件」App → 我的 iPhone → 新月杀测试版 → FreeKill 里备份。
+5. 安装到 iPhone：见 `安装说明.txt`（推荐用 `apk/整合包` 一键脚本）。
 
 > GitHub Actions 在中国大陆访问可能不稳定；如果拉取/上传很慢，可以改用
-> 方式 B（自己的 Mac 或云 Mac），或先把本目录打包传到能访问 GitHub 的机器。
+> 自己的 Mac，或先把本目录打包传到能访问 GitHub 的机器。
 
-## 方式 B：自己的 Mac / 云 Mac
+## 重新构建（开发者）：自己的 Mac
 
 要求：macOS + Xcode（App Store 安装，至少 Xcode 15）、Homebrew、Python 3。
 
@@ -101,12 +84,11 @@ bash scripts/build_all_mac.sh
 3. 用 Qt 的 `qt-cmake` + Xcode 生成并编译 `FreeKill.app`；
 4. 打包 `build-ios/ipa/新月杀测试版-0.5.25-ios-unsigned.ipa`。
 
-产物仍然是未签名的。两种安装方式：
+产物仍然是未签名的。安装方式：
 
-- **Sideloadly / AltStore**（同方式 A）；
-- **Xcode 直接装**：打开 `build-ios/FreeKill.xcodeproj`，在
-  Signing & Capabilities 里选择自己的 Team，连接 iPhone 后 Run。
-  这种方式不需要 Sideloadly，但需要有 Mac。
+- **Windows**：见 `安装说明.txt`（推荐 `apk/整合包` 一键脚本）；
+- **Mac**：打开 `build-ios/FreeKill.xcodeproj`，在 Signing & Capabilities
+  里选择自己的 Team，连接 iPhone 后 Run；不需要 Sideloadly。
 
 分步执行（调试用）：
 
