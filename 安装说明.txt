@@ -1,0 +1,29 @@
+新月杀测试版 · iOS 未签名 IPA
+==============================
+
+IPA 文件：新月杀测试版-0.5.25-ios-unsigned.ipa（72MB）
+SHA-256：a7209890b306c056e18fd820621433aed152b9b4cc4036f6a6dc44a7b3b49f5b
+Bundle ID：com.cui.freekill.ios
+最低系统：iOS 16（你的 iOS 17 可用）
+
+安装步骤（Windows + 免费 Apple ID）
+----------------------------------
+1. 运行 C:\Users\c2115\Downloads\iTunes64Setup.exe，安装 Apple 驱动（需要管理员）。
+2. 运行 C:\Users\c2115\Downloads\SideloadlySetup64.exe，安装 Sideloadly。
+3. 数据线连接 iPhone，iPhone 上点“信任此电脑”。
+4. iPhone：设置 → 隐私与安全性 → 开发者模式 → 打开（iOS 16+，可能需重启）。
+5. 打开 Sideloadly，Device 选择你的 iPhone。
+6. 把 新月杀测试版-0.5.25-ios-unsigned.ipa 拖进 Sideloadly 的 IPA 框。
+7. Apple ID 填你的免费账号；双重认证建议用 App 专用密码。
+8. 点 Start，等待完成。
+9. iPhone：设置 → 通用 → VPN 与设备管理 → 开发者 App → 信任你的 Apple ID。
+10. 打开桌面上的“新月杀测试版”，横屏登录主力服。
+
+注意
+----
+- 免费 Apple ID 签名 7 天后过期；用同一个 IPA 重新 Start 即可续签。
+- 覆盖重签通常保留数据；若必须卸载，先备份
+  “文件”App → 我的 iPhone → 新月杀测试版 → FreeKill。
+- 首次启动会复制约 70MB 运行时到 Documents，需要几秒，之后不再复制。
+- 如果闪退：把 iPhone 的崩溃日志和
+  “文件”App 里的 FreeKill/freekill.server.log 发回。
