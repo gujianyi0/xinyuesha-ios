@@ -2,6 +2,7 @@
 build-ios/
 build-deps/
 ios-deps/
+windows-tools/
 .venv-aqt/
 build-check/
 DerivedData/

@@ -6,10 +6,13 @@ SHA-256：a7209890b306c056e18fd820621433aed152b9b4cc4036f6a6dc44a7b3b49f5b
 Bundle ID：com.cui.freekill.ios
 最低系统：iOS 16（你的 iOS 17 可用）
 
+本目录已整合：IPA、iTunes/Sideloadly 安装包（windows-tools）、安装说明。
+安装包校验值见 windows-tools\SHA256SUMS.txt。
+
 安装步骤（Windows + 免费 Apple ID）
 ----------------------------------
-1. 运行 C:\Users\c2115\Downloads\iTunes64Setup.exe，安装 Apple 驱动（需要管理员）。
-2. 运行 C:\Users\c2115\Downloads\SideloadlySetup64.exe，安装 Sideloadly。
+1. 运行 windows-tools\iTunes64Setup.exe，安装 Apple 驱动（需要管理员）。
+2. 运行 windows-tools\SideloadlySetup64.exe，安装 Sideloadly。
 3. 数据线连接 iPhone，iPhone 上点“信任此电脑”。
 4. iPhone：设置 → 隐私与安全性 → 开发者模式 → 打开（iOS 16+，可能需重启）。
 5. 打开 Sideloadly，Device 选择你的 iPhone。

@@ -51,7 +51,9 @@ SHA-256: a7209890b306c056e18fd820621433aed152b9b4cc4036f6a6dc44a7b3b49f5b
 4. 构建约 30–60 分钟，完成后在 run 页面下载 artifact
    **`xinyuesha-ios-unsigned`**，里面是：
    `新月杀测试版-0.5.25-ios-unsigned.ipa`
-5. 在 Windows 上安装 [Sideloadly](https://sideloadly.io/)，USB 连接 iPhone：
+5. 在 Windows 上安装 Sideloadly（本目录 `windows-tools/` 已放好
+   `iTunes64Setup.exe` 和 `SideloadlySetup64.exe`；先装 iTunes 再装 Sideloadly），
+   USB 连接 iPhone：
    - 把 IPA 拖进 Sideloadly；
    - Apple ID 填自己的（免费账号即可）；
    - 点 Start，输入 Apple ID 密码（如开启双重认证，用专用密码）；
@@ -148,6 +150,9 @@ deepseek/ios/
 │   ├── build_all_mac.sh        # 一键 Mac 构建
 │   └── verify_app.sh           # 打包前检查 .app 资源完整性
 ├── .github/workflows/build-ios.yml
+├── windows-tools/              # iTunes / Sideloadly 安装包（仅本地，不推 GitHub）
+├── 新月杀测试版-0.5.25-ios-unsigned.ipa
+├── 安装说明.txt
 └── docs/移植改动.md
 ```
 
