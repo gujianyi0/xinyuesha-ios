@@ -103,7 +103,7 @@ add_custom_command(
   POST_BUILD
   COMMENT "Generating version file fk_ver"
   COMMAND echo ${CMAKE_PROJECT_VERSION} > ${PROJECT_SOURCE_DIR}/fk_ver
-  COMMAND ${PROJECT_SOURCE_DIR}/genfkver.sh
+  COMMAND sh ${PROJECT_SOURCE_DIR}/genfkver.sh
 )
 
 if (NOT DEFINED FK_SERVER_ONLY)
