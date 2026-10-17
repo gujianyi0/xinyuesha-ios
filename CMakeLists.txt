@@ -171,6 +171,11 @@ if (IOS)
   # A tiny QML module whose only job is to make qmlimportscanner see every
   # Qt module used by the loose QML tree. On a static Qt build this causes
   # qt_import_qml_plugins to link the matching QML plugins.
+  # qt_add_qml_module puts QML_FILES into a Qt resource; an absolute source
+  # path needs an explicit relative resource alias.
+  set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/ios/IosImports.qml"
+    PROPERTIES QT_RESOURCE_ALIAS "IosImports.qml")
+  qt_policy(SET QTP0001 NEW)
   qt_add_qml_module(FreeKill
     URI FreeKillIosImports
     VERSION 1.0
