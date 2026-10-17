@@ -2,6 +2,7 @@
 build-ios/
 build-deps/
 ios-deps/
+.venv-aqt/
 build-check/
 DerivedData/
 *.ipa

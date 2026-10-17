@@ -25,7 +25,11 @@ jobs:
       - name: Install build tools
         run: |
           brew install cmake swig
-          python3 -m pip install --user aqtinstall
+          # GitHub's Homebrew Python is PEP 668 externally-managed, so install
+          # aqt into a throw-away venv instead of the system interpreter.
+          python3 -m venv "$RUNNER_TEMP/aqt-venv"
+          "$RUNNER_TEMP/aqt-venv/bin/pip" install --upgrade pip aqtinstall
+          echo "$RUNNER_TEMP/aqt-venv/bin" >> "$GITHUB_PATH"
 
       - name: Cache Qt and native dependencies
         uses: actions/cache@v4
@@ -38,7 +42,7 @@ jobs:
       - name: Install Qt for iOS
         run: |
           if [ ! -x "$HOME/Qt/6.8.3/ios/bin/qt-cmake" ]; then
-            python3 -m aqt install-qt mac ios 6.8.3 ios \
+            aqt install-qt mac ios 6.8.3 ios \
               -m qtmultimedia qt5compat qtshadertools -O "$HOME/Qt"
           fi
 

@@ -31,9 +31,12 @@ command -v swig >/dev/null || brew install swig
 
 if [[ ! -x "$QT_ROOT/bin/qt-cmake" ]]; then
   echo "==> Installing Qt $QT_VERSION for iOS via aqtinstall"
-  python3 -m pip install --user aqtinstall
-  python3 -m aqt install-qt mac ios "$QT_VERSION" ios \
-    -m qtmultimedia qt5compat qtshadertools -O "$HOME/Qt"
+  AQT_VENV="$ROOT/.venv-aqt"
+  if [[ ! -x "$AQT_VENV/bin/aqt" ]]; then
+    python3 -m venv "$AQT_VENV"
+    "$AQT_VENV/bin/pip" install --upgrade pip aqtinstall
+  fi
+  "$AQT_VENV/bin/aqt" install-qt mac ios "$QT_VERSION" ios     -m qtmultimedia qt5compat qtshadertools -O "$HOME/Qt"
 fi
 
 bash "$ROOT/scripts/build_deps.sh" --prefix "$ROOT/ios-deps"
