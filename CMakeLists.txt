@@ -167,8 +167,6 @@ if (IOS)
       "${CMAKE_CURRENT_SOURCE_DIR}/ios/bundle"
       "$<TARGET_BUNDLE_DIR:FreeKill>"
     COMMAND xcrun --sdk iphoneos ibtool --compile
-      --minimum-deployment-target "${FK_IOS_DEPLOYMENT_TARGET}"
-      --target-device iphone --target-device ipad
       "$<TARGET_BUNDLE_DIR:FreeKill>/LaunchScreen.storyboardc"
       "${CMAKE_CURRENT_SOURCE_DIR}/ios/LaunchScreen.storyboard"
     COMMENT "Bundling FreeKill runtime, icons and launch screen"
