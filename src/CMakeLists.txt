@@ -220,9 +220,10 @@ if (NOT DEFINED FK_SERVER_ONLY)
     Qt6::QuickControls2
     Qt6::Concurrent
     Qt6::ShaderTools
-    Qt6::GuiPrivate
   )
   if (NOT IOS)
+    # Desktop Qt ships private headers; iOS uses ios-compat/rhi instead.
+    list(APPEND QT_LIB Qt6::GuiPrivate)
     # Qt OpenGL is a desktop module; iOS uses Metal through RHI.
     list(APPEND QT_LIB Qt6::OpenGL)
   endif()

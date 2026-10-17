@@ -18,7 +18,6 @@ set(FK_QT_COMPONENTS Network)
 if (NOT DEFINED FK_SERVER_ONLY)
   list(APPEND FK_QT_COMPONENTS
     Gui
-    GuiPrivate
     Qml
     Quick
     Widgets
@@ -27,6 +26,12 @@ if (NOT DEFINED FK_SERVER_ONLY)
     Concurrent
     ShaderTools
   )
+  if (NOT IOS)
+    # The official Qt for iOS package does not ship Qt6GuiPrivate/Qt6GuiPrivateConfig.cmake.
+    # The Spine RHI code only needs four self-contained rhi/*.h headers, which
+    # are vendored under ios-compat/rhi for iOS.
+    list(APPEND FK_QT_COMPONENTS GuiPrivate)
+  endif()
   if (NOT IOS)
     # Translators are build-time host tools; on iOS the .qm files are shipped
     # pre-built in runtime/ instead of invoking lrelease for the target.
@@ -59,6 +64,7 @@ include_directories(include/lua)
 include_directories(include/libgit2)
 include_directories(src)
 if (IOS AND DEFINED FK_IOS_DEPS)
+  include_directories(${CMAKE_CURRENT_SOURCE_DIR}/ios-compat)
   include_directories(${FK_IOS_DEPS}/include)
   include_directories(${FK_IOS_DEPS}/include/lua)
   set(LUA_INCLUDE_DIR ${FK_IOS_DEPS}/include/lua)
