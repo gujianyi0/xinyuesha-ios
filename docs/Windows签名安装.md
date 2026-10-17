@@ -1,57 +1,33 @@
-# Windows 上用免费 Apple ID 签名安装 IPA
+# iPhone 安装与排错（一键整合包）
 
-> 目标：把 CI 产出的 `新月杀测试版-0.5.25-ios-unsigned.ipa` 装到 iPhone。
-> 免费 Apple ID 即可，不需要 99 美元的开发者账号。
+> 正常安装只需要双击 `一键安装到iPhone.lnk`（或
+> `apk/整合包/一键安装到iPhone.cmd`），按 `安装说明.txt` 完成 Apple ID 和
+> 信任证书即可。本文只列常见问题，不再重复手动安装步骤。
 
-## 1. 准备（一次性）
+## 一键脚本做了什么
 
-1. **iTunes（Apple 官网版）**：到 <https://www.apple.com/itunes/download/win64>
-   下载安装。不要用 Microsoft Store 版；Sideloadly 需要它带的
-   Apple Mobile Device Support 驱动。
-2. **Sideloadly**：到 <https://sideloadly.io/> 下载 Windows 版并安装。
-3. 用**数据线**连接 iPhone 和电脑，iPhone 上点「信任此电脑」。
-   - 如果 iTunes 能识别 iPhone，Sideloadly 一般也能识别。
-4. iPhone：设置 → 隐私与安全性 → 开发者模式（iOS 16+）→ 打开，重启后确认。
+1. 检查/安装 iTunes（优先 winget；失败则调用随包的 `iTunes64Setup.exe`）；
+2. 检查/安装 Sideloadly（静默；失败则打开安装向导）；
+3. 尝试启动 `Apple Mobile Device Service`；
+4. 把 IPA 路径复制到剪贴板，打开 Sideloadly 并尝试带上 IPA。
 
-## 2. 签名安装
+脚本后端在 `apk/整合包/bin/install-to-iphone.ps1`，请勿删除。
 
-1. 打开 Sideloadly，顶部 `Device` 选择你的 iPhone。
-2. 把 `新月杀测试版-0.5.25-ios-unsigned.ipa` 拖进 IPA 框（或点 IPA 图标选择）。
-3. `Apple ID` 填你的 Apple ID（免费账号即可）。
-4. 点 **Start**：
-   - 弹出 Apple ID 登录窗口时输入密码；
-   - 开了双重认证的账号，建议先在 <https://account.apple.com> 生成
-     「App 专用密码」，用专用密码登录；
-   - 等待进度条走完。
-5. iPhone：设置 → 通用 → VPN 与设备管理 → 开发者 APP →
-   点你的 Apple ID → **信任**。
-6. 回到桌面打开「新月杀测试版」。
-
-## 3. 免费账号的限制
-
-- 签名 **7 天**后过期，App 打不开；用同一个 IPA 在 Sideloadly 里重新签一次
-  即可（Start 会覆盖安装）。
-- 一个免费账号最多同时签 **3 个** App。
-- 重签/覆盖安装通常会保留 App 的 Documents 数据；如果 Sideloadly 提示必须
-  先卸载，卸载会删除 `Documents/FreeKill`（账号、录像、皮肤）。重要数据先在
-  「文件」App → 我的 iPhone → 新月杀测试版 → FreeKill 里备份。
-- 免费账号的 bundle id 不要和别的自签 App 冲突；本工程固定为
-  `com.cui.freekill.ios`，要改就改 `CMakeLists.txt` 的 `FK_IOS_BUNDLE_ID`
-  重新构建。
-
-## 4. 常见问题
+## 常见问题
 
 | 现象 | 处理 |
 |---|---|
-| Sideloadly 看不到设备 | 装 Apple 官网 iTunes；服务里重启 `Apple Mobile Device Service`；换原装线/USB 口 |
-| `Unable to connect to device` | 同上；先在 iTunes 里确认能看到设备 |
-| Apple ID 登录失败 | 用 App 专用密码；或在 Sideloadly 设置里换 `Anisette` 服务器 |
-| 安装后闪退 | 先在设置里信任证书；仍闪退就抓 Xcode/Console 日志发回 |
-| 7 天后打不开 | 正常，重新签名安装 |
-| 想保留数据 | 不要卸载 App，直接覆盖重签；先备份 Documents |
+| UAC / SmartScreen 弹窗 | 点“是”/“更多信息 → 仍要运行” |
+| Sideloadly 看不到设备 | 先重启电脑（iTunes 驱动首次安装后常见）；确认 iTunes 能看到 iPhone；换原装线/USB 口；服务里重启 `Apple Mobile Device Service` |
+| Sideloadly 没自动带 IPA | 把 `apk/整合包/新月杀测试版-0.5.25-ios-unsigned.ipa` 拖进窗口 |
+| Apple ID 登录失败 | 用 App 专用密码（<https://account.apple.com>）；或在 Sideloadly 设置里换 Anisette 服务器 |
+| 安装后闪退 | 先到 设置 → 通用 → VPN 与设备管理 信任证书；仍闪退就把设备日志和 App 内 `FreeKill/freekill.server.log` 发回 |
+| 7 天后打不开 | 免费 Apple ID 正常过期，用同一个 IPA 在 Sideloadly 重新 Start |
+| 想保留数据 | 不要卸载 App，直接覆盖重签；先备份「文件」App → 我的 iPhone → 新月杀测试版 → FreeKill |
 
-## 5. 之后如果要长期使用
+## 免费 Apple ID 的限制
 
-- 付费开发者账号（$99/年）：证书 1 年有效，可用 Xcode 直接装，不需要每 7 天
-  重签。
-- 或者用 AltStore + 同一 Apple ID 自动续签（需要电脑/AltServer 在同一网络）。
+- 签名 7 天有效，最多同时签 3 个 App；
+- 覆盖重签通常保留 Documents 数据；卸载会删除；
+- 想彻底免掉 iTunes/Sideloadly 和 7 天重签，需要付费 Apple Developer
+  账号（$99/年）+ TestFlight。

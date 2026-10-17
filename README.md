@@ -49,6 +49,8 @@ SHA-256: a7209890b306c056e18fd820621433aed152b9b4cc4036f6a6dc44a7b3b49f5b
 
 苹果强制的 Apple ID 授权与“信任证书”无法脚本化；其余步骤已合并。
 
+安装失败/闪退排错：`docs/Windows签名安装.md`。
+
 ---
 
 ## 重新构建（开发者）：GitHub Actions
