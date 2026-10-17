@@ -17,3 +17,6 @@ DerivedData/
 # Editor
 .vscode/
 .idea/
+
+# Local Windows shortcut
+*.lnk
