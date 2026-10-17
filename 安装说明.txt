@@ -26,3 +26,12 @@
 源码/构建：README.md。
 
 注：根目录的 .lnk 快捷方式只适用于本机；拷贝到其他电脑请用 apk\整合包\一键安装到iPhone.cmd。
+
+只有手机、没有电脑？
+--------------------
+- 免费 Apple ID 首次仍需电脑签名一次；装好后 App 在手机上独立运行，
+  只是 7 天到期后要再签一次。
+- 想彻底不用电脑：付费 Apple Developer（$99/年）+ TestFlight，手机装
+  TestFlight 后点邀请即可，不用 iTunes/Sideloadly，也不用每 7 天重签。
+- 折中：SideStore（首次仍需电脑配对；之后可在手机上续签/安装 IPA，
+  免费 Apple ID，7 天周期）。是否支持取决于具体 iOS 17 小版本。

@@ -31,3 +31,10 @@
 - 覆盖重签通常保留 Documents 数据；卸载会删除；
 - 想彻底免掉 iTunes/Sideloadly 和 7 天重签，需要付费 Apple Developer
   账号（$99/年）+ TestFlight。
+
+## 只有手机、没有电脑？
+
+免费 Apple ID 的首次签名仍需要电脑端工具（Sideloadly/AltStore/SideStore
+的初始配对）；装好后 App 独立运行。彻底不用电脑的干净路径只有
+**付费 Apple Developer + TestFlight**；SideStore 是折中（首次电脑配对，
+之后手机续签）。
