@@ -41,6 +41,21 @@ SHA-256: a7209890b306c056e18fd820621433aed152b9b4cc4036f6a6dc44a7b3b49f5b
 
 ---
 
+## 最简安装（推荐）
+
+`apk/整合包/` 里已经放好 IPA、iTunes、Sideloadly 和一个一键脚本：
+
+1. 双击 `apk/整合包/一键安装到iPhone.cmd`（需要管理员/UAC）；
+2. 脚本自动安装 iTunes 和 Sideloadly，并打开 Sideloadly、把 IPA 路径放进剪贴板；
+3. 连 iPhone、点“信任此电脑”；
+4. 在 Sideloadly 里填免费 Apple ID（双重认证用 App 专用密码），点 Start；
+5. iPhone 设置 → 通用 → VPN 与设备管理 → 信任证书。
+
+苹果强制的 Apple ID 授权和“信任证书”无法脚本化，其余步骤已合并。
+整合包只在本机，`apk/` 已在 `.gitignore` 中，不会上传 GitHub。
+
+---
+
 ## 方式 A：GitHub Actions 云端构建（推荐，不需要自己有 Mac）
 
 1. 在 GitHub 新建一个仓库（public/private 都行；public 的 macOS 分钟免费）。
@@ -152,7 +167,8 @@ deepseek/ios/
 ├── .github/workflows/build-ios.yml
 ├── apk/
 │   ├── ios/                    # 手机端：IPA + sha256（仅本地）
-│   └── pc/                     # 电脑端：iTunes / Sideloadly（仅本地）
+│   ├── pc/                     # 电脑端：iTunes / Sideloadly（仅本地）
+│   └── 整合包/                 # 一键安装：脚本 + IPA + 安装器（仅本地）
 ├── 安装说明.txt
 └── docs/移植改动.md
 ```
