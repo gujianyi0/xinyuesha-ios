@@ -60,7 +60,7 @@ if (IOS)
   # Objective-C++ bridge: AVAudioSession category + idle timer.
   list(APPEND freekill_SRCS "platform/ioshelper.mm")
   set_source_files_properties("platform/ioshelper.mm" PROPERTIES
-    SKIP_PRECOMPILE_HEADERS ON)
+    LANGUAGE OBJCXX SKIP_PRECOMPILE_HEADERS ON)
 endif()
 
 if (NOT DEFINED FK_SERVER_ONLY)
@@ -187,6 +187,13 @@ if (NOT DEFINED FK_SERVER_ONLY)
       "${SOLOUD_ROOT}/src/backend/miniaudio"
     )
     target_compile_definitions(soloud PRIVATE WITH_MINIAUDIO)
+    if (IOS)
+      # miniaudio's CoreAudio backend includes <AVFoundation/AVFoundation.h>;
+      # that header (and miniaudio's ObjC bits) must be parsed as ObjC++.
+      set_source_files_properties(
+        "${SOLOUD_ROOT}/src/backend/miniaudio/soloud_miniaudio.cpp"
+        PROPERTIES LANGUAGE OBJCXX SKIP_PRECOMPILE_HEADERS ON)
+    endif()
     # stb_vorbis 单头实现：编译 .c 时展开实现
     set_source_files_properties(
       "${SOLOUD_ROOT}/src/audiosource/wav/stb_vorbis.c" PROPERTIES
