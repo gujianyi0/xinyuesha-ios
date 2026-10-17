@@ -273,16 +273,20 @@ elseif (IOS)
   set(FK_ICONV iconv)
   set(GIT_LIB "${FK_IOS_DEPS}/lib/libgit2.a;${FK_ZLIB};${FK_ICONV}")
   set(READLINE_LIB "")
-  # Linking "-framework X" as two list items is more reliable than
-  # find_library() when cross-compiling from a macOS host to iOS.
+  # find_library() resolves these against the iPhoneOS SDK sysroot (CMake
+  # already found the SDK's libz.tbd above). Linking the returned .tbd paths
+  # avoids ambiguity around how "-framework X" tokens are passed through.
+  find_library(FK_AVFOUNDATION AVFoundation REQUIRED)
+  find_library(FK_UIKIT UIKit REQUIRED)
+  find_library(FK_FOUNDATION Foundation REQUIRED)
+  find_library(FK_AUDIOTOOLBOX AudioToolbox REQUIRED)
+  find_library(FK_COREAUDIO CoreAudio REQUIRED)
+  find_library(FK_COREFOUNDATION CoreFoundation REQUIRED)
+  find_library(FK_SECURITY Security REQUIRED)
   set(IOS_FRAMEWORKS
-    -framework AVFoundation
-    -framework UIKit
-    -framework Foundation
-    -framework AudioToolbox
-    -framework CoreAudio
-    -framework CoreFoundation
-    -framework Security)
+    "${FK_AVFOUNDATION}" "${FK_UIKIT}" "${FK_FOUNDATION}"
+    "${FK_AUDIOTOOLBOX}" "${FK_COREAUDIO}" "${FK_COREFOUNDATION}"
+    "${FK_SECURITY}")
   include_directories("${FK_IOS_DEPS}/include")
   include_directories("${FK_IOS_DEPS}/include/lua")
 elseif (APPLE)
