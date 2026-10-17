@@ -22,6 +22,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Ensure Rosetta 2 (Intel Qt host tools on arm64 runner)
+        if: runner.arch == 'ARM64'
+        run: sudo softwareupdate --install-rosetta --agree-to-license || true
+
       - name: Install build tools
         run: |
           brew install cmake swig
@@ -36,6 +40,7 @@ jobs:
         with:
           path: |
             ~/Qt/6.8.3/ios
+            ~/Qt/6.8.3/macos
             ios-deps
           key: fk-ios-deps-${{ runner.os }}-qt683-openssl351-git2-197-v1
 
@@ -46,11 +51,17 @@ jobs:
               -m qtmultimedia qt5compat qtshadertools -O "$HOME/Qt"
           fi
 
+      - name: Install host Qt (cross-compile tools)
+        run: |
+          if [ ! -x "$HOME/Qt/6.8.3/macos/bin/qmake" ]; then
+            aqt install-qt mac desktop 6.8.3 clang_64 -m qtshadertools -O "$HOME/Qt"
+          fi
+
       - name: Build Lua / OpenSSL / libgit2
         run: bash scripts/build_deps.sh --prefix "$PWD/ios-deps"
 
       - name: Build app and package unsigned IPA
-        run: bash scripts/build_ios.sh --qt "$HOME/Qt/6.8.3/ios" --deps "$PWD/ios-deps"
+        run: bash scripts/build_ios.sh --qt "$HOME/Qt/6.8.3/ios" --host-qt "$HOME/Qt/6.8.3/macos" --deps "$PWD/ios-deps"
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4

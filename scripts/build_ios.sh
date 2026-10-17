@@ -14,6 +14,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 QT_ROOT="${QT_ROOT:-$HOME/Qt/6.8.3/ios}"
+QT_HOST_PATH="${QT_HOST_PATH:-$(dirname "$QT_ROOT")/macos}"
 DEPS="$ROOT/ios-deps"
 BUILD="$ROOT/build-ios"
 MIN_IOS="16.0"
@@ -24,6 +25,7 @@ PACKAGE=1
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --qt) QT_ROOT="$2"; shift 2 ;;
+    --host-qt) QT_HOST_PATH="$2"; shift 2 ;;
     --deps) DEPS="$2"; shift 2 ;;
     --build) BUILD="$2"; shift 2 ;;
     --min-ios) MIN_IOS="$2"; shift 2 ;;
@@ -47,6 +49,18 @@ fi
   echo "ERROR: iOS dependencies missing under $DEPS (run scripts/build_deps.sh)." >&2
   exit 1
 }
+# A cross-compiled Qt needs the matching desktop Qt for moc/rcc/qsb/qmlcachegen.
+if [[ ! -f "$QT_HOST_PATH/lib/cmake/Qt6/Qt6Config.cmake" ]]; then
+  for candidate in "$(dirname "$QT_ROOT")/macos" "$(dirname "$QT_ROOT")/clang_64"; do
+    if [[ -f "$candidate/lib/cmake/Qt6/Qt6Config.cmake" ]]; then QT_HOST_PATH="$candidate"; break; fi
+  done
+fi
+[[ -f "$QT_HOST_PATH/lib/cmake/Qt6/Qt6Config.cmake" ]] || {
+  echo "ERROR: host Qt not found. Install it with:" >&2
+  echo "  aqt install-qt mac desktop 6.8.3 clang_64 -m qtshadertools -O \$HOME/Qt" >&2
+  echo "then pass --host-qt <prefix> (default: $(dirname "$QT_ROOT")/macos)." >&2
+  exit 1
+}
 
 echo "==> Configuring (Qt: $QT_ROOT)"
 rm -rf "$BUILD"
@@ -54,6 +68,7 @@ rm -rf "$BUILD"
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_OSX_ARCHITECTURES=arm64 \
   -DCMAKE_OSX_DEPLOYMENT_TARGET="$MIN_IOS" \
+  -DQT_HOST_PATH="$QT_HOST_PATH" \
   -DFK_IOS_DEPS="$DEPS" \
   -DFK_IOS_DEPLOYMENT_TARGET="$MIN_IOS" \
   -DFK_IOS_BUNDLE_ID="$BUNDLE_ID"

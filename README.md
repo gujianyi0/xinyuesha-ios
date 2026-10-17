@@ -71,7 +71,8 @@ bash scripts/build_all_mac.sh
 脚本会：
 
 1. 用 `aqtinstall` 安装 Qt 6.8.3 for iOS（含 qtmultimedia / qt5compat /
-   qtshadertools）；
+   qtshadertools），以及配套的 macOS 桌面版 Qt 6.8.3（提供 moc / qsb /
+   qmlcachegen 等交叉编译工具，CMake 变量 `QT_HOST_PATH`）；
 2. 编译 Lua 5.4.8、OpenSSL 3.5.1、libgit2 1.9.7 的 arm64 静态库到 `ios-deps/`；
 3. 用 Qt 的 `qt-cmake` + Xcode 生成并编译 `FreeKill.app`；
 4. 打包 `build-ios/ipa/新月杀测试版-0.5.25-ios-unsigned.ipa`。
