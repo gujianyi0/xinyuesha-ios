@@ -72,7 +72,23 @@ jobs:
           fi
 
       - name: Build Lua / OpenSSL / libgit2
-        run: bash scripts/build_deps.sh --prefix "$PWD/ios-deps"
+        run: |
+          # This cache key pins Qt / OpenSSL / libgit2 versions. Reuse complete
+          # arm64 dependencies rather than recompiling them on every app fix.
+          ready=1
+          for file in lib/liblua54.a lib/libcrypto.a lib/libssl.a lib/libgit2.a; do
+            if [ ! -s "ios-deps/$file" ] || ! xcrun lipo -verify_arch arm64 "ios-deps/$file"; then
+              ready=0
+            fi
+          done
+          for file in include/lua/lua.h include/git2.h include/openssl/ssl.h; do
+            [ -s "ios-deps/$file" ] || ready=0
+          done
+          if [ "$ready" = 1 ]; then
+            echo "Using verified arm64 libraries from the versioned dependency cache."
+          else
+            bash scripts/build_deps.sh --prefix "$PWD/ios-deps"
+          fi
 
       - name: Build app and package unsigned IPA
         run: bash scripts/build_ios.sh --qt "$HOME/Qt/6.8.3/ios" --host-qt "$HOME/Qt/6.8.3/macos" --deps "$PWD/ios-deps"
