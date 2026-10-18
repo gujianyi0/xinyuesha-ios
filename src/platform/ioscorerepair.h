@@ -10,7 +10,9 @@
 #include <QUuid>
 #include <git2.h>
 #include <git2/errors.h>
+#if __has_include(<git2/sys/errors.h>)
 #include <git2/sys/errors.h>
+#endif
 
 namespace fkIosCoreRepair {
 
