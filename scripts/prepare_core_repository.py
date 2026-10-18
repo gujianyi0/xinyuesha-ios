@@ -38,6 +38,9 @@ def prepare(runtime, bundle=SEED, commit=CORE_COMMIT):
         git('-c', 'core.autocrlf=false', 'clone', '--no-checkout', bundle.resolve(), repo)
         git('-C', repo, 'config', 'core.autocrlf', 'false')
         git('-C', repo, 'checkout', '--detach', commit)
+        # IPA repackers may omit empty directories. Keep refs nonempty so a
+        # files-only extraction still satisfies Git's repository layout.
+        git('-C', repo, 'update-ref', 'refs/heads/master', commit)
         git('-C', repo, 'remote', 'set-url', 'origin', CORE_URL)
         git('-C', repo, 'fsck', '--full', '--no-reflogs')
         if git('-C', repo, 'status', '--porcelain', '--untracked-files=all'):
