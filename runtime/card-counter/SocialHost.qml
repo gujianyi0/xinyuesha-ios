@@ -35,7 +35,8 @@ Control {
   Connections {
     target: host.navigationStack
     ignoreUnknownSignals: true
-    function onCurrentItemChanged() { host.scheduleLauncherUpdate(); }
+    function onCurrentItemChanged() { host.scheduleLauncherUpdate(); Qt.callLater(host.finishJoin); }
+    function onBusyChanged() { if (host.navigationStack && !host.navigationStack.busy) Qt.callLater(host.finishJoin); }
   }
   property var readyReminders: []
   property bool gameOnline: false
@@ -453,7 +454,11 @@ Control {
     expanded = false;
     if (invitePolicy) invitePolicy.popup.close();
     if (friendNativeDialog) friendNativeDialog.close();
-    pendingJoin = null;
+    // A temporary StackView transition hides the launcher while QuitRoom is
+    // acknowledged. Preserve that transaction until the real lobby is ready.
+    if (!networkGame || matchViewActive || gameState === "playing" ||
+        (pendingJoin && (pendingJoin.server !== gameServer || pendingJoin.profileKey !== social.profileKey || Date.now() >= joinDeadline)))
+      pendingJoin = null;
     if (joinDialog) joinDialog.close();
     if (linkDialog) linkDialog.close();
     if (removeDialog) removeDialog.close();
@@ -514,9 +519,22 @@ Control {
   }
   function finishJoin() {
     const target = pendingJoin;
+    if (!target) return;
+    if (!networkGame || target.server !== gameServer || target.profileKey !== social.profileKey || Date.now() >= joinDeadline) {
+      pendingJoin = null; return;
+    }
+    if (gameState !== "lobby" || !nativeBasePageVisible) return;
+    const page = navigationStack && navigationStack.currentItem;
+    if (navigationStack && (!page || !("roomModel" in page) || !("lobbyPlayerNum" in page))) return;
     pendingJoin = null;
-    if (!target || !networkGame || target.server !== gameServer || target.profileKey !== social.profileKey ||
-        gameState !== "lobby" || Date.now() >= joinDeadline) return;
+    if (target.friendId) {
+      const friend = social.friends.find(f => f.id === target.friendId);
+      const p = friend && friend.presence;
+      if (!p || p.server !== target.server || Math.floor(p.roomId || 0) !== target.roomId ||
+          ["waiting", "playing", "observing"].indexOf(p.state) < 0 || (!target.observe && p.state !== "waiting")) {
+        social.error = "好友的房间状态已改变，请重新跟随"; return;
+      }
+    }
     host.selectedRoomId = target.roomId;
     host.selectedRoomName = target.roomName || "";
     host.selectedRoomDeadline = Date.now() + 10000;
@@ -777,7 +795,7 @@ Control {
     interval: 1000; repeat: true; running: host.pendingJoin !== null
     onTriggered: if (Date.now() >= host.joinDeadline) {
       host.pendingJoin = null; social.error = "未能退出原房间，已取消自动加入";
-    }
+    } else host.finishJoin();
   }
 
   Rectangle {
