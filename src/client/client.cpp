@@ -11,6 +11,7 @@
 #include "ui/qmlbackend.h"
 
 #include <QElapsedTimer>
+#include "platform/requestclock.h"
 #include <openssl/rsa.h>
 #include <openssl/aes.h>
 #include <openssl/pem.h>
@@ -108,14 +109,17 @@ void Client::sendSetupPacket(const QString &pubkey) {
   // notifyServer("Setup", arr.toCborValue().toCbor());
   int type =
       Router::TYPE_NOTIFICATION | Router::SRC_CLIENT | Router::DEST_SERVER;
+  // RSA and the full package checksum can take seconds on a phone. They are
+  // local preparation, not network round-trip time for clock synchronization.
+  setup_packet_timestamp = QDateTime::currentMSecsSinceEpoch();
   router->notify(type, "Setup", arr.toCborValue().toCbor());
 }
 
 void Client::setupServerLag(qint64 server_time) {
+  if (setup_packet_timestamp <= 0 || server_time <= 0) return;
   auto now = QDateTime::currentMSecsSinceEpoch();
-  auto ping = now - start_connent_timestamp;
-  auto lag = now - server_time;
-  server_lag = lag - ping / 2;
+  server_lag = fkRequestClock::offset(server_time, setup_packet_timestamp, now);
+  setup_packet_timestamp = 0; // Later Setup snapshots are not a new RTT probe.
 }
 
 qint64 Client::getServerLag() const { return server_lag; }

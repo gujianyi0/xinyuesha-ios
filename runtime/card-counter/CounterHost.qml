@@ -2,7 +2,6 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Window
-import QtCore
 import Fk
 import LunarLtk
 Item {
@@ -16,6 +15,7 @@ Item {
   property var clientContext: typeof ClientInstance !== "undefined" ? ClientInstance : null
   property bool bootstrapReady: false
   property bool settingsReady: false
+  property var photoLocations: []
   property bool hideTitles: false
   property bool preferencesLoaded: false
   property var titleBadges: []
@@ -79,7 +79,7 @@ Item {
         function prepareDialog() {
           if ("configKey" in item) {
             if (["lobbyBg","roomBg","lady"].indexOf(item.configKey) >= 0 && ios) {
-              const pictures = StandardPaths.standardLocations(StandardPaths.PicturesLocation);
+              const pictures = host.photoLocations;
               if (pictures.length) item.currentFolder = pictures[pictures.length-1];
             }
             const filters = Array.from(item.nameFilters).map(f => f.indexOf("(") >= 0 && !f.endsWith(")") ? f+")" : f);
@@ -101,10 +101,13 @@ Item {
       if (ios && adaptedControls.indexOf(item) < 0) {
         if (serverPage && "text" in item && "elide" in item && "font" in item) {
           item.elide = Text.ElideRight; item.maximumLineCount = 1;
+          item.Layout.minimumWidth = 0;
+          if (item.parent && String(item.parent).indexOf("ColumnLayout") >= 0) item.parent.Layout.minimumWidth = 0;
           item.font.pixelSize = 14;
           if (/^[0-9?]+\//.test(item.text)) {
             item.font.pixelSize = 19;
             item.Layout.preferredWidth = 76; item.Layout.maximumWidth = 76;
+            item.parent.anchors.rightMargin = 34;
           }
           adaptedControls.push(item);
         } else if (lobbyPage && "text" in item && "display" in item && item.text === Lua.tr("Exit Lobby")) {

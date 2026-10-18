@@ -36,6 +36,9 @@ jobs:
           c++ -std=c++17 -fPIC scripts/test_local_file_url.cpp -Isrc \
             $(pkg-config --cflags --libs Qt6Core) -o "$RUNNER_TEMP/test-file-url"
           "$RUNNER_TEMP/test-file-url"
+          c++ -std=c++17 -fPIC scripts/test_request_clock.cpp -Isrc \
+            $(pkg-config --cflags --libs Qt6Core) -o "$RUNNER_TEMP/test-request-clock"
+          "$RUNNER_TEMP/test-request-clock"
   build:
     name: Build iOS arm64
     needs: test-core-repair

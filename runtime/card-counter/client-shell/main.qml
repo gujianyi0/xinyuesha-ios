@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import QtQuick
+import QtCore
 import QtQuick.Dialogs
 import QtQuick.Window
 import Fk
@@ -18,7 +19,7 @@ Window {
   visibility: skinDebuggerMode ? Window.Hidden : (androidMode ? Window.FullScreen : Window.AutomaticVisibility)
   title: "新月杀测试版" + " v" + Cpp.version
 
-  Counter.CounterHost { id: counterHost }
+  Counter.CounterHost { id: counterHost; photoLocations: StandardPaths.standardLocations(StandardPaths.PicturesLocation) }
 
   onXChanged: if (!skinDebuggerMode && !androidMode) Config.winX = x;
   onYChanged: if (!skinDebuggerMode && !androidMode) Config.winY = y;
@@ -44,6 +45,9 @@ Window {
               root.x = Config.winX; root.y = Config.winY;
               root.width = Config.winWidth; root.height = Config.winHeight;
             } else {
+              // loadConf may have restored desktop/previous orientation sizes.
+              // Popup geometry must use the current native surface.
+              Config.winWidth = root.width; Config.winHeight = root.height;
               // Android owns the surface geometry. Screen metrics can be stale
               // during startup, rotation, cutout/inset changes and density changes.
               Qt.callLater(root.showFullScreen);
