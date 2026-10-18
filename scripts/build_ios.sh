@@ -114,7 +114,7 @@ if [[ "$PACKAGE" == "1" ]]; then
   cp -R "$APP" "$IPA_DIR/Payload/"
   IPA="$IPA_DIR/新月杀测试版-0.5.25-ios-unsigned.ipa"
   rm -f "$IPA"
-  (cd "$IPA_DIR" && /usr/bin/zip -qry "$(basename "$IPA")" Payload)
+  python3 "$ROOT/scripts/package_ipa.py" "$IPA_DIR" "$IPA"
   echo
   echo "IPA: $IPA"
   echo "SHA-256: $(shasum -a 256 "$IPA" | awk '{print $1}')"
