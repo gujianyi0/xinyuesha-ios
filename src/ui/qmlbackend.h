@@ -31,6 +31,7 @@ public:
                                             const QString &content);
   static Q_INVOKABLE bool existsInAssets(const QString &path);
   static Q_INVOKABLE bool removeFileFromAssets(const QString &path);
+  static Q_INVOKABLE QString importBackground(const QString &source);
 
 #ifndef FK_SERVER_ONLY
   QQmlApplicationEngine *getEngine() const;

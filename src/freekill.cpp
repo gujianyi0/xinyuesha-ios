@@ -30,6 +30,9 @@ using namespace fkShell;
  #include "ui/spine/spineregister.h"
 #ifdef Q_OS_IOS
  #include "platform/ioshelper.h"
+ #include "platform/ioscorerepair.h"
+#include "platform/iosruntimepayload.h"
+ #include <QMessageBox>
 #endif
 #endif
 
@@ -492,6 +495,19 @@ int freekill_main(int argc, char *argv[]) {
   fkIosExcludeFromBackup(dataDir.toUtf8().constData());
   qInfo("iOS: installing bundled runtime into %s", qUtf8Printable(dataDir));
   installFkAssets(bundleDir + QLatin1String("/res"), dataDir);
+  QString payloadError;
+  if (!fkIosRuntimePayload::refresh(bundleDir + "/res", dataDir, &payloadError)) {
+    QMessageBox::critical(nullptr, "界面更新失败", payloadError);
+    return -1;
+  }
+  QString coreRepairError;
+  if (!fkIosCoreRepair::repair(bundleDir + QLatin1String("/res"), dataDir,
+                             &coreRepairError)) {
+    QMessageBox::critical(nullptr, QStringLiteral("核心包修复失败"),
+        QStringLiteral("无法恢复核心扩展包。请检查剩余空间，并重新覆盖安装完整版本。\n")
+        + coreRepairError);
+    return -1;
+  }
   QDir::setCurrent(dataDir);
 
   log_file.reset(new QFile("freekill.server.log"));
@@ -599,6 +615,14 @@ int freekill_main(int argc, char *argv[]) {
   // 注册 Spine 动画类型（Spine 1.0 模块）
   registerSpineQmlTypes();
 
+#ifdef Q_OS_IOS
+  // Keep the game UI and its Lua protocol on the same core version. Our
+  // standalone shell remains outside packages and the server MD5 boundary.
+  engine->addImportPath(QDir::currentPath());
+  if (Pacman->shouldUseCore() && QFile::exists("packages/freekill-core/Fk"))
+    engine->addImportPath(QDir::currentPath() + "/packages/freekill-core");
+  engine->load("card-counter/client-shell/main.qml");
+#else
   // 加载GUI了，如果core有的话用core的
   if (Pacman->shouldUseCore() &&
       QFile::exists("packages/freekill-core/Fk")) {
@@ -609,6 +633,8 @@ int freekill_main(int argc, char *argv[]) {
     engine->addImportPath(QDir::currentPath());
     engine->load("Fk/main.qml");
   }
+
+#endif
 
   // qml 报错了就直接退出吧
   if (engine->rootObjects().isEmpty())

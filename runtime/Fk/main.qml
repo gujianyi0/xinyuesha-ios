@@ -12,19 +12,19 @@ Window {
   minimumWidth: 200
   minimumHeight: 90
   color: "#13292e"
-  readonly property bool mobileMode: Cpp.os === "Android" || Cpp.os === "iOS"
+  readonly property bool androidMode: Cpp.os === "Android" || Cpp.os === "iOS"
   readonly property bool skinDebuggerMode: Qt.application.arguments.indexOf("--skin-debugger") !== -1
   visible: !skinDebuggerMode
-  visibility: skinDebuggerMode ? Window.Hidden : (mobileMode ? Window.FullScreen : Window.AutomaticVisibility)
+  visibility: skinDebuggerMode ? Window.Hidden : (androidMode ? Window.FullScreen : Window.AutomaticVisibility)
   title: "新月杀测试版" + " v" + Cpp.version
 
-  Counter.CounterHost {}
+  Counter.CounterHost { id: counterHost }
 
-  onXChanged: if (!skinDebuggerMode && !mobileMode) Config.winX = x;
-  onYChanged: if (!skinDebuggerMode && !mobileMode) Config.winY = y;
+  onXChanged: if (!skinDebuggerMode && !androidMode) Config.winX = x;
+  onYChanged: if (!skinDebuggerMode && !androidMode) Config.winY = y;
   onWidthChanged: if (!skinDebuggerMode) Config.winWidth = width;
   onHeightChanged: if (!skinDebuggerMode) Config.winHeight = height;
-  onActiveChanged: if (active && mobileMode && !skinDebuggerMode) Qt.callLater(root.showFullScreen)
+  onActiveChanged: if (active && androidMode && !skinDebuggerMode) Qt.callLater(root.showFullScreen)
 
   Counter.CounterViewport {
     id: viewport
@@ -39,11 +39,12 @@ Window {
           anchors.fill: parent
           Counter.SocialHost { id: socialHost }
           onConfLoaded: {
-            if (!root.mobileMode) {
+            counterHost.settingsReady = true;
+            if (!root.androidMode) {
               root.x = Config.winX; root.y = Config.winY;
               root.width = Config.winWidth; root.height = Config.winHeight;
             } else {
-              // Mobile owns the surface geometry. Screen metrics can be stale
+              // Android owns the surface geometry. Screen metrics can be stale
               // during startup, rotation, cutout/inset changes and density changes.
               Qt.callLater(root.showFullScreen);
             }
@@ -73,7 +74,7 @@ Window {
   Shortcut {
     sequences: ["F11", "Ctrl+F", "Alt+Return"]
     onActivated: {
-      if (root.mobileMode || root.visibility !== Window.FullScreen) root.showFullScreen();
+      if (root.androidMode || root.visibility !== Window.FullScreen) root.showFullScreen();
       else root.showNormal();
     }
   }

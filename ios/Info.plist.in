@@ -61,6 +61,8 @@
   <true/>
   <key>NSLocalNetworkUsageDescription</key>
   <string>用于连接局域网内的新月杀服务器，以及发现同一网络中的房间。</string>
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>用于从相册选择大厅壁纸与房间背景。</string>
   <key>ITSAppUsesNonExemptEncryption</key>
   <false/>
   <key>CFBundleIconFiles</key>

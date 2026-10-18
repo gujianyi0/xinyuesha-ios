@@ -3,9 +3,38 @@
 #include "ui/qmlbackend.h"
 #include <qjsondocument.h>
 #include <qjsonobject.h>
+#include <QSaveFile>
+#include <QCryptographicHash>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QUrl>
+#include "platform/localfileurl.h"
+
+QString QmlBackend::importBackground(const QString &source) {
+  const QString input = fkLocalFile::path(source);
+  QString suffix = QFileInfo(QUrl(source).path()).suffix().toLower();
+  if (!QStringList{"png","jpg","jpeg","gif","webp","heic","mp4","mov"}.contains(suffix))
+    suffix = "image";
+  const QString directory = QDir::currentPath() + "/assets/backgrounds";
+  if (!QDir().mkpath(directory)) return {};
+  const auto key = QCryptographicHash::hash(source.toUtf8(),QCryptographicHash::Sha256).toHex();
+  const QString dest = directory + '/' + key + '.' + suffix;
+  QFile file(input);
+  if (!file.open(QIODevice::ReadOnly)) return {};
+  QSaveFile output(dest);
+  if (!output.open(QIODevice::WriteOnly)) return {};
+  while (!file.atEnd()) {
+    const QByteArray bytes = file.read(64 * 1024);
+    if (file.error() != QFile::NoError || bytes.isEmpty() || output.write(bytes) != bytes.size()) return {};
+  }
+  if (!output.commit()) return {};
+  return QUrl::fromLocalFile(dest).toString();
+}
 
 #ifndef FK_SERVER_ONLY
 #include <QCoreApplication>
+#include <QElapsedTimer>
 #include <QNetworkAccessManager>
 #include <QNetworkDatagram>
 #include <QNetworkReply>
@@ -211,7 +240,9 @@ void QmlBackend::setEngine(QQmlApplicationEngine *engine) {
 
 void QmlBackend::startServer(ushort port) {
   if (!ServerInstance) {
+    QElapsedTimer startupTimer; startupTimer.start();
     Server *server = new Server(nullptr);
+    qInfo("[Startup] local server ready: %lld ms", static_cast<long long>(startupTimer.elapsed()));
 
     if (!server->listen(QHostAddress::Any, port)) {
       server->deleteLater();
@@ -676,6 +707,9 @@ QJsonObject QmlBackend::getRequestData() const {
   // 因为timestamp是服务器发来的时间，如果自己比服务器的时钟快的话，那么就得加上这个差值才行
   timestamp += ClientInstance->getServerLag();
   obj["timestamp"] = timestamp;
+  qInfo("[RequestClock] timeout=%d elapsed=%lld offset=%lld", router->getTimeout(),
+        static_cast<long long>(QDateTime::currentMSecsSinceEpoch() - timestamp),
+        static_cast<long long>(ClientInstance->getServerLag()));
   return obj;
 }
 

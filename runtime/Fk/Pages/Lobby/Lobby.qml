@@ -141,6 +141,7 @@ W.PageBase {
 
       Text {
         id: bulletin_info
+        font.pixelSize: 14
         width: parent.width
         wrapMode: TextEdit.WordWrap
         textFormat: Text.MarkdownText
@@ -380,6 +381,9 @@ W.PageBase {
 
   Button {
     id: exitButton
+    height: 40
+    font.pixelSize: 14
+    icon.width: 20; icon.height: 20
     anchors.right: parent.right
     text: Lua.tr("Exit Lobby")
     display: AbstractButton.TextBesideIcon

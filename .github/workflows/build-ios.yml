@@ -13,8 +13,32 @@ on:
       - "ios-*"
 
 jobs:
+  test-core-repair:
+    name: Test core repository recovery
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native test dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y qt6-base-dev libgit2-dev pkg-config
+      - name: Verify seed and recovery against real Git repositories
+        run: |
+          python3 scripts/test_core_repository.py
+          python3 scripts/test_package_ipa.py
+          c++ -std=c++17 -fPIC scripts/test_ios_core_repair.cpp -Isrc \
+            $(pkg-config --cflags --libs Qt6Core libgit2) -o "$RUNNER_TEMP/test-core-repair"
+          "$RUNNER_TEMP/test-core-repair"
+          c++ -std=c++17 -fPIC scripts/test_ui_payload.cpp -Isrc \
+            $(pkg-config --cflags --libs Qt6Core) -o "$RUNNER_TEMP/test-ui-payload"
+          "$RUNNER_TEMP/test-ui-payload"
+          c++ -std=c++17 -fPIC scripts/test_package_checksum.cpp -Isrc \
+            $(pkg-config --cflags --libs Qt6Core) -o "$RUNNER_TEMP/test-package-checksum"
+          "$RUNNER_TEMP/test-package-checksum" runtime/packages
+          c++ -std=c++17 -fPIC scripts/test_local_file_url.cpp -Isrc \
+            $(pkg-config --cflags --libs Qt6Core) -o "$RUNNER_TEMP/test-file-url"
+          "$RUNNER_TEMP/test-file-url"
   build:
     name: Build iOS arm64
+    needs: test-core-repair
     runs-on: macos-14
     timeout-minutes: 120
 
@@ -58,7 +82,23 @@ jobs:
           fi
 
       - name: Build Lua / OpenSSL / libgit2
-        run: bash scripts/build_deps.sh --prefix "$PWD/ios-deps"
+        run: |
+          # This cache key pins Qt / OpenSSL / libgit2 versions. Reuse complete
+          # arm64 dependencies rather than recompiling them on every app fix.
+          ready=1
+          for file in lib/liblua54.a lib/libcrypto.a lib/libssl.a lib/libgit2.a; do
+            if [ ! -s "ios-deps/$file" ] || ! xcrun lipo -verify_arch arm64 "ios-deps/$file"; then
+              ready=0
+            fi
+          done
+          for file in include/lua/lua.h include/git2.h include/openssl/ssl.h; do
+            [ -s "ios-deps/$file" ] || ready=0
+          done
+          if [ "$ready" = 1 ]; then
+            echo "Using verified arm64 libraries from the versioned dependency cache."
+          else
+            bash scripts/build_deps.sh --prefix "$PWD/ios-deps"
+          fi
 
       - name: Build app and package unsigned IPA
         run: bash scripts/build_ios.sh --qt "$HOME/Qt/6.8.3/ios" --host-qt "$HOME/Qt/6.8.3/macos" --deps "$PWD/ios-deps"

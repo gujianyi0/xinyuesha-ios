@@ -16,6 +16,8 @@ QtObject {
   property bool accountConnected: false
   property bool authenticating: false
   property string inviteMode: ""
+  property string visibility: "online"
+  property var reservations: []
   property bool policyReady: false
   property string profileKey: ""
   property string generationKey: profileKey + "|" + endpoint + "|" + token
@@ -30,6 +32,7 @@ QtObject {
   property var context: ({ valid: false, state: "offline", server: "", gameId: 0, roomId: 0, roomName: "" })
   property var me: ({})
   property var friends: []
+  property var avatarCache: ({})
   property var requests: []
   property var invitations: []
   property var calls: []
@@ -52,11 +55,15 @@ QtObject {
     credentialGeneration++; credentialScope = ""; accountKey = ""; deriving = false;
     accountBound = false; accountConnected = false; authenticating = false;
     inviteMode = ""; policyReady = false;
-    friends = []; requests = []; invitations = []; error = "";
+    friends = []; avatarCache = ({}); requests = []; invitations = []; reservations = []; visibility = "online"; error = "";
   }
   function bind(value) {
+    const sameAccount = context.server === value.server && context.gameId === value.gameId;
+    // A temporary dummy/observer game model is not an avatar removal request.
+    if (sameAccount && !value.avatar && context.avatar)
+      value = Object.assign({}, value, {avatar: context.avatar});
     const changed = context.server !== value.server || context.gameId !== value.gameId ||
-      context.state !== value.state || context.roomId !== value.roomId || context.valid !== value.valid;
+      context.state !== value.state || context.roomId !== value.roomId || context.valid !== value.valid || context.avatar !== value.avatar;
     const key = value.valid ? value.server + "/" + value.gameId : "";
     if (key !== profileKey) {
       // Invalidate callbacks before aborting requests from the previous account.
@@ -75,6 +82,7 @@ QtObject {
         enabled = saved.enabled !== false;
         accountBound = saved.accountBound === true;
         inviteMode = ["original","friends","none"].indexOf(saved.inviteMode) >= 0 ? saved.inviteMode : "";
+        avatarCache = saved.avatarCache && typeof saved.avatarCache === "object" && !Array.isArray(saved.avatarCache) ? saved.avatarCache : ({});
       }
     }
     context = value;
@@ -85,13 +93,52 @@ QtObject {
     }
   }
   function persist() {
-    if (profileKey) writeProfile(profileKey, {endpoint: endpoint, token: token, recoveryCode: recoveryCode, enabled: enabled, accountBound: accountBound, inviteMode: inviteMode});
+    if (profileKey) writeProfile(profileKey, {endpoint: endpoint, token: token, recoveryCode: recoveryCode, enabled: enabled, accountBound: accountBound, inviteMode: inviteMode, avatarCache: avatarCache});
+  }
+  function validAvatar(value) {
+    return typeof value === "string" && /^[A-Za-z0-9_\u4e00-\u9fff#-]{1,128}$/.test(value);
+  }
+  function avatarFor(friend) {
+    if (validAvatar(friend.avatar)) return friend.avatar;
+    const cached = avatarCache[friend.id];
+    return cached && validAvatar(cached.avatar) ? cached.avatar : "";
+  }
+  // Reuse public game profile data already delivered by the server. Match by
+  // server + player ID, never by nickname, and never upload someone else's
+  // claimed picture to their cloud profile.
+  function observeGameAvatars(server, players) {
+    if (!context.valid || !token || !enabled || !players || profileKey !== context.server + "/" + context.gameId) return;
+    // Engine notifications can expose a QVariantList rather than a JS Array.
+    try { players = JSON.parse(JSON.stringify(players)); } catch (_) { return; }
+    if (!Array.isArray(players)) return;
+    const next = ({});
+    for (const friend of friends) {
+      const previous = avatarCache[friend.id] || {};
+      const p = friend.presence || {};
+      const identity = p.gameId > 0 && p.server ? {server:p.server,gameId:p.gameId} : previous;
+      let avatar = validAvatar(friend.avatar) ? friend.avatar : (previous.avatar || "");
+      if (identity.server === server && identity.gameId > 0) {
+        const seen = players.find(player => Number(player.id) === Number(identity.gameId));
+        if (seen && validAvatar(seen.avatar)) avatar = seen.avatar;
+      }
+      if (identity.server && identity.gameId > 0)
+        next[friend.id] = {server:identity.server,gameId:identity.gameId,avatar:avatar};
+    }
+    if (JSON.stringify(next) !== JSON.stringify(avatarCache)) { avatarCache = next; persist(); }
   }
   function applyMe(value) {
     if (!value || !value.id) return;
     inviteMode = ["original","friends","none"].indexOf(value.inviteMode) >= 0 ? value.inviteMode : value.blocked === 1 ? "none" : "original";
+    visibility = value.visibility === "invisible" ? "invisible" : "online";
     policyReady = true; me = value; persist(); policyUpdated();
   }
+  function setVisibility(value) {
+    action("profile", {visibility:value}, function(data) { applyMe(data.me); message(value === "invisible" ? "已隐身：好友看到离线，预约已取消" : "已恢复在线"); });
+  }
+  function reserve(friendId) { action("reservations", {friendId:friendId}, function() { message("预约已发送，等待对方接受；30 分钟内有效"); }); }
+  function respondReservation(id,accept) { action("reservations/respond", {id:id,accept:accept}); }
+  function cancelReservation(id) { action("reservations/cancel", {id:id}); }
+  function acknowledgeReservation(id) { action("reservations/ack", {id:id}); }
   function setInvitationMode(mode, blocked, callback) {
     action("settings", {inviteMode:mode, blocked:blocked}, function(data) {
       if (data.me) applyMe(data.me);
@@ -178,16 +225,17 @@ QtObject {
   function pauseService() {
     if (token && context.valid)
       call("POST", "/v1/presence", Object.assign({}, context, {state: "offline", roomId: 0}), null);
-    enabled = false; friends = []; requests = []; invitations = []; persist();
+    enabled = false; friends = []; requests = []; invitations = []; reservations = []; persist();
   }
   function refresh() {
     if (!enabled || !token || !context.valid || busy) return;
     presenceDirty = false;
     const presence = {server: context.server, gameId: context.gameId, state: context.state,
       roomId: context.roomId, roomName: context.roomName};
+    if (context.avatar) presence.avatar = context.avatar;
     const receive = function(data) {
       applyMe(data.me); friends = data.friends || []; requests = data.requests || [];
-      invitations = data.invitations || [];
+      invitations = data.invitations || []; reservations = data.reservations || [];
     };
     if (endpoint === defaultEndpoint) call("POST", "/v1/sync", presence, receive);
     else call("POST", "/v1/presence", presence, function() {
@@ -202,11 +250,11 @@ QtObject {
         refresh();
       });
     };
-    if (path.indexOf("invitations") === 0) {
+    if (path.indexOf("invitations") === 0 || path.indexOf("reservations") === 0) {
       // Sync current room/game state before deciding where an invitation leads.
       presenceDirty = false;
       call("POST", "/v1/presence", {server:context.server, gameId:context.gameId,
-        state:context.state, roomId:context.roomId, roomName:context.roomName}, perform);
+        state:context.state, roomId:context.roomId, roomName:context.roomName, avatar:context.avatar || ""}, perform);
     } else perform();
   }
   function addFriend(code) {

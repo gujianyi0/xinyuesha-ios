@@ -5,6 +5,7 @@
 #include "client/clientplayer.h"
 #include "core/util.h"
 #include "core/c-wrapper.h"
+#include "platform/localfileurl.h"
 
 Replayer::Replayer(QObject *parent, const QString &filename) :
   QThread(parent), fileName(filename), roomSettings(""), origPlayerInfo(""),
@@ -12,13 +13,8 @@ Replayer::Replayer(QObject *parent, const QString &filename) :
 {
   setObjectName("Replayer");
 
-  auto s = filename;
-#ifdef Q_OS_WIN
-  if (s.startsWith("file:///"))
-    s.replace(0, 8, "file://");
-#endif
-  QFile file(QUrl(s).path());
-  file.open(QIODevice::ReadOnly);
+  QFile file(fkLocalFile::path(filename));
+  if (!file.open(QIODevice::ReadOnly)) return;
   QByteArray raw = file.readAll();
   file.close();
   loadRawData(raw);

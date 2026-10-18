@@ -103,6 +103,8 @@ if [[ -d "$APP/Frameworks" ]]; then
   done < <(find "$APP/Frameworks" -maxdepth 1 -name '*.framework' -print0)
 fi
 
+python3 "$ROOT/scripts/prepare_core_repository.py" "$APP/res"
+python3 "$ROOT/scripts/prepare_ui_payload.py" "$APP/res"
 bash "$ROOT/scripts/verify_app.sh" "$APP"
 
 if [[ "$PACKAGE" == "1" ]]; then
@@ -113,7 +115,7 @@ if [[ "$PACKAGE" == "1" ]]; then
   cp -R "$APP" "$IPA_DIR/Payload/"
   IPA="$IPA_DIR/新月杀测试版-0.5.25-ios-unsigned.ipa"
   rm -f "$IPA"
-  (cd "$IPA_DIR" && /usr/bin/zip -qry "$(basename "$IPA")" Payload)
+  python3 "$ROOT/scripts/package_ipa.py" "$IPA_DIR" "$IPA"
   echo
   echo "IPA: $IPA"
   echo "SHA-256: $(shasum -a 256 "$IPA" | awk '{print $1}')"

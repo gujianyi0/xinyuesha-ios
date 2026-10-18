@@ -34,7 +34,9 @@ Item {
 
       RowLayout {
         anchors.fill: parent
-        spacing: 16
+        spacing: 8
+        anchors.leftMargin: 8
+        anchors.rightMargin: 34
 
         Item {}
 
@@ -59,8 +61,13 @@ Item {
 
         ColumnLayout {
           Layout.fillWidth: true
+          Layout.minimumWidth: 0
           Text {
             Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            elide: Text.ElideRight
+            maximumLineCount: 1
+            font.pixelSize: 14
             horizontalAlignment: Text.AlignLeft
             text: {
               if (name) return name;
@@ -83,6 +90,10 @@ Item {
 
           Text {
             Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            elide: Text.ElideRight
+            maximumLineCount: 1
+            font.pixelSize: 14
             horizontalAlignment: Text.AlignLeft
             text: delay + " ms " + misMatchMsg
             textFormat: TextEdit.RichText
@@ -101,8 +112,11 @@ Item {
         }
 
         Text {
-          text: online + "/<font size='1'>" + capacity + "</font>"
-          font.pixelSize: 26
+          Layout.preferredWidth: 76
+          horizontalAlignment: Text.AlignRight
+          text: online + "/" + capacity
+          font.pixelSize: 19
+          elide: Text.ElideRight
           color: favicon ? "black" : "gray"
         }
 

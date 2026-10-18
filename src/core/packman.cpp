@@ -369,13 +369,6 @@ cleanup:
 static const char *min_commit = "b57d89fa4c1a1ae5a0711b97598747b8cbc7428e";
 
 bool PackMan::shouldUseCore() {
-#ifdef Q_OS_IOS
-  // The iOS bundle carries the patched root Fk/LunarLtk/card-counter tree.
-  // Loading packages/freekill-core/Fk/main.qml would bypass those edits.
-  // Keep behaving exactly like the shipped Windows/Android build, which
-  // loads the root tree at the pinned core commit.
-  return false;
-#endif
   if (!QFile::exists("packages/freekill-core")) return false;
   if (disabled_packs.contains("freekill-core")) return false;
   bool ret = is_head_newer_than_commit("packages/freekill-core", min_commit);

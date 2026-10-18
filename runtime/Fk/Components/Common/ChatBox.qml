@@ -106,7 +106,7 @@ Rectangle {
     RowLayout {
       Rectangle {
         Layout.fillWidth: true
-        Layout.preferredHeight: 28
+        Layout.preferredHeight: 40
         color: "#040403"
         radius: 3
         border.width: 1
@@ -138,7 +138,8 @@ Rectangle {
 
       MetroButton {
         id: soundBtn
-        text: "🗨️"
+        text: "语音"
+        width: 48; height: 40; textFont.pixelSize: 14
         visible: !isLobby
         enabled: !opTimer.running;
         onClicked: {
@@ -149,7 +150,8 @@ Rectangle {
 
       MetroButton {
         id: emojiBtn
-        text: "😃"
+        text: "表情"
+        width: 48; height: 40; textFont.pixelSize: 14
         onClicked: {
           soundSelector.visible = false;
           emojiSelector.visible = !emojiSelector.visible;
@@ -157,7 +159,8 @@ Rectangle {
       }
 
       MetroButton {
-        text: "✔️"
+        text: "发送"
+        width: 48; height: 40; textFont.pixelSize: 14
         enabled: !opTimer.running;
         onClicked: {
           opTimer.start();

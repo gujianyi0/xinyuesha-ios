@@ -10,6 +10,7 @@
 #include "network/router.h"
 #include "ui/qmlbackend.h"
 
+#include <QElapsedTimer>
 #include <openssl/rsa.h>
 #include <openssl/aes.h>
 #include <openssl/pem.h>
@@ -23,6 +24,7 @@ struct ClientPrivate {
 };
 
 Client::Client(QObject *parent) : QObject(parent) {
+  QElapsedTimer startupTimer; startupTimer.start();
   ClientInstance = this;
   self = new ClientPlayer(0, this);
 
@@ -44,11 +46,14 @@ Client::Client(QObject *parent) : QObject(parent) {
     QDir::setCurrent("packages/freekill-core");
   }
 
+  qInfo("[Startup] client pre-Lua: %lld ms", static_cast<long long>(startupTimer.elapsed()));
   L->dofile("lua/freekill.lua");
   L->dofile("lua/client/client.lua");
   L->call("CreateLuaClient", { QVariant::fromValue(this) });
 
+  qInfo("[Startup] client Lua ready: %lld ms", static_cast<long long>(startupTimer.elapsed()));
   db = std::make_unique<Sqlite3>("./client/client.db", "./client/init.sql");
+  qInfo("[Startup] client ready: %lld ms", static_cast<long long>(startupTimer.elapsed()));
 }
 
 Client::~Client() {

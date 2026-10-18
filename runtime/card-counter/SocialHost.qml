@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import QtQuick
+import QtQuick.Window
 import QtQuick.Controls
 import QtQuick.Templates as T
 import QtQuick.Layouts
@@ -9,7 +10,7 @@ Control {
   id: host
   anchors.fill: parent
   z: 400
-  font.family: Qt.platform.os === "ios" ? "PingFang SC" : (Qt.platform.os === "android" ? (systemFont.status === FontLoader.Ready ? systemFont.name : "Noto Sans CJK SC") : "Microsoft YaHei")
+  font.family: Qt.platform.os === "android" ? (systemFont.status === FontLoader.Ready ? systemFont.name : "Noto Sans CJK SC") : "Microsoft YaHei"
   FontLoader {
     id: systemFont
     source: Qt.platform.os === "android" ? "file:///system/fonts/NotoSansCJK-Regular.ttc" : ""
@@ -21,10 +22,31 @@ Control {
   palette.base: "#20383e"
   palette.highlight: "#9f8757"
   palette.highlightedText: "#fff5dc"
+  readonly property var clientPreferences: {
+    const window = host.Window.window;
+    return window ? window.contentItem.children.find(c => c.objectName === "fkCounterHost") || null : null;
+  }
   property bool expanded: false
+  property var navigationStack: null
+  property int utilityPageDepth: 0
+  readonly property bool nativeBasePageVisible: navigationStack
+    ? navigationStack.visible && !navigationStack.busy && isSocialBasePage(navigationStack.currentItem)
+    : utilityPageDepth === 0
+  Connections {
+    target: host.navigationStack
+    ignoreUnknownSignals: true
+    function onCurrentItemChanged() { host.scheduleLauncherUpdate(); }
+  }
+  property var readyReminders: []
   property bool gameOnline: false
   property int gameAccount: 0
   property string gameName: ""
+  // The profile page writes Self.avatar. Read the game model reactively so a
+  // successful profile edit is uploaded even when no navigation event follows.
+  readonly property string gameAvatar: selectedGameAvatar()
+  onGameAvatarChanged: Qt.callLater(updateContext)
+  property int avatarResourceRevision: 0
+  onExpandedChanged: if (expanded) avatarResourceRevision++
   property string gameState: "offline"
   // GameOver leaves the table/results page open. Only an explicit return to
   // the waiting room or lobby makes the social UI available again.
@@ -88,11 +110,11 @@ Control {
   // Use confirmed navigation events for the page; the flag only gates rooms.
   // An unstarted room is still a room whether we entered or observe it, so the
   // friends launcher must stay available until the match actually starts.
-  readonly property bool socialUiAvailable: networkGame && !matchViewActive &&
+  readonly property bool socialUiAvailable: networkGame && !matchViewActive && nativeBasePageVisible &&
     (gameState === "lobby" || gameState === "waiting" || gameState === "observing")
   readonly property string gameServer: String(Config.serverAddr || "").toLowerCase() + ":" + Config.serverPort
   visible: socialUiAvailable
-  onSocialUiAvailableChanged: if (!socialUiAvailable) dismissSocialUi();
+  onSocialUiAvailableChanged: { if (!socialUiAvailable) dismissSocialUi(); else Qt.callLater(remindReservations); }
 
   // Use explicit control delegates: Android's Material defaults otherwise draw
   // black input/checkbox text over this panel, regardless of the host palette.
@@ -114,6 +136,76 @@ Control {
       border.width: actionButton.visualFocus ? 2 : 1
       border.color: actionButton.enabled ? "#a18e65" : "#526366"
     }
+  }
+  component SocialAvatar: Rectangle {
+    id: avatarTile
+    property string avatar: ""
+    property string nickname: ""
+    implicitWidth: 42; implicitHeight: 42; radius: 8; clip: true
+    color: "#365357"; border.color: "#9e8b65"
+    Text { anchors.centerIn: parent; text: avatarTile.nickname.slice(0,1) || "友"; color: "#f5e6c5"; font.pixelSize: 21; font.family: host.font.family }
+    Image {
+      objectName: "socialAvatarImage"
+      anchors.fill: parent; anchors.margins: 1; fillMode: Image.PreserveAspectCrop
+      property var resolvedAvatar: host.avatarPicture(avatarTile.avatar, host.avatarResourceRevision)
+      sourceClipRect: resolvedAvatar.extra ? undefined : Qt.rect(61,20,128,128)
+      source: resolvedAvatar.source
+      visible: status === Image.Ready
+    }
+  }
+  function selectedGameAvatar() {
+    let player = typeof Self !== "undefined" ? Self : null;
+    if (!player || Number(player.id) !== gameAccount) player = Cpp.self;
+    // Spectating may change Self. Never publish the watched player's avatar
+    // under the logged-in account's identity.
+    if (!player || Number(player.id) !== gameAccount) return "";
+    const value = String(player.avatar || "");
+    return /^[A-Za-z0-9_\u4e00-\u9fff#-]{1,128}$/.test(value) ? value : "";
+  }
+  function avatarPicture(value, revision) {
+    if (!/^[A-Za-z0-9_\u4e00-\u9fff#-]{1,128}$/.test(value) || typeof SkinBank === "undefined")
+      return {source:"",extra:false};
+    try {
+      const extra = SkinBank.getGeneralExtraPic(value,"avatar/");
+      return {source:extra || SkinBank.getGeneralPicture(value) || "",extra:!!extra};
+    } catch (_) { return {source:"",extra:false}; }
+  }
+  function refreshPublicAvatars() {
+    if (!networkGame || typeof Lua === "undefined" || typeof Lua.getPlayersAndObservers !== "function") return;
+    try { social.observeGameAvatars(gameServer, Lua.getPlayersAndObservers() || []); }
+    catch (_) { /* No room/player model has been delivered yet. */ }
+  }
+  function isSocialBasePage(page) {
+    return !!page && (("roomModel" in page && "lobbyPlayerNum" in page && "serverPlayerNum" in page) ||
+      ("gameComponent" in page && "gameContent" in page));
+  }
+  function findNavigationStack() {
+    // RootPage owns the real StackView. Inspect it without changing any core
+    // QML file covered by the game server's MD5 check.
+    const children = host.parent ? host.parent.children : [];
+    for (let i=0; i<children.length; i++) {
+      const child = children[i];
+      if (child !== host && "currentItem" in child && "depth" in child &&
+          typeof child.get === "function" && typeof child.push === "function") {
+        navigationStack = child; return;
+      }
+    }
+  }
+  function hasReservation(friendId) {
+    return social.reservations.some(r => r.friend.id === friendId);
+  }
+  function canReserve(friend) {
+    const p = friend.presence || {};
+    return social.visibility !== "invisible" && p.server === gameServer &&
+      (p.state === "playing" || p.state === "observing");
+  }
+  function remindReservations() {
+    if (!socialUiAvailable) return;
+    const fresh = social.reservations.filter(r => r.status === "ready" && readyReminders.indexOf(r.id) < 0);
+    if (!fresh.length) return;
+    readyReminders = readyReminders.concat(fresh.map(r => r.id));
+    notice = fresh.map(r => "预约就绪：" + r.friend.name + " 现在可以一起玩了").join("；");
+    if (typeof App !== "undefined" && App.showToast) App.showToast(notice);
   }
   component SocialField: T.TextField {
     id: entry
@@ -178,49 +270,10 @@ Control {
   function updateContext() {
     loadProfiles();
     social.bind({valid: networkGame && gameAccount > 0, server: gameServer,
-      gameId: gameAccount, name: gameName, state: gameState, roomId: roomId, roomName: roomName});
+      gameId: gameAccount, name: gameName, state: matchViewActive ? (gameState === "observing" ? "observing" : "playing") : gameState,
+      roomId: roomId, roomName: roomName, avatar: gameAvatar});
     if (social.context.valid) social.setCredentials(gameServer, String(Config.screenName || ""), String(Config.password || ""));
     if (!observerMarkHookInstalled && networkGame) observerMarkHookInstalled = installObserverMarkCount();
-    if (!localTitleStyleInstalled && networkGame) localTitleStyleInstalled = installLocalTitleStyle();
-  }
-  // Personal title: only this client shows it for its own player.
-  readonly property string localTitleText: "故剑遗"
-  readonly property string localTitleStyle: "player_titles.gujianyi"
-  property bool localTitleStyleInstalled: false
-  function installLocalTitleStyle() {
-    if (typeof ClientInstance === "undefined" || !ClientInstance) return false;
-    try {
-      Lua.ev('(function() ' +
-        'if not Fk then return false end ' +
-        'Fk.title_styles = Fk.title_styles or {} ' +
-        'Fk.title_styles["player_titles.gujianyi"] = {' +
-        '  border = "#b8913d", background = "#050809", color = "#f3dc95",' +
-        '  fontSize = 10, width = 110, height = 30, backgroundMode = "component",' +
-        '  fontFamily = "' + (Qt.platform.os === "ios" ? "PingFang SC" : "Microsoft YaHei") + '",' +
-        '  component = "packages/gujianyi_title/GujianyiTitle.qml"' +
-        '} ' +
-        'return true end)()');
-      TitleBank.refresh();
-      applyLocalTitle();
-      return true;
-    } catch(e) { return false; }
-  }
-  function applyLocalTitle() {
-    if (typeof Cpp === "undefined" || !Cpp.self) return;
-    const me = Math.floor(Cpp.self.id || 0);
-    if (!me) return;
-    const current = (Config.playerTitles || {})[String(me)] || {};
-    if (current.id !== "local.gujianyi" || current.title !== localTitleText || current.style !== localTitleStyle)
-      Config.applyPlayerTitle({playerId: me, id: "local.gujianyi", title: localTitleText, style: localTitleStyle});
-    if (Config.myTitle !== localTitleText) Config.myTitle = localTitleText;
-    if (Config.myTitleId !== "local.gujianyi") Config.myTitleId = "local.gujianyi";
-    if (Config.myTitleStyle !== localTitleStyle) Config.myTitleStyle = localTitleStyle;
-  }
-  Connections {
-    target: Config
-    function onPlayerTitlesChanged() { Qt.callLater(host.applyLocalTitle); }
-    function onMyTitleChanged() { Qt.callLater(host.applyLocalTitle); }
-    function onTitleServerSupportedChanged() { Qt.callLater(host.applyLocalTitle); }
   }
   // Keep private list-mark counts readable while spectating or replaying.
   // The stock helper only prints the count for the mark owner (Self), so an
@@ -395,7 +448,7 @@ Control {
     function onCurrentInvitationChanged() { Qt.callLater(host.synchronizeNativeInvitationUi); }
   }
   onInvitationModeChanged: { filterNativeInvitations(); synchronizeNativeInvitationUi(); }
-  Component.onCompleted: Qt.callLater(host.synchronizeNativeInvitationUi)
+  Component.onCompleted: { host.findNavigationStack(); Qt.callLater(host.synchronizeNativeInvitationUi); }
   function dismissSocialUi() {
     expanded = false;
     if (invitePolicy) invitePolicy.popup.close();
@@ -405,12 +458,26 @@ Control {
     if (linkDialog) linkDialog.close();
     if (removeDialog) removeDialog.close();
     if (backupDialog) backupDialog.close();
+    if (serviceSettings) serviceSettings.close();
     if (roomPassword) roomPassword.text = "";
   }
   function joinTarget(target, observe) {
     updateContext();
     if (!target || target.profileKey !== social.profileKey || target.server !== gameServer || !networkGame) {
       social.error = "账号或服务器已改变，请重新接收邀请"; return;
+    }
+    // Recheck the last received presence when confirming the dialog. Never
+    // silently enter an old room after the friend moves or starts a match.
+    if (target.friendId) {
+      const friend = social.friends.find(f => f.id === target.friendId);
+      const p = friend && friend.presence;
+      if (!p || p.server !== target.server || Math.floor(p.roomId || 0) !== target.roomId ||
+          ["waiting", "playing", "observing"].indexOf(p.state) < 0) {
+        social.error = "好友的房间状态已改变，请重新跟随"; return;
+      }
+      if (!observe && p.state !== "waiting") {
+        social.error = "好友已开局，请关闭窗口后重新选择跟随观战"; return;
+      }
     }
     if (gameState === "playing") { social.error = "当前对局尚未结束，无法切换房间"; return; }
     if (!socialUiAvailable) { social.error = "请返回大厅或等待房间后再加入好友房间"; return; }
@@ -424,7 +491,7 @@ Control {
   function canFollowObserve(friend) {
     const presence = (friend && friend.presence) || {};
     return networkGame && presence.server === gameServer &&
-      (presence.state === "playing" || presence.state === "observing") &&
+      (presence.state === "waiting" || presence.state === "playing" || presence.state === "observing") &&
       Math.floor(presence.roomId || 0) > 0;
   }
   function followObserve(friend) {
@@ -433,15 +500,15 @@ Control {
     if (!social.enabled || !social.token) { social.error = "先连接好友服务"; return; }
     if (!networkGame) { social.error = "请先登录游戏服务器"; return; }
     if (presence.server !== gameServer) { social.error = "好友在其他服务器，暂时无法跟随观战"; return; }
-    if (presence.state !== "playing" && presence.state !== "observing") { social.error = "好友当前不在对局或观战中"; return; }
+    if (["waiting", "playing", "observing"].indexOf(presence.state) < 0) { social.error = "好友当前不在房间中"; return; }
     const targetRoom = Math.floor(presence.roomId || 0);
     if (targetRoom <= 0) { social.error = "好友未上报房间号，暂时无法跟随观战"; return; }
     if (targetRoom === roomId && roomId > 0) { social.error = "已经在这个房间中"; return; }
     if (gameState === "playing") { social.error = "当前对局尚未结束，无法切换房间"; return; }
     if (!socialUiAvailable) { social.error = "请返回大厅或等待房间后再跟随观战"; return; }
     joinDialog.targetRoom = {roomId: targetRoom, roomName: presence.roomName || "",
-      server: gameServer, profileKey: social.profileKey, observe: true};
-    joinDialog.observeOnly = true;
+      server: gameServer, profileKey: social.profileKey, friendId: friend.id, observe: presence.state !== "waiting"};
+    joinDialog.observeOnly = presence.state !== "waiting";
     roomPassword.text = "";
     joinDialog.open();
   }
@@ -465,6 +532,7 @@ Control {
   }
 
   function invitationReason(friend) {
+    if (social.visibility === "invisible") return "隐身中";
     if (!social.enabled || !social.token) return "先连接好友服务";
     if (social.busy) return "同步中";
     if (host.gameState !== "waiting" || !host.socialUiAvailable) return "先进入等待房间";
@@ -519,6 +587,7 @@ Control {
     }
   }
   function refreshRoomBridge() {
+    host.findNavigationStack();
     if (!host.socialUiAvailable) return;
     let anchor = null;
     let inviteNode = null;
@@ -591,24 +660,30 @@ Control {
     onIdentityCreated: { host.prepareRecoveredProfile(); if (host.socialUiAvailable) backupDialog.open(); }
     onIdentityRestored: host.prepareRecoveredProfile()
     onPolicyUpdated: Qt.callLater(host.synchronizeInvitationPolicy)
-    onFriendsChanged: host.filterNativeInvitations()
+    onFriendsChanged: { host.filterNativeInvitations(); host.refreshPublicAvatars(); }
+    onReservationsChanged: host.remindReservations()
+    onMeChanged: if (social.me.id) host.readyReminders = host.readyReminders.filter(id => social.reservations.some(r => r.id === id));
   }
 
   Connections {
     target: Mediator
     function onCommandGot(sender, command, data) {
+      if (command === "PushPage" && host.networkGame) {
+        host.utilityPageDepth++; host.findNavigationStack();
+      } else if (command === "PopPage") host.utilityPageDepth = Math.max(0, host.utilityPageDepth - 1);
       if (command === "Setup" && !Config.observing) {
         const id = Math.floor(data[0] || 0);
-        if (id !== host.gameAccount) { host.resetInvitationPolicyBridge(); host.observerMarkHookInstalled = false; host.localTitleStyleInstalled = false; host.gameAccount = id; host.pendingJoin = null; host.notice = ""; }
+        if (id !== host.gameAccount) { host.resetInvitationPolicyBridge(); host.observerMarkHookInstalled = false; host.gameAccount = id; host.pendingJoin = null; host.notice = ""; }
         host.gameName = data[1] || "";
       } else if (command === "SetServerSettings") {
-        host.resetInvitationPolicyBridge(); host.observerMarkHookInstalled = false; host.localTitleStyleInstalled = false;
+        host.resetInvitationPolicyBridge(); host.observerMarkHookInstalled = false;
         const features = data[2] || [];
         host.nativeInvitesSupported = Array.isArray(features) && features.indexOf("RoomInvitations") >= 0;
         host.gameAccount = Math.floor(Cpp.self.id || 0);
         host.gameName = Cpp.self.screenName || "";
         host.gameOnline = host.gameAccount > 0;
       } else if (command === "EnterLobby") {
+        host.utilityPageDepth = 0; host.findNavigationStack();
         host.gameAccount = Math.floor(Cpp.self.id || 0);
         host.gameName = Cpp.self.screenName || host.gameName;
         host.gameOnline = true; host.gameState = "lobby"; host.roomId = 0; host.roomName = "";
@@ -618,6 +693,7 @@ Control {
         host.selectedRoomId = 0; host.selectedRoomName = "";
         host.updateContext(); Qt.callLater(host.finishJoin);
       } else if (command === "EnterRoom" || command === "ChangeRoom") {
+        if (command === "EnterRoom") { host.utilityPageDepth = 0; host.findNavigationStack(); }
         if (command === "EnterRoom") { host.matchViewActive = false; host.nativeFailureNeedsRoomId = false; }
         const settings = data[2] || {};
         host.roomId = Math.floor(settings.roomId || (command === "EnterRoom" ?
@@ -633,10 +709,12 @@ Control {
       } else if (command === "GameOver") {
         host.gameState = Config.observing ? "observing" : "waiting";
       } else if (command === "BackToRoom") {
+        host.utilityPageDepth = 0;
         host.matchViewActive = false;
         host.gameState = Config.observing ? "observing" : "waiting";
       } else if (command === "BackToStart" && !(data && data.preserveSession)) {
-        host.resetInvitationPolicyBridge(); host.observerMarkHookInstalled = false; host.localTitleStyleInstalled = false;
+        host.utilityPageDepth = 0;
+        host.resetInvitationPolicyBridge(); host.observerMarkHookInstalled = false;
         host.gameOnline = false; host.gameState = "offline"; host.pendingJoin = null;
         host.gameAccount = 0; host.expanded = false; joinDialog.close();
         host.nativeInvitesSupported = false; host.nativePending = ({}); host.nativeCooldowns = ({});
@@ -644,6 +722,11 @@ Control {
       } else if (command === "RoomInviteSettings") {
         host.nativeInvitesSupported = data.supported === true;
         host.receiveNativeSettings(data);
+      } else if (command === "RoomInvitePlayers" && data && data.players) {
+        // Some servers include public avatars in the native invitation list.
+        // Reuse them only when already delivered; do not create subscriptions
+        // or extra game-server requests on behalf of the player.
+        social.observeGameAvatars(host.gameServer, data.players);
       } else if (command === "RoomInviteResult") {
         const id = String(data.playerId);
         if (host.nativePending[id]) {
@@ -659,6 +742,8 @@ Control {
         host.selectedRoomId = 0; host.selectedRoomName = ""; host.selectedRoomDeadline = 0;
       }
       host.updateContext();
+      if (command === "AddPlayer" || command === "EnterRoom" || command === "BackToRoom" || command === "ArrangeSeats")
+        Qt.callLater(host.refreshPublicAvatars);
       if (command === "EnterLobby" || command === "EnterRoom" || command === "BackToRoom") Qt.callLater(host.refreshRoomBridge);
     }
   }
@@ -708,7 +793,7 @@ Control {
       anchors.centerIn: parent; width: parent.width - 8; horizontalAlignment: Text.AlignHCenter
       elide: Text.ElideRight; color: "#f4e6c8"; font.family: host.font.family
       font.pixelSize: 16 * (host.gameContentItem ? host.gameContentItem.scale : 1)
-      text: "好友" + (host.socialInvitationCount + social.requests.length > 0 ? " · " + (host.socialInvitationCount + social.requests.length) : "")
+      text: "好友" + (host.socialInvitationCount + social.requests.length + social.reservations.filter(r => r.status === "ready" || (r.status === "pending" && r.direction === "incoming")).length > 0 ? " · " + (host.socialInvitationCount + social.requests.length + social.reservations.filter(r => r.status === "ready" || (r.status === "pending" && r.direction === "incoming")).length) : "")
     }
     MouseArea { id: launchMouse; anchors.fill: parent; hoverEnabled: true
       onClicked: { host.expanded = !host.expanded; host.refreshRoomBridge(); host.updateContext(); social.refresh(); } }
@@ -729,6 +814,7 @@ Control {
           Text { text: "同游好友"; font.family: host.font.family; font.pixelSize: 24; font.bold: true; color: "#f2e3be" }
           Text { text: host.statusLabel(host.gameState) + (host.roomId ? " · 房间 #" + host.roomId : ""); color: "#a1b9bb"; font.family: host.font.family; font.pixelSize: 13 }
           Item { Layout.fillWidth: true }
+          SocialButton { text: "设置"; onClicked: serviceSettings.open() }
           SocialButton { text: "关闭"; onClicked: host.expanded = false }
         }
         Text {
@@ -736,25 +822,15 @@ Control {
           text: "好友随游戏账号保存在云端；重装后登录同一服务器、同一账号即可恢复。双方连接同一好友服务后可互邀。"
         }
         RowLayout {
-          Text { text: "好友服务"; color: "#d6e0df"; font.family: host.font.family; font.pixelSize: 14 }
-          SocialField { id: serviceAddress; objectName: "serviceAddress"; Layout.fillWidth: true; text: social.endpoint; placeholderText: "输入好友服务地址"; maximumLength: 255 }
-          SocialButton { objectName: "friendsConnectButton"; text: social.deriving ? "认证中…" : social.enabled && social.token ? "暂停" : "连接好友"; enabled: !social.busy && !social.deriving && host.networkGame
-            onClicked: {
-              host.notice = "";
-              if (!social.configure(serviceAddress.text)) return;
-              if (social.enabled && social.token) social.pauseService();
-              else social.connectService();
-            } }
-        }
-        RowLayout {
           visible: social.token !== ""
+          SocialAvatar { avatar: social.context.avatar || social.me.avatar || ""; nickname: host.gameName }
           Text { text: "我的好友码  " + (social.me.code || "…"); color: "#e1c98f"; font.family: host.font.family; font.pixelSize: 15 }
           SocialButton { text: "复制"; enabled: !!social.me.code; onClicked: Backend.copyToClipboard(social.me.code) }
-          SocialButton { text: "备份恢复码"; enabled: !social.busy && !!social.me.id; onClicked: { backupDialog.open(); social.ensureRecoveryCode(); } }
           Item { Layout.fillWidth: true }
-          SocialButton { text: "迁移到另一设备"; enabled: !social.busy; onClicked: social.deviceCode() }
+          SocialButton { objectName: "visibilityToggle"; text: social.visibility === "invisible" ? "隐身中 · 上线" : "在线 · 隐身"; enabled: !social.busy && !!social.me.id
+            onClicked: social.setVisibility(social.visibility === "invisible" ? "online" : "invisible") }
         }
-        Text { Layout.fillWidth: true; visible: !!social.token; wrapMode: Text.Wrap
+        Text { Layout.fillWidth: true; visible: !!social.token && !social.accountBound; wrapMode: Text.Wrap
           text: social.accountBound ? "已绑定游戏账号 · 重装自动恢复，好友仅在主动删除后移除" : social.deriving || social.authenticating ? "正在绑定游戏账号，请稍候…" : "尚未绑定游戏账号，请重新登录游戏完成绑定；也可先备份恢复码。"
           color: social.accountBound ? "#b6dacb" : "#e1c98f"; font.pixelSize: 13; font.family: host.font.family }
         RowLayout {
@@ -807,12 +883,32 @@ Control {
               }
             }
             Repeater {
+              model: social.reservations
+              delegate: Rectangle {
+                required property var modelData
+                Layout.fillWidth: true; implicitHeight: 70; radius: 8; color: modelData.status === "ready" ? "#34483d" : "#2c3944"; border.color: "#8c967e"
+                RowLayout {
+                  anchors.fill: parent; anchors.margins: 10
+                  SocialAvatar { avatar: social.avatarFor(modelData.friend); nickname: modelData.friend.name }
+                  Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: "#f3e9d5"; font.family: host.font.family; font.pixelSize: 14; textFormat: Text.PlainText
+                    text: modelData.status === "ready" ? "预约就绪 · " + modelData.friend.name + "\n双方已空闲，可以邀请一起玩"
+                      : modelData.status === "accepted" ? "已约好 · " + modelData.friend.name + "\n回到大厅或等待房间后提醒，不会自动跳房"
+                      : modelData.friend.name + (modelData.direction === "incoming" ? " 想和你一起玩\n接受后，双方空闲时提醒" : " · 等待接受预约\n30 分钟内有效") }
+                  SocialButton { visible: modelData.status === "pending" && modelData.direction === "incoming"; text: "婉拒"; enabled: !social.busy; onClicked: social.respondReservation(modelData.id,false) }
+                  SocialButton { visible: modelData.status === "pending" && modelData.direction === "incoming"; text: "接受预约"; enabled: !social.busy; onClicked: social.respondReservation(modelData.id,true) }
+                  SocialButton { visible: modelData.status !== "ready" && (modelData.direction === "outgoing" || modelData.status === "accepted"); text: "取消预约"; enabled: !social.busy; onClicked: social.cancelReservation(modelData.id) }
+                  SocialButton { visible: modelData.status === "ready"; text: "知道了"; enabled: !social.busy; onClicked: social.acknowledgeReservation(modelData.id) }
+                }
+              }
+            }
+            Repeater {
               model: social.friends
               delegate: Rectangle {
                 required property var modelData
                 Layout.fillWidth: true; implicitHeight: 64; radius: 8; color: "#243b40"
                 RowLayout {
                   anchors.fill: parent; anchors.margins: 10
+                  SocialAvatar { avatar: social.avatarFor(modelData); nickname: modelData.name }
                   Rectangle { width: 8; height: 8; radius: 4; color: modelData.presence.state === "offline" ? "#6b8083" : "#7dcab0" }
                   ColumnLayout {
                     Layout.fillWidth: true; spacing: 3
@@ -824,7 +920,7 @@ Control {
                   SocialButton {
                     objectName: "followObserveFriend_" + modelData.id
                     visible: host.canFollowObserve(modelData)
-                    text: "跟随观战"
+                    text: modelData.presence.state === "waiting" ? "跟随入房" : "跟随观战"
                     enabled: !social.busy
                     onClicked: host.followObserve(modelData)
                   }
@@ -834,12 +930,19 @@ Control {
                     enabled: host.invitationReason(modelData) === ""
                     onClicked: host.inviteFriend(modelData)
                   }
+                  SocialButton {
+                    objectName: "reserveFriend_" + modelData.id
+                    visible: host.canReserve(modelData)
+                    text: host.hasReservation(modelData.id) ? "已预约" : "预约一起玩"
+                    enabled: !social.busy && !host.hasReservation(modelData.id)
+                    onClicked: social.reserve(modelData.id)
+                  }
                   SocialButton { text: "删除"; enabled: !social.busy
                     onClicked: { removeDialog.friendId = modelData.id; removeDialog.friendName = modelData.name; removeDialog.open(); } }
                 }
               }
             }
-            Text { visible: social.friends.length === 0 && social.requests.length === 0 && host.socialInvitationCount === 0
+            Text { visible: social.friends.length === 0 && social.requests.length === 0 && social.reservations.length === 0 && host.socialInvitationCount === 0
               Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; topPadding: 24; bottomPadding: 24
               text: social.deriving || social.authenticating ? "正在恢复账号好友，请稍候…" : social.enabled ? "还没有好友，把好友码发给一起玩的伙伴吧" : "连接好友服务后，查看好友和邀请"
               color: "#c1d1d4"; font.family: host.font.family; font.pixelSize: 15 }
@@ -897,6 +1000,42 @@ Control {
         }
 
       }
+    }
+  }
+  SocialDialog {
+    id: serviceSettings; objectName: "socialServiceSettings"
+    title: "好友与显示设置"; anchors.centerIn: parent; modal: true; exit: Transition {}
+    width: Math.min(host.width - 36, 650)
+    contentItem: ColumnLayout {
+      spacing: 14
+      CheckBox {
+        objectName: "hideServerTitles"
+        text: "屏蔽称号（仅本机显示）"; palette.windowText: "#e5ded0"
+        visible: host.clientPreferences !== null
+        checked: host.clientPreferences ? host.clientPreferences.hideTitles : false
+        onClicked: {
+          if (!host.clientPreferences.setHideTitles(checked)) social.error = "显示设置保存失败，请检查存储空间";
+        }
+      }
+      Text { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "头像跟随游戏个人资料。隐身只隐藏同游好友服务中的在线和房间信息，不改变主力服的游戏状态。"; color: "#c5d2d4"; font.pixelSize: 14; font.family: host.font.family }
+        RowLayout {
+          Text { text: "好友服务"; color: "#d6e0df"; font.family: host.font.family; font.pixelSize: 14 }
+          SocialField { id: serviceAddress; objectName: "serviceAddress"; Layout.fillWidth: true; text: social.endpoint; placeholderText: "输入好友服务地址"; maximumLength: 255 }
+          SocialButton { objectName: "friendsConnectButton"; text: social.deriving ? "认证中…" : social.enabled && social.token ? "暂停" : "连接好友"; enabled: !social.busy && !social.deriving && host.networkGame
+            onClicked: {
+              host.notice = "";
+              if (!social.configure(serviceAddress.text)) return;
+              if (social.enabled && social.token) social.pauseService();
+              else social.connectService();
+            } }
+        }
+      RowLayout {
+          SocialButton { text: "备份恢复码"; enabled: !social.busy && !!social.me.id; onClicked: { backupDialog.open(); social.ensureRecoveryCode(); } }
+          SocialButton { text: "迁移到另一设备"; enabled: !social.busy; onClicked: social.deviceCode() }
+        Item { Layout.fillWidth: true }
+      }
+      Text { Layout.fillWidth: true; wrapMode: Text.Wrap; text: social.error || host.notice; color: social.error ? "#f0a795" : "#b6dacb"; font.pixelSize: 13; font.family: host.font.family; textFormat: Text.PlainText }
+      SocialButton { text: "关闭"; Layout.alignment: Qt.AlignRight; onClicked: serviceSettings.close() }
     }
   }
   SocialDialog {

@@ -3,61 +3,15 @@
 #include "core/util.h"
 
 #include <QSettings>
+#include <QElapsedTimer>
+#include "core/packagechecksum.h"
 #include <QUuid>
 #include "core/packman.h"
 #include <QSysInfo>
 #include <git2.h>
 
-static void writeFileMD5(QFile &dest, const QString &fname) {
-  QFile f(fname);
-  if (!f.open(QIODevice::ReadOnly)) {
-    return;
-  }
-
-  auto data = f.readAll();
-  f.close();
-  data.replace(QByteArray("\r\n"), QByteArray("\n"));
-  auto hash = QCryptographicHash::hash(data, QCryptographicHash::Md5).toHex();
-  dest.write(fname.toUtf8() + '=' + hash + ';');
-}
-
-static void writeDirMD5(QFile &dest, const QString &dir,
-                        const QString &filter) {
-  QDir d(dir);
-  auto entries = d.entryInfoList(
-      QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
-  auto re = QRegularExpression::fromWildcard(filter);
-  for (QFileInfo info : entries) {
-    if (info.isDir()) {
-      writeDirMD5(dest, info.filePath(), filter);
-    } else {
-      if (re.match(info.fileName()).hasMatch()) {
-        writeFileMD5(dest, info.filePath());
-      }
-    }
-  }
-}
-
-static void writePkgsMD5(QFile &dest, const QString &dir,
-                        const QString &filter) {
-  QDir d(dir);
-  auto entries = d.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
-  const auto disabled = Pacman->getDisabledPacks();
-  static const QStringList builtinPkgs = {
-    "standard", "standard_cards", "maneuvering", "test",
-  };
-  for (QFileInfo info : entries) {
-    if (!info.isDir()) continue;
-    auto dirname = info.fileName();
-    if (info.fileName().endsWith(".disabled")) continue;
-    if (disabled.contains(info.fileName())) continue;
-    if (builtinPkgs.contains(info.fileName())) continue;
-
-    writeDirMD5(dest, info.filePath(), filter);
-  }
-}
-
 QString calcFileMD5() {
+  QElapsedTimer checksumTimer; checksumTimer.start();
   // First, generate flist.txt
   // flist.txt is a file contains all md5sum for code files
   QFile flist("flist.txt");
@@ -65,9 +19,10 @@ QString calcFileMD5() {
     qFatal("Cannot open flist.txt. Quitting.");
   }
 
-  writePkgsMD5(flist, "packages", "*.lua");
-  writePkgsMD5(flist, "packages", "*.qml");
-  writePkgsMD5(flist, "packages", "*.js");
+  const auto files = fkPackageChecksum::packageFiles("packages", Pacman->getDisabledPacks());
+  for (const auto &group : files)
+    for (const auto &name : group)
+      flist.write(fkPackageChecksum::record(name));
 
   // then, return flist.txt's md5
   flist.close();
@@ -77,6 +32,7 @@ QString calcFileMD5() {
   auto ret = QCryptographicHash::hash(flist.readAll(), QCryptographicHash::Md5);
 
   flist.close();
+  qInfo("[Startup] package checksum: %lld ms", static_cast<long long>(checksumTimer.elapsed()));
   return ret.toHex();
 }
 
