@@ -33,6 +33,14 @@ Item {
     if (!preferencesLoaded || !Backend.writeFileToAssets("client-ui.json", payload)) return false;
     hideTitles = !!value; refreshCompatibility(); return true;
   }
+  function chatIcon(kind) {
+    const shapes = {
+      sound: '<path d="M3 4h18v13H11l-5 4v-4H3z" fill="white" stroke="#161616" stroke-width="1.3"/>',
+      emoji: '<circle cx="12" cy="12" r="10" fill="#ffd348" stroke="#ba8822"/><ellipse cx="8.5" cy="9" rx="1.4" ry="2" fill="#35271b"/><ellipse cx="15.5" cy="9" rx="1.4" ry="2" fill="#35271b"/><path d="M6.5 14h11c-1 6-10 6-11 0" fill="#513824"/><path d="M8 14h8v2H8z" fill="white"/>',
+      send: '<path d="M4 12l5 6L21 4" fill="none" stroke="#91a9bc" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>'
+    };
+    return "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">'+shapes[kind]+'</svg>');
+  }
   function refreshCompatibility() {
     const window = host.Window.window;
     if (!window) return;
@@ -106,10 +114,12 @@ Item {
         } else if (lobbyPage && "textFormat" in item && item.textFormat === Text.MarkdownText) {
           item.font.pixelSize = 14; adaptedControls.push(item);
         } else if (chatBox && "textFont" in item && "clicked" in item) {
-          const labels = {"🗨️":"语音", "😃":"表情", "✔️":"发送"};
-          if (labels[item.text]) {
-            item.text = labels[item.text]; item.width = 48; item.height = 40;
-            item.textFont.pixelSize = 14; adaptedControls.push(item);
+          const icons = {"🗨️":"sound", "😃":"emoji", "✔️":"send", "语音":"sound", "表情":"emoji", "发送":"send"};
+          if (icons[item.text] && "icon" in item && "title" in item) {
+            item.icon.source = host.chatIcon(icons[item.text]);
+            item.icon.width = 24; item.icon.height = 24;
+            item.text = ""; item.title.visible = false;
+            item.width = 40; item.height = 40; adaptedControls.push(item);
           }
         }
       }
@@ -121,7 +131,7 @@ Item {
   }
   Timer { interval: 1000; repeat: true; running: host.settingsReady; onTriggered: host.refreshCompatibility(); }
   property var fallbackButton: null
-  onClientContextChanged: { bootstrapReady = false; if (clientContext) Qt.callLater(host.ensureBootstrap); }
+  onClientContextChanged: { bootstrapReady = false; if (clientContext) Qt.callLater(host.ensureBootstrap); else Qt.callLater(host.releaseScene); }
   Connections {
     target: Config
     // Do not save while loadConf is assigning defaults and stored values.

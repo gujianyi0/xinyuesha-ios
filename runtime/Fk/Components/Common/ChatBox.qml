@@ -138,7 +138,7 @@ Rectangle {
 
       MetroButton {
         id: soundBtn
-        text: "语音"
+        text: "🗨️"
         width: 48; height: 40; textFont.pixelSize: 14
         visible: !isLobby
         enabled: !opTimer.running;
@@ -150,7 +150,7 @@ Rectangle {
 
       MetroButton {
         id: emojiBtn
-        text: "表情"
+        text: "😃"
         width: 48; height: 40; textFont.pixelSize: 14
         onClicked: {
           soundSelector.visible = false;
@@ -159,7 +159,7 @@ Rectangle {
       }
 
       MetroButton {
-        text: "发送"
+        text: "✔️"
         width: 48; height: 40; textFont.pixelSize: 14
         enabled: !opTimer.running;
         onClicked: {

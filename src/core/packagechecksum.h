@@ -14,9 +14,10 @@ inline void collect(const QString &dir, Groups &files) {
   for (const QFileInfo &entry : QDir(dir).entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
     if (entry.isDir()) { collect(entry.filePath(), files); continue; }
     const QString name=entry.fileName();
-    if (name.endsWith(".lua")) files[0].append(entry.filePath());
-    else if (name.endsWith(".qml")) files[1].append(entry.filePath());
-    else if (name.endsWith(".js")) files[2].append(entry.filePath());
+    // QRegularExpression::fromWildcard defaults to case-insensitive matching.
+    if (name.endsWith(".lua", Qt::CaseInsensitive)) files[0].append(entry.filePath());
+    else if (name.endsWith(".qml", Qt::CaseInsensitive)) files[1].append(entry.filePath());
+    else if (name.endsWith(".js", Qt::CaseInsensitive)) files[2].append(entry.filePath());
   }
 }
 inline Groups packageFiles(const QString &dir, const QStringList &disabled) {

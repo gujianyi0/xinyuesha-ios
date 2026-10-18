@@ -6,6 +6,7 @@
 // into the executable. Local modules (Fk, LunarLtk, Spine) live on disk in the
 // writable runtime directory and are deliberately not listed here.
 import QtQuick
+import QtCore
 import QtQuick.Window
 import QtQuick.Templates
 import QtQuick.Controls
