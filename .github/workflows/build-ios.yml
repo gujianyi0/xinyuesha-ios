@@ -13,8 +13,22 @@ on:
       - "ios-*"
 
 jobs:
+  test-core-repair:
+    name: Test core repository recovery
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native test dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y qt6-base-dev libgit2-dev pkg-config
+      - name: Verify seed and recovery against real Git repositories
+        run: |
+          python3 scripts/test_core_repository.py
+          c++ -std=c++17 -fPIC scripts/test_ios_core_repair.cpp -Isrc \
+            $(pkg-config --cflags --libs Qt6Core libgit2) -o "$RUNNER_TEMP/test-core-repair"
+          "$RUNNER_TEMP/test-core-repair"
   build:
     name: Build iOS arm64
+    needs: test-core-repair
     runs-on: macos-14
     timeout-minutes: 120
 

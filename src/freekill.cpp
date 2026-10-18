@@ -30,6 +30,8 @@ using namespace fkShell;
  #include "ui/spine/spineregister.h"
 #ifdef Q_OS_IOS
  #include "platform/ioshelper.h"
+ #include "platform/ioscorerepair.h"
+ #include <QMessageBox>
 #endif
 #endif
 
@@ -492,6 +494,14 @@ int freekill_main(int argc, char *argv[]) {
   fkIosExcludeFromBackup(dataDir.toUtf8().constData());
   qInfo("iOS: installing bundled runtime into %s", qUtf8Printable(dataDir));
   installFkAssets(bundleDir + QLatin1String("/res"), dataDir);
+  QString coreRepairError;
+  if (!fkIosCoreRepair::repair(bundleDir + QLatin1String("/res"), dataDir,
+                             &coreRepairError)) {
+    QMessageBox::critical(nullptr, QStringLiteral("核心包修复失败"),
+        QStringLiteral("无法恢复核心扩展包。请检查剩余空间，并重新覆盖安装完整版本。\n")
+        + coreRepairError);
+    return -1;
+  }
   QDir::setCurrent(dataDir);
 
   log_file.reset(new QFile("freekill.server.log"));

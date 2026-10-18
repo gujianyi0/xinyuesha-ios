@@ -24,8 +24,13 @@ check "runtime Fk/main.qml" "$APP/res/Fk/main.qml"
 check "runtime LunarLtk" "$APP/res/LunarLtk/qmldir"
 check "card-counter SocialHost" "$APP/res/card-counter/SocialHost.qml"
 check "card-counter bootstrap" "$APP/res/card-counter/bootstrap.lua"
-check "title component" "$APP/res/packages/gujianyi_title/GujianyiTitle.qml"
 check "freekill-core" "$APP/res/packages/freekill-core/Fk/main.qml"
+check "freekill-core Git HEAD" "$APP/res/packages/freekill-core/.git/HEAD"
+if ! git -C "$APP/res/packages/freekill-core" rev-parse --verify HEAD^{commit} >/dev/null 2>&1 \
+    || ! git -C "$APP/res/packages/freekill-core" fsck --full --no-reflogs >/dev/null 2>&1; then
+  echo "  FAIL freekill-core is not a complete Git repository"
+  fail=1
+fi
 check "standard package" "$APP/res/packages/standard/init.lua"
 check "Spine QML module" "$APP/res/Spine/qmldir"
 check "CA certificates" "$APP/res/certs"

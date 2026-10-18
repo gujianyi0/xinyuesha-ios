@@ -103,6 +103,7 @@ if [[ -d "$APP/Frameworks" ]]; then
   done < <(find "$APP/Frameworks" -maxdepth 1 -name '*.framework' -print0)
 fi
 
+python3 "$ROOT/scripts/prepare_core_repository.py" "$APP/res"
 bash "$ROOT/scripts/verify_app.sh" "$APP"
 
 if [[ "$PACKAGE" == "1" ]]; then
