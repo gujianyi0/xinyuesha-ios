@@ -51,7 +51,7 @@ def prepare(runtime, bundle=SEED, commit=CORE_COMMIT):
             def writable_retry(function, path, error):
                 Path(path).chmod(stat.S_IWRITE | stat.S_IREAD)
                 function(path)
-            shutil.rmtree(target, onexc=writable_retry)
+            shutil.rmtree(target, onerror=writable_retry)
         shutil.move(str(repo), target)
     db = runtime / 'packages/packages.db'
     if db.exists():
