@@ -9,6 +9,7 @@
 #include <QString>
 #include <QUuid>
 #include <git2.h>
+#include <git2/errors.h>
 
 namespace fkIosCoreRepair {
 
