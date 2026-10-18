@@ -79,7 +79,11 @@ inline bool repair(const QString &bundleRuntime, const QString &dataRuntime,
     if (error) *error = message;
     return false;
   };
-  if (!validRepository(source))
+  // The read-only .app bundle may be owned by the iOS installer. Do not open
+  // its repository with libgit2's ownership check; validate the copied stage,
+  // which belongs to the running app, without disabling that safety check.
+  if (!QFile::exists(source + "/.git/HEAD")
+      || !QFile::exists(source + "/Fk/main.qml"))
     return fail(QStringLiteral("The bundled core repository is incomplete."));
 
   const QString recovery = dataRuntime + "/.core-recovery";
