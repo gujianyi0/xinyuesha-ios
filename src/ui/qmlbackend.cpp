@@ -9,6 +9,8 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QUrl>
+#include <QPasswordDigestor>
+#include <QJsonArray>
 #include "platform/localfileurl.h"
 
 QString QmlBackend::importBackground(const QString &source) {
@@ -33,6 +35,7 @@ QString QmlBackend::importBackground(const QString &source) {
 }
 
 #ifndef FK_SERVER_ONLY
+#include <QQmlContext>
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QNetworkAccessManager>
@@ -277,8 +280,8 @@ void QmlBackend::joinServer(QString address, ushort port) {
   engine->rootContext()->setContextProperty("ClientInstance", client);
   engine->rootContext()->setContextProperty("Self", client->getSelf());
   connect(client, &Client::destroyed, this, [=, this] {
-    engine->rootContext()->setContextProperty("Self", &dummyPlayer);
     engine->rootContext()->setContextProperty("ClientInstance", nullptr);
+    engine->rootContext()->setContextProperty("Self", &dummyPlayer);
   });
   connect(client, &Client::error_message, this, [=, this](const QString &msg) {
     if (replayer) {
@@ -328,34 +331,54 @@ void QmlBackend::joinServer(QString address, ushort port) {
 }
 
 void QmlBackend::quitLobby(bool close) {
-  if (ClientInstance)
+  if (ClientInstance) {
+    engine->rootContext()->setContextProperty("ClientInstance", nullptr);
     delete ClientInstance;
+  }
   // if (ServerInstance && close)
   //   ServerInstance->deleteLater();
 }
 
 QString QmlBackend::translate(const QString &src) {
-  if (!ClientInstance)
+  // The process global is published before the worker-thread constructor has
+  // finished. The QML context becomes visible only after Lua is initialized.
+  auto client = engine->rootContext()->contextProperty("ClientInstance").value<Client *>();
+  if (!client)
     return src;
 
-  auto L = ClientInstance->getLua();
+  auto L = client->getLua();
   auto bytes = src.toUtf8();
   return L->call("Translate", { bytes }).toString();
 }
 
 QVariant QmlBackend::callLuaFunction(const QString &func_name,
                                     QVariantList params) {
-  if (!ClientInstance) return QVariantMap();
+  auto client = engine->rootContext()->contextProperty("ClientInstance").value<Client *>();
+  if (!client) return QVariantMap();
 
-  auto L = ClientInstance->getLua();
+  auto L = client->getLua();
   return L->call(func_name, params);
 }
 
 QVariant QmlBackend::evalLuaExp(const QString &lua) {
-  if (!ClientInstance) return QVariantMap();
+  auto client = engine->rootContext()->contextProperty("ClientInstance").value<Client *>();
+  if (!client) return QVariantMap();
 
-  auto L = ClientInstance->getLua();
+  auto L = client->getLua();
   return L->eval(lua);
+}
+
+QString QmlBackend::deriveSocialAccountKey(const QString &server,
+    const QString &username, const QString &password) {
+  if (server.isEmpty() || username.isEmpty() || password.isEmpty()) return {};
+  const QByteArray salt = QJsonDocument(QJsonArray{
+    "freekill-social-account-v1", server, username}).toJson(QJsonDocument::Compact);
+  // Identical to the existing WorkerScript protocol, without the JS delay.
+  auto secret = password.toUtf8();
+  const auto key = QPasswordDigestor::deriveKeyPbkdf2(
+    QCryptographicHash::Sha256, secret, salt, 210000, 32);
+  secret.fill('\0');
+  return QString::fromLatin1(key.toHex());
 }
 
 static QString touchAndRead(const QString &fname, QString init_conf) {

@@ -48,6 +48,8 @@ public:
   Q_INVOKABLE QVariant callLuaFunction(const QString &func_name,
                                       QVariantList params);
   Q_INVOKABLE QVariant evalLuaExp(const QString &lua);
+  Q_INVOKABLE QString deriveSocialAccountKey(const QString &server,
+      const QString &username, const QString &password);
 
   Q_INVOKABLE QString getPublicServerList();
   Q_INVOKABLE QString loadConf();

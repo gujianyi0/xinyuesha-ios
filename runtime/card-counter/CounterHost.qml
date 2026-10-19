@@ -37,7 +37,9 @@ Item {
     const shapes = {
       sound: '<path d="M3 4h18v13H11l-5 4v-4H3z" fill="white" stroke="#161616" stroke-width="1.3"/>',
       emoji: '<circle cx="12" cy="12" r="10" fill="#ffd348" stroke="#ba8822"/><ellipse cx="8.5" cy="9" rx="1.4" ry="2" fill="#35271b"/><ellipse cx="15.5" cy="9" rx="1.4" ry="2" fill="#35271b"/><path d="M6.5 14h11c-1 6-10 6-11 0" fill="#513824"/><path d="M8 14h8v2H8z" fill="white"/>',
-      send: '<path d="M4 12l5 6L21 4" fill="none" stroke="#91a9bc" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>'
+      send: '<path d="M4 12l5 6L21 4" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>',
+      expand: '<path d="M2 3h13v11H9l-5 4v-4H2z" fill="white"/><path d="M20 13v9m-4-4h8" stroke="white" stroke-width="2"/>',
+      collapse: '<path d="M2 3h13v11H9l-5 4v-4H2z" fill="white"/><path d="M16 18h8" stroke="white" stroke-width="2"/>'
     };
     return "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">'+shapes[kind]+'</svg>');
   }
@@ -51,13 +53,13 @@ Item {
     let visited = 0;
     const seen = new Set();
     function scan(item, depth, serverPage, lobbyPage, chatBox) {
-      if (!item || seen.has(item) || depth > 24 || ++visited > 12000) return;
+      if (!item || typeof item !== "object" || seen.has(item) || depth > 24 || ++visited > 12000) return;
       seen.add(item);
       const type = String(item);
       serverPage = serverPage || ("selectedServer" in item && "serverListUrl" in item);
       lobbyPage = lobbyPage || ("roomModel" in item && "serverPlayerNum" in item);
       chatBox = chatBox || type.indexOf("ChatBox_QMLTYPE") === 0;
-      const children = item.children || [];
+      const children = item.children ? Array.from(item.children) : [];
       if (adaptedControls.indexOf(item) < 0 && "generalCardList" in item && "draggingCard" in item && "dataModel" in item) {
         // Fit the complete selection box, including both borders and buttons.
         item.scale = Qt.binding(function() {
@@ -99,7 +101,7 @@ Item {
         item.opacity = Qt.binding(function() { return host.hideTitles ? 0 : 1; });
       }
       if (ios && adaptedControls.indexOf(item) < 0) {
-        if (serverPage && "text" in item && "elide" in item && "font" in item) {
+        if (serverPage && "text" in item && "elide" in item && "font" in item && item.wrapMode === Text.NoWrap) {
           item.elide = Text.ElideRight; item.maximumLineCount = 1;
           item.Layout.minimumWidth = 0;
           if (item.parent && String(item.parent).indexOf("ColumnLayout") >= 0) item.parent.Layout.minimumWidth = 0;
@@ -116,19 +118,30 @@ Item {
           adaptedControls.push(item);
         } else if (lobbyPage && "textFormat" in item && item.textFormat === Text.MarkdownText) {
           item.font.pixelSize = 14; adaptedControls.push(item);
-        } else if (chatBox && "textFont" in item && "clicked" in item) {
+        } else if ((chatBox || lobbyPage) && "textFont" in item && "clicked" in item) {
           const icons = {"🗨️":"sound", "😃":"emoji", "✔️":"send", "语音":"sound", "表情":"emoji", "发送":"send"};
-          if (icons[item.text] && "icon" in item && "title" in item) {
+          const toggle = String(item.text).indexOf("🗨️") === 0 && item.text.length > "🗨️".length;
+          if ((icons[item.text] || toggle) && "icon" in item && "title" in item) {
+            if (toggle) {
+              // Leave the original text binding intact: it tracks chatShown.
+              item.icon.source = Qt.binding(function() {
+                return host.chatIcon(String(item.text).indexOf("➕") >= 0 ? "expand" : "collapse");
+              });
+            } else {
             item.icon.source = host.chatIcon(icons[item.text]);
+              item.text = "";
+            }
             item.icon.width = 24; item.icon.height = 24;
-            item.text = ""; item.title.visible = false;
+            item.title.visible = false;
             item.width = 40; item.height = 40; adaptedControls.push(item);
           }
         }
       }
       for (const child of children) scan(child,depth+1,serverPage,lobbyPage,chatBox);
       // Native FileDialog objects are in data, not visual children.
-      for (const child of item.data || []) scan(child,depth+1,serverPage,lobbyPage,chatBox);
+      const data = item.data;
+      if (data && typeof data === "object" && typeof data.length === "number")
+        for (let i=0; i<data.length; i++) scan(data[i],depth+1,serverPage,lobbyPage,chatBox);
     }
     scan(window.contentItem,0,false,false,false);
   }

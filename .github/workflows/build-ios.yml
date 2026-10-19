@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install native test dependencies
-        run: sudo apt-get update -qq && sudo apt-get install -y qt6-base-dev libgit2-dev pkg-config
+        run: sudo apt-get update -qq && sudo apt-get install -y qt6-base-dev libgit2-dev liblua5.4-dev pkg-config
       - name: Verify seed and recovery against real Git repositories
         run: |
           python3 scripts/test_core_repository.py
@@ -39,6 +39,26 @@ jobs:
           c++ -std=c++17 -fPIC scripts/test_request_clock.cpp -Isrc \
             $(pkg-config --cflags --libs Qt6Core) -o "$RUNNER_TEMP/test-request-clock"
           "$RUNNER_TEMP/test-request-clock"
+          c++ -std=c++17 -fPIC scripts/test_lua_variant.cpp -Isrc \
+            $(pkg-config --cflags --libs Qt6Core lua5.4) -o "$RUNNER_TEMP/test-lua-variant"
+          "$RUNNER_TEMP/test-lua-variant"
+          c++ -std=c++17 -fPIC scripts/test_ios_ui_overlay.cpp -Isrc \
+            $(pkg-config --cflags --libs Qt6Core Qt6Network) -o "$RUNNER_TEMP/test-ios-ui"
+          "$RUNNER_TEMP/test-ios-ui" runtime "$RUNNER_TEMP/ios-ui"
+      - name: Test QML layout and state changes on the shipped Qt version
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+          FK_TEST_UI: ${{ runner.temp }}/ios-ui
+        run: |
+          sudo apt-get install -y libegl1 libxkbcommon0
+          python3 -m pip install 'PySide6==6.8.3'
+          python3 scripts/test_ios_qml.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-ui-test-fixture
+          path: ${{ runner.temp }}/ios-ui
   build:
     name: Build iOS arm64
     needs: test-core-repair

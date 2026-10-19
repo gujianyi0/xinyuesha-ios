@@ -152,17 +152,31 @@ QtObject {
     const scope = profileKey + "|" + username;
     if (credentialScope === scope) return;
     credentialScope = scope; credentialGeneration++; deriving = true;
+    if (typeof Backend !== "undefined" && typeof Backend.deriveSocialAccountKey === "function") {
+      const generation = credentialGeneration;
+      Qt.callLater(function() {
+        if (generation !== api.credentialGeneration) return;
+        const key = Backend.deriveSocialAccountKey(server, username, password);
+        password = "";
+        if (generation !== api.credentialGeneration) return;
+        api.receiveAccountKey({generation:generation, key:key, error:!key});
+      });
+      return;
+    }
     authWorker.sendMessage({generation:credentialGeneration, server:server,
       username:username, password:password});
+  }
+  function receiveAccountKey(message) {
+    if (message.generation !== credentialGeneration) return;
+    deriving = false;
+    if (message.error) { error = "账号好友身份认证失败，请重试或使用恢复码"; credentialScope = ""; return; }
+    accountKey = message.key;
+    if (enabled) connectService();
   }
   property WorkerScript authWorker: WorkerScript {
     source: Qt.resolvedUrl("SocialAuth.js")
     onMessage: function(message) {
-      if (message.generation !== api.credentialGeneration) return;
-      api.deriving = false;
-      if (message.error) { api.error = "账号好友身份认证失败，请重试或使用恢复码"; api.credentialScope = ""; return; }
-      api.accountKey = message.key;
-      if (api.enabled) api.connectService();
+      api.receiveAccountKey(message);
     }
   }
   function configure(url) {

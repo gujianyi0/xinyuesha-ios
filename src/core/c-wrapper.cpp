@@ -102,7 +102,7 @@ QVariant Lua::call(const QString &func_name, QVariantList params) {
   // handler位于function位置的前一个
   int err = lua_pcall(L, nargs, 1, -nargs - 2);
   if (err) {
-    qCritical() << lua_tostring(L, -1);
+    qCritical().noquote() << "Lua call failed (" + func_name + "):" << lua_tostring(L, -1);
     lua_pop(L, 2);
     return QVariant();
   }

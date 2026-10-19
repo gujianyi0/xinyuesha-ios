@@ -32,6 +32,7 @@ using namespace fkShell;
  #include "platform/ioshelper.h"
  #include "platform/ioscorerepair.h"
 #include "platform/iosruntimepayload.h"
+#include "platform/iosuioverlay.h"
  #include <QMessageBox>
 #endif
 #endif
@@ -619,8 +620,15 @@ int freekill_main(int argc, char *argv[]) {
   // Keep the game UI and its Lua protocol on the same core version. Our
   // standalone shell remains outside packages and the server MD5 boundary.
   engine->addImportPath(QDir::currentPath());
-  if (Pacman->shouldUseCore() && QFile::exists("packages/freekill-core/Fk"))
+  const bool coreUi = Pacman->shouldUseCore() && QFile::exists("packages/freekill-core/Fk");
+  if (coreUi)
     engine->addImportPath(QDir::currentPath() + "/packages/freekill-core");
+  QString uiError;
+  const QString uiPath = fkIosUiOverlay::prepare(
+    QDir::currentPath() + (coreUi ? "/packages/freekill-core" : ""),
+    QDir::currentPath() + "/assets/ios-ui", &uiError);
+  if (uiPath.isEmpty()) qWarning() << "[iOS UI]" << uiError;
+  else engine->addImportPath(uiPath);
   engine->load("card-counter/client-shell/main.qml");
 #else
   // 加载GUI了，如果core有的话用core的

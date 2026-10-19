@@ -6,6 +6,7 @@
 
 %{
 #include "core/c-wrapper.h"
+#include "core/luavariant.h"
 #include "client/client.h"
 #include "server/gamelogic/roomthread.h"
 
@@ -77,105 +78,9 @@ void Lua::pushValue(lua_State *L, QVariant v) {
 }
 
 QVariant Lua::readValue(lua_State *L, int index, QHash<const void *, bool> stack) {
-  if (index == 0) index = lua_gettop(L);
-  auto tp = lua_type(L, index);
-  switch (tp) {
-    case LUA_TNIL:
-      return QVariant::fromValue(nullptr);
-    case LUA_TBOOLEAN:
-      return QVariant((bool)lua_toboolean(L, index));
-    case LUA_TNUMBER:
-      return QVariant(lua_tonumber(L, index));
-    case LUA_TSTRING: {
-      size_t len = lua_rawlen(L, index);
-      return QVariant(lua_tolstring(L, index, &len));
-    }
-    case LUA_TTABLE: {
-      auto p = lua_topointer(L, index);
-      if (stack[p]) {
-        qCritical("circular reference detected");
-        return QVariant();
-      }
-      stack[p] = true;
-
-      if (lua_getmetatable(L, index)) {
-        lua_pushstring(L, "__tocbor");
-        lua_rawget(L, -2);
-        if (!lua_isnil(L, -1)) {
-          // Found __tocbor metamethod
-          lua_pushvalue(L, index);  // Push the table as argument
-          if (lua_pcall(L, 1, 1, 0) != LUA_OK) {
-            qCritical("error calling __tocbor: %s", lua_tostring(L, -1));
-            lua_pop(L, 1);  // pop error message
-            return QVariant();
-          }
-
-          // Get the result string (must be string)
-          if (!lua_isstring(L, -1)) {
-            qCritical("__tocbor must return a string");
-            lua_pop(L, 1);  // pop non-string result
-            return QVariant();
-          }
-
-          size_t len = lua_rawlen(L, -1);
-          const char* data = lua_tolstring(L, -1, &len);
-          QByteArray result(data, len);
-          lua_pop(L, 1);  // pop the result
-          lua_pop(L, 1);  // pop the metatable
-          return QVariant(result);
-        }
-      }
-
-      lua_len(L, index);
-      int length = lua_tointeger(L, -1);
-      lua_pop(L, 1);
-
-      if (length == 0) {
-        bool empty = true;
-        QVariantMap map;
-
-        lua_pushnil(L);
-        while (lua_next(L, index) != 0) {
-          QString key;
-          if (lua_type(L, -2) == LUA_TNUMBER) {
-            key = lua_tostring(L, -2);
-          } else if (lua_type(L, -2) == LUA_TSTRING) {
-            key = lua_tostring(L, -2);
-          } else {
-            qCritical("key of object must be string");
-            return QVariant();
-          }
-
-          auto value = readValue(L, lua_gettop(L), stack);
-          lua_pop(L, 1);
-
-          map[key] = value;
-          empty = false;
-        }
-
-        if (empty) {
-          return QVariantList();
-        } else {
-          return map;
-        }
-      } else {
-        QVariantList arr;
-        for (int i = 1; i <= length; i++) {
-          lua_rawgeti(L, index, i);
-          arr << readValue(L, lua_gettop(L), stack);
-          lua_pop(L, 1);
-        }
-        return arr;
-      }
-      break;
-    }
-
-    // ignore function, userdata and thread
-    default:
-      qCritical("unexpected value type %s", lua_typename(L, tp));
-  }
-  return QVariant();
+  return fkLuaVariant::read(L, index, stack);
 }
+
 %}
 
 // Lua 5.4 特有的不能pushnumber， swig迟迟不更只好手动调教

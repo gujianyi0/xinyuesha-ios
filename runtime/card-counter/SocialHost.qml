@@ -696,7 +696,7 @@ Control {
       } else if (command === "SetServerSettings") {
         host.resetInvitationPolicyBridge(); host.observerMarkHookInstalled = false;
         const features = data[2] || [];
-        host.nativeInvitesSupported = Array.isArray(features) && features.indexOf("RoomInvitations") >= 0;
+        host.nativeInvitesSupported = features && typeof features.length === "number" && Array.from(features).indexOf("RoomInvitations") >= 0;
         host.gameAccount = Math.floor(Cpp.self.id || 0);
         host.gameName = Cpp.self.screenName || "";
         host.gameOnline = host.gameAccount > 0;
