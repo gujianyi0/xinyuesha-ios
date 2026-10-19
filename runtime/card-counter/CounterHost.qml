@@ -128,7 +128,7 @@ Item {
                 return host.chatIcon(String(item.text).indexOf("➕") >= 0 ? "expand" : "collapse");
               });
             } else {
-            item.icon.source = host.chatIcon(icons[item.text]);
+              item.icon.source = host.chatIcon(icons[item.text]);
               item.text = "";
             }
             item.icon.width = 24; item.icon.height = 24;

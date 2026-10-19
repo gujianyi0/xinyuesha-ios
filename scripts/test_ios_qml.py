@@ -13,7 +13,7 @@ UI = Path(os.environ.get("FK_TEST_UI", str(SOURCE)))
 logs = []
 qInstallMessageHandler(lambda kind, context, message: logs.append(message))
 app = QGuiApplication([])
-workspace = tempfile.TemporaryDirectory()
+workspace = tempfile.TemporaryDirectory(dir=os.environ.get("FK_TEST_TMP"))
 base = Path(workspace.name)
 def put(name, value):
     p = base / name; p.parent.mkdir(parents=True, exist_ok=True); p.write_text(value, encoding="utf-8")
@@ -49,6 +49,9 @@ photo_source=(UI/"LunarLtk/Models/PhotoModel.qml").read_text(encoding="utf-8")
 skill_method=re.search(r"  function updateLimitSkill\(skill, time\) \{.*?\n  \}",photo_source,re.S).group(0)
 server_source=(UI/"Fk/Pages/Common/JoinServer.qml").read_text(encoding="utf-8")
 version_expression=re.search(r'text: (delay \+ " ms " \+ [^\n]+)',server_source).group(1)
+lobby_source=(UI/"Fk/Pages/Lobby/Lobby.qml").read_text(encoding="utf-8")
+exit_content=re.search(r"contentItem: Text \{\n      text: parent.text;.*?\n    \}",lobby_source,re.S)
+exit_content=exit_content.group(0) if exit_content else ""
 put("Main.qml", '''import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -70,7 +73,7 @@ Window {
   Text {id:desc;y:90;width:180;text:"服务器信息应当完整展示，支持多行说明。服务器信息应当完整展示，支持多行说明。服务器信息应当完整展示，支持多行说明。";wrapMode:Text.WrapAnywhere;font.pixelSize:18}
  }
  Item {id:lobby;width:1000;property var roomModel:({});property int serverPlayerNum:1
-  Button {id:exitButton;anchors.right:parent.right;text:"Exit Lobby";width:110;height:40;icon.name:"application-exit"}
+  Button {id:exitButton;anchors.right:parent.right;text:"Exit Lobby";width:110;height:40;icon.name:"application-exit"; EXIT_CONTENT }
   MetroButton {id:toggle;text:"🗨️➕";y:50}
  }
  Item {property string data:"a model payload"}
@@ -84,7 +87,7 @@ Window {
  LimitSkillItem {id:switchSkill;skillname:"switch_test";usedtimes:1}
  function setup(){host.refreshCompatibility();photo.updateLimitSkill("switch_test",0);popup.setSourceComponent(Qt.createComponent("GeneralDetail.qml"),{generals:["test"]});popup.open();worker.sendMessage({generation:1,server:"test:9527",username:"测试用户",password:"test-only-password"});}
  function changeSkill(){photo.updateLimitSkill("switch_test",1);}
- function skillState(){return String(skillArea.children[0].itemAt(0).children[0].source);}
+ function skillState(){const rep=Array.from(skillArea.children).find(c=>typeof c.itemAt==="function");return String(rep.itemAt(0).children[0].source);}
  function generalHeight(){return popup.item.contentHeight;}
  function showCards(){popup.setSourceComponent(Qt.createComponent("ViewPile.qml"),{name:"hand_card",ids:[1,2,3]});}
  function cardCount(){return popup.item.children[1].count;}
@@ -99,7 +102,7 @@ Window {
    exitContentWidth:exitButton.contentItem.width,exitWidth:exitButton.width
  });}
 }
-'''.replace("AUTH_SOURCE", (SOURCE / "card-counter/SocialAuth.js").as_uri()).replace("VERSION_EXPRESSION",version_expression).replace("SKILL_METHOD",skill_method))
+'''.replace("AUTH_SOURCE", (SOURCE / "card-counter/SocialAuth.js").as_uri()).replace("VERSION_EXPRESSION",version_expression).replace("SKILL_METHOD",skill_method).replace("EXIT_CONTENT",exit_content))
 engine = QQmlApplicationEngine(); engine.addImportPath(str(base))
 engine.rootContext().setContextProperty("AppPath", QUrl.fromLocalFile(str(base)))
 engine.load(QUrl.fromLocalFile(str(base / "Main.qml")))
@@ -121,7 +124,9 @@ QMetaObject.invokeMethod(window,"changeToggle",Qt.DirectConnection);pump(.1)
 deadline=time.monotonic()+90
 while time.monotonic()<deadline:
     app.processEvents();time.sleep(.01)
-    if window.property("authResult").toVariant() is not None:break
+    auth = window.property("authResult")
+    if hasattr(auth, "toVariant"): auth = auth.toVariant()
+    if auth is not None: break
 raw = invoke("inspect")
 assert raw, logs
 result=json.loads(raw)

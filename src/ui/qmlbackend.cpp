@@ -9,8 +9,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QUrl>
-#include <QPasswordDigestor>
-#include <QJsonArray>
+#include "core/socialaccountkey.h"
 #include "platform/localfileurl.h"
 
 QString QmlBackend::importBackground(const QString &source) {
@@ -370,15 +369,8 @@ QVariant QmlBackend::evalLuaExp(const QString &lua) {
 
 QString QmlBackend::deriveSocialAccountKey(const QString &server,
     const QString &username, const QString &password) {
-  if (server.isEmpty() || username.isEmpty() || password.isEmpty()) return {};
-  const QByteArray salt = QJsonDocument(QJsonArray{
-    "freekill-social-account-v1", server, username}).toJson(QJsonDocument::Compact);
   // Identical to the existing WorkerScript protocol, without the JS delay.
-  auto secret = password.toUtf8();
-  const auto key = QPasswordDigestor::deriveKeyPbkdf2(
-    QCryptographicHash::Sha256, secret, salt, 210000, 32);
-  secret.fill('\0');
-  return QString::fromLatin1(key.toHex());
+  return fkSocialAccount::deriveKey(server, username, password);
 }
 
 static QString touchAndRead(const QString &fname, QString init_conf) {

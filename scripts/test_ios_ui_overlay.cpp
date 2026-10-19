@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "platform/iosuioverlay.h"
+#include "core/socialaccountkey.h"
 #include <QCoreApplication>
 #include <QTemporaryDir>
 #include <QDebug>
@@ -26,8 +27,7 @@ int main(int argc, char **argv) {
   const auto server = fkIosRuntimePayload::read(output+"/Fk/Pages/Common/JoinServer.qml");
   require(server.contains("String(misMatchMsg).replace"), "HTML version size normalization");
   require(!server.contains("font.pixelSize: 26"), "bounded server count font");
-  const QByteArray salt = QJsonDocument(QJsonArray{"freekill-social-account-v1", "test:9527", QString::fromUtf8("测试用户")}).toJson(QJsonDocument::Compact);
-  const auto key = QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha256,"test-only-password",salt,210000,32).toHex();
+  const auto key = fkSocialAccount::deriveKey("test:9527", QString::fromUtf8("测试用户"), "test-only-password");
   require(key == "d41c77099501cd4af9ba643cc6c3b42fb3f83718eed69248e0bdab3c3abe2a8c", "native social identity matches Python and shipped WorkerScript");
   qInfo() << "iOS UI overlay, unchanged source core and social identity compatibility passed";
 }

@@ -4,6 +4,7 @@
 #include <QCryptographicHash>
 #include <QDirIterator>
 #include <QRegularExpression>
+#include <QMap>
 
 namespace fkIosUiOverlay {
 // Build the frontend from the currently selected core, outside packages/. Lua,
