@@ -10,9 +10,9 @@ Android、Windows PC、iOS 三端客户端，基于 [FreeKill / 新月杀](https
 
 | 平台 | 安装包 | 要求与安装方式 |
 | --- | --- | --- |
-| Android | [下载 APK](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019/%E6%96%B0%E6%9C%88%E6%9D%80%E6%B5%8B%E8%AF%95%E7%89%88-20261019.apk) | Android 9+、ARM64；已有同签名测试版可直接覆盖安装，保留应用数据。 |
-| Windows PC | [下载完整包](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019/%E6%96%B0%E6%9C%88%E6%9D%80%E6%B5%8B%E8%AF%95%E7%89%88-PC-20261019.7z) · [已有版本更新补丁](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019/%E6%96%B0%E6%9C%88%E6%9D%80%E6%B5%8B%E8%AF%95%E7%89%88-PC%E6%9B%B4%E6%96%B0%E8%A1%A5%E4%B8%81-20261019.zip) | 64 位 Windows；完整解压后运行“启动新月杀测试版.cmd”；更新前关闭游戏。 |
-| iOS | [下载独立 IPA](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019/%E6%96%B0%E6%9C%88%E6%9D%80%E6%B5%8B%E8%AF%95%E7%89%88-iOS-20261019-unsigned.ipa) · [含工具的安装整合包](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019/%E6%96%B0%E6%9C%88%E6%9D%80%E6%B5%8B%E8%AF%95%E7%89%88-iOS%E5%AE%89%E8%A3%85%E6%95%B4%E5%90%88%E5%8C%85-20261019.zip) | 游戏最低 iOS 16.0；IPA 未签名，需要兼容的签名或安装工具。覆盖安装沿用旧版应用标识与签名身份。 |
+| Android | [下载 APK](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019/xinyuesha-test-android-20261019.apk) | Android 9+、ARM64；已有同签名测试版可直接覆盖安装，保留应用数据。 |
+| Windows PC | [下载完整包](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019/xinyuesha-test-windows-20261019.7z) · [已有版本更新补丁](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019/xinyuesha-test-windows-patch-20261019.zip) | 64 位 Windows；完整解压后运行“启动新月杀测试版.cmd”；更新前关闭游戏。 |
+| iOS | [下载独立 IPA](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019/xinyuesha-test-ios-20261019-unsigned.ipa) · [含工具的安装整合包](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019/xinyuesha-test-ios-bundle-20261019.zip) | 游戏最低 iOS 16.0；IPA 未签名，需要兼容的签名或安装工具。覆盖安装沿用旧版应用标识与签名身份。 |
 
 安装游戏请下载上表对应文件。GitHub 的 **Code → Download ZIP** 是工程源码，不是完整的安装包。
 
