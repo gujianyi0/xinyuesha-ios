@@ -172,8 +172,17 @@ Item {
           id:search
           objectName:"counterSearch"
           anchors.right:parent.right; width:Math.min(176,parent.width-categories.width-12); height:28
-          placeholderText:"搜索牌名…"; color:root.pale; placeholderTextColor:"#7D8C83"; font.pixelSize:12
-          leftPadding:10; rightPadding:8; selectionColor:"#5C6245"; onTextChanged:root.filterText=text
+          // This compact field uses its own placeholder instead of Material's
+          // floating label, which sits above a 28 px field when the IME opens.
+          placeholderText:""; color:root.pale; font.pixelSize:12
+          leftPadding:10; rightPadding:8; topPadding:0; bottomPadding:0
+          verticalAlignment:TextInput.AlignVCenter
+          selectionColor:"#5C6245"; onTextChanged:root.filterText=text
+          Text {
+            anchors.fill:parent; anchors.leftMargin:10; anchors.rightMargin:8
+            verticalAlignment:Text.AlignVCenter; text:"搜索牌名…"; color:"#7D8C83"
+            font:search.font; visible:!search.text && !search.activeFocus; elide:Text.ElideRight
+          }
           background:Rectangle { radius:4; color:"#10191B"; border.color:search.activeFocus ? "#B89C65" : "#3F4D46" }
         }
         GridView {

@@ -45,6 +45,15 @@ inline QString adapt(const QString &path, QString text) {
       "    item.width = Qt.binding(function() { return container.width; });\n"
       "    item.height = Qt.binding(function() { return container.height; });");
   } else if (path == "LunarLtk/Models/PhotoModel.qml") {
+    // QVariantList iteration can expose temporary map wrappers in Qt 6.8.
+    // Mutating each wrapper does not update the original list; publish copies.
+    const QRegularExpression targetTips("  function updateTargetTip\\(\\) \\{.*?\\n  \\}", QRegularExpression::DotMatchesEverythingOption);
+    text.replace(targetTips, R"QML(  function updateTargetTip() {
+    const dataList = Ltk.getTargetTip(playerid);
+    targetTip = Array.from(dataList || [], function(data) {
+      return Object.assign({}, data, {content: Ltk.processPrompt(data.content)});
+    });
+  })QML");
     const QRegularExpression method("  function updateLimitSkill\\(skill, time\\) \\{.*?\\n  \\}", QRegularExpression::DotMatchesEverythingOption);
     text.replace(method, R"QML(  function updateLimitSkill(skill, time) {
     const next = Array.from(limitSkills);

@@ -117,7 +117,13 @@ Item {
           }
           adaptedControls.push(item);
         } else if (lobbyPage && "text" in item && "display" in item && item.text === Lua.tr("Exit Lobby")) {
-          item.height = 40; item.font.pixelSize = 14;
+          // Material's implicit height includes its vertical style insets.
+          // A fixed 40 px control shrinks the visible pill below its siblings.
+          item.height = Qt.binding(function() { return item.implicitHeight; });
+          item.width = Qt.binding(function() { return Math.max(120,item.implicitWidth); });
+          item.font.pixelSize = 16;
+          item.anchors.top = item.parent.top; item.anchors.topMargin = 16;
+          item.anchors.rightMargin = 8;
           item.icon.width = 20; item.icon.height = 20;
           adaptedControls.push(item);
         } else if (lobbyPage && "textFormat" in item && item.textFormat === Text.MarkdownText) {

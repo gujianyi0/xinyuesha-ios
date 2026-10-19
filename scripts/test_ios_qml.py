@@ -5,7 +5,7 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
 os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "Material")
-from PySide6.QtCore import QUrl, QMetaObject, Qt, Q_RETURN_ARG, qInstallMessageHandler
+from PySide6.QtCore import QUrl, QMetaObject, Qt, Q_RETURN_ARG, qInstallMessageHandler, QObject, Slot
 from PySide6.QtGui import QGuiApplication, QFontDatabase, QFont
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
@@ -15,6 +15,11 @@ RUN_AUTH_TEST = os.environ.get("FK_TEST_AUTH", "1") != "0"
 logs = []
 qInstallMessageHandler(lambda kind, context, message: logs.append(message))
 app = QGuiApplication([])
+class TipProvider(QObject):
+    @Slot(result='QVariantList')
+    def tips(self):
+        return [{'content':'draw1','type':'normal'},{'content':'liexiangbigger','type':'normal'}]
+tip_provider=TipProvider()
 if os.environ.get("FK_TEST_FONT"):
     font_id=QFontDatabase.addApplicationFont(os.environ["FK_TEST_FONT"])
     assert font_id >= 0, "test font loads"
@@ -40,6 +45,8 @@ QtObject {
  function getSkillData(n){return {switchSkillName:n};}
  function getGeneralDetail(n){return {kingdom:"wei",hp:4,maxHp:4,mainMaxHp:0,deputyMaxHp:0,headnote:"",endnote:"",companions:[],skill:[{name:"test skill",description:"A visible skill description with wrapping text."}]};}
  function createCardModel(id, props){return {cardId:id};}
+ function getTargetTip(pid){return TipProvider.tips();}
+ function processPrompt(s){return ({draw1:"摸一张牌",liexiangbigger:"手牌数大于你"})[s] || s;}
 }
 ''')
 put("LunarLtk/Components/qmldir", "module LunarLtk.Components\nDescriptionText 1.0 DescriptionText.qml\nCardItem 1.0 CardItem.qml\nBigGlowText 1.0 BigGlowText.qml\n")
@@ -53,6 +60,7 @@ for source, target in [("Fk/Widgets/PopupItem.qml","PopupItem.qml"), ("LunarLtk/
 shutil.copyfile(SOURCE / "card-counter/CounterHost.qml", base / "CounterHost.qml")
 photo_source=(UI/"LunarLtk/Models/PhotoModel.qml").read_text(encoding="utf-8")
 skill_method=re.search(r"  function updateLimitSkill\(skill, time\) \{.*?\n  \}",photo_source,re.S).group(0)
+target_method=re.search(r"  function updateTargetTip\(\) \{.*?\n  \}",photo_source,re.S).group(0)
 server_source=(UI/"Fk/Pages/Common/JoinServer.qml").read_text(encoding="utf-8")
 version_expression=re.search(r'text: (delay \+ " ms " \+ [^\n]+)',server_source).group(1)
 lobby_source=(UI/"Fk/Pages/Lobby/Lobby.qml").read_text(encoding="utf-8")
@@ -80,6 +88,7 @@ Window {
  }
  Item {id:lobby;width:1000;property var roomModel:({});property int serverPlayerNum:1
   Button {id:exitButton;anchors.right:parent.right;text:"Exit Lobby";width:110;height:40;icon.name:"application-exit"; EXIT_CONTENT }
+  Button {id:referenceButton;font.pixelSize:16;text:"Create Room";y:16}
   MetroButton {id:toggle;text:"🗨️➕";y:50}
  }
  Item {property string data:"a model payload"}
@@ -89,9 +98,10 @@ Window {
    Text {id:label;text:"Skill details and visible teammate cards";font.pixelSize:18;color:"black"}
  }}
  QtObject {id:photo;property list<var> limitSkills:[]; SKILL_METHOD }
+ QtObject {id:targetPhoto;property int playerid:1;property var targetTip:[]; TARGET_METHOD }
  LimitSkillArea {id:skillArea;skillModel:photo.limitSkills}
  LimitSkillItem {id:switchSkill;skillname:"switch_test";usedtimes:1}
- function setup(){host.refreshCompatibility();photo.updateLimitSkill("switch_test",0);popup.setSourceComponent(Qt.createComponent("GeneralDetail.qml"),{generals:["test"]});popup.open();if (RUN_AUTH_TEST) worker.sendMessage({generation:1,server:"test:9527",username:"测试用户",password:"test-only-password"});}
+ function setup(){host.refreshCompatibility();photo.updateLimitSkill("switch_test",0);targetPhoto.updateTargetTip();popup.setSourceComponent(Qt.createComponent("GeneralDetail.qml"),{generals:["test"]});popup.open();if (RUN_AUTH_TEST) worker.sendMessage({generation:1,server:"test:9527",username:"测试用户",password:"test-only-password"});}
  function changeSkill(){photo.updateLimitSkill("switch_test",1);}
  function skillState(){const rep=Array.from(skillArea.children).find(c=>typeof c.itemAt==="function");return String(rep.itemAt(0).children[0].source);}
  function generalHeight(){return popup.item.contentHeight;}
@@ -105,12 +115,15 @@ Window {
    popupWidth:popup.item.width,popupHeight:popup.item.height,
    switchSource:String(switchSkill.children[0].source),toggleText:toggle.text,
    toggleIcon:String(toggle.icon.source),exitContentX:exitButton.contentItem.x,
-   exitContentWidth:exitButton.contentItem.width,exitWidth:exitButton.width
+   exitContentWidth:exitButton.contentItem.width,exitWidth:exitButton.width,
+   exitHeight:exitButton.height,referenceHeight:referenceButton.height,exitY:exitButton.y,
+   targetTips:targetPhoto.targetTip
  });}
 }
-'''.replace("AUTH_SOURCE", (SOURCE / "card-counter/SocialAuth.js").as_uri()).replace("VERSION_EXPRESSION",version_expression).replace("SKILL_METHOD",skill_method).replace("EXIT_CONTENT",exit_content).replace("RUN_AUTH_TEST",str(RUN_AUTH_TEST).lower()))
+'''.replace("AUTH_SOURCE", (SOURCE / "card-counter/SocialAuth.js").as_uri()).replace("VERSION_EXPRESSION",version_expression).replace("SKILL_METHOD",skill_method).replace("TARGET_METHOD",target_method).replace("EXIT_CONTENT",exit_content).replace("RUN_AUTH_TEST",str(RUN_AUTH_TEST).lower()))
 engine = QQmlApplicationEngine(); engine.addImportPath(str(base))
 engine.rootContext().setContextProperty("AppPath", QUrl.fromLocalFile(str(base)))
+engine.rootContext().setContextProperty("TipProvider",tip_provider)
 engine.load(QUrl.fromLocalFile(str(base / "Main.qml")))
 assert engine.rootObjects(), logs
 window = engine.rootObjects()[0]
@@ -146,6 +159,8 @@ assert card_count == 3, "teammate handcard grid must render the supplied visible
 assert str(yang).endswith("/switch") and str(yin).endswith("/switch-yin"), "switch changes propagate to the real skill delegate"
 assert result["switchSource"].endswith("/switch-yin"), "initial Yin value must render regardless of property initialization order"
 assert "white" in result["toggleIcon"] and "M16" in result["toggleIcon"], "chat toggle tracks collapsed/expanded state"
+assert result['exitHeight']==result['referenceHeight'] and result['exitY']==16 and result['exitWidth']>=120, 'exit button matches sibling Material height and top alignment'
+assert [entry['content'] for entry in result['targetTips']]==['摸一张牌','手牌数大于你'],'QVariantList target tips publish translated copies'
 salt=json.dumps(["freekill-social-account-v1","test:9527","测试用户"],ensure_ascii=False,separators=(",",":")).encode()
 expected=hashlib.pbkdf2_hmac("sha256",b"test-only-password",salt,210000,32).hex()
 if RUN_AUTH_TEST: assert result["authResult"]["key"] == expected, "WorkerScript identity remains compatible"

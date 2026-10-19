@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(dir=args.work_dir) as temp:
     put('Fk/SkinBank.qml','pragma Singleton\nimport QtQuick\nQtObject {function getCardPicture(s){return "";}}')
     source=(args.payload/'card-counter/CardCounter.qml').read_text(encoding='utf8')
     assert source.count('objectName: "fkCardCounter"')==1 and source.count('id:tile\n')==1
-    source=source.replace('objectName: "fkCardCounter"','objectName: "fkCardCounter"\n  property int testCreates:0\n  property alias testGrid:cards')
+    source=source.replace('objectName: "fkCardCounter"','objectName: "fkCardCounter"\n  property int testCreates:0\n  property alias testGrid:cards\n  property alias testSearch:search')
     source=source.replace('id:tile\n','id:tile\n            Component.onCompleted:root.testCreates++\n')
     put('CardCounter.qml',source)
     shutil.copyfile(args.payload/'card-counter/SuitIcon.qml',base/'SuitIcon.qml')
@@ -59,6 +59,8 @@ Window {
  function clearSearch(){counter.filterText="";}
  function startFlick(){counter.testGrid.contentY=0;counter.testGrid.flick(0,-2000);}
  function stopFlick(){counter.testGrid.cancelFlick();}
+ function focusSearch(){counter.testSearch.forceActiveFocus();counter.testSearch.text="测试输入";}
+ function inputGeometry(){const field=counter.testSearch;const cursor=field.cursorRectangle;return JSON.stringify({y:cursor.y,height:cursor.height,fieldHeight:field.height,topPadding:field.topPadding,bottomPadding:field.bottomPadding});}
  function state(){return JSON.stringify({reads:reads,creates:counter.testCreates,count:counter.rows.length,gridCount:counter.testGrid.count,moving:counter.testGrid.moving,y:counter.testGrid.contentY,selected:counter.selectedRow?counter.selectedRow.key:"",amount:counter.selectedRow?counter.selectedRow.unseen:-1});}
 }''')
     engine=QQmlApplicationEngine();engine.addImportPath(str(base));engine.load(QUrl.fromLocalFile(str(base/'Main.qml')))
@@ -75,16 +77,19 @@ Window {
     invoke('showZero');invoke('choose');pump(.02);assert state()['selected']=='c18',state()
     invoke('search');pump(.02);assert state()['count']==11,state()
     invoke('clearSearch');pump(.02);assert state()['count']==300,state()
+    invoke('focusSearch');pump(.02);raw_geometry=invoke('inputGeometry');assert raw_geometry,logs
+    input_geometry=json.loads(raw_geometry)
     invoke('close');closed=state();pump(.6);assert state()['reads']==closed['reads'],'hidden counter must not poll'
     result={'initial':initial,'after_live_counts':updated,'during_flick_start':start,'during_flick_end':moving,'after_flick':stopped,
       'delegates_created_by_count_updates':updated['creates']-initial['creates'],'snapshots_during_flick':moving['reads']-start['reads'],
-      'qml_errors':[m for m in logs if any(e in m for e in ['TypeError','ReferenceError','SyntaxError','Cannot assign','is not a type'])]}
+      'input_geometry':input_geometry,'qml_errors':[m for m in logs if any(e in m for e in ['TypeError','ReferenceError','SyntaxError','Cannot assign','is not a type'])]}
     if not args.measure_only:
         assert not result['qml_errors'],result['qml_errors']
         assert result['delegates_created_by_count_updates']==0,result
         assert start['moving'] and moving['moving'],result
         assert result['snapshots_during_flick']==0,result
         assert stopped['reads']>moving['reads'],result
+        assert input_geometry['y']>=0 and 0<input_geometry['height'] and input_geometry['y']+input_geometry['height']<=input_geometry['fieldHeight']+1,input_geometry
 
     if args.lua_library:
         directory=os.add_dll_directory(str(Path(args.lua_library).resolve().parent)) if os.name=='nt' else None
