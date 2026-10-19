@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='compile-', dir=BUILD) as temporary:
     # The background-service experiment is archived separately. It did not
     # prevent vendor freezing and must not enter distributed DEX files.
     sources = [BASE / 'java/org/notify/FreeKill' / (name + '.java')
-               for name in ('CounterRepoRepair', 'CounterStartup', 'CounterPackageSources', 'GameActivity')]
+               for name in ('CounterRepoRepair', 'CounterStartup', 'CounterPackageSources', 'CounterBackgroundImages', 'GameActivity')]
     subprocess.run([
         str(JDK / 'javac.exe'), '-encoding', 'UTF-8', '-source', '8', '-target', '8',
         '-classpath', str(ANDROID), '-d', str(classes), *map(str, sources), str(stub),
