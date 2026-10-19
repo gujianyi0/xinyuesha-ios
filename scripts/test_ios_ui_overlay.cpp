@@ -20,6 +20,11 @@ int main(int argc, char **argv) {
   require(fkIosUiOverlay::prepare(source,output,&error) == output, qPrintable(error));
   require(fkIosRuntimePayload::read(original) == before, "source and checksum inputs unchanged");
   require(fkIosUiOverlay::prepare(source,output,&error) == output, "repeat build succeeds");
+  require(QFile::remove(output+"/Fk/Widgets/PopupItem.qml"), "remove cached popup fixture");
+  require(fkIosUiOverlay::prepare(source,output,&error) == output, "incomplete cache is repaired");
+  require(QFile::exists(output+"/Fk/Widgets/PopupItem.qml"), "cached popup restored");
+  require(QFile::remove(output+"/revision"), "simulate interrupted cache write");
+  require(fkIosUiOverlay::prepare(source,output,&error) == output, "interrupted first build can retry");
   const auto model = fkIosRuntimePayload::read(output+"/LunarLtk/Models/PhotoModel.qml");
   require(model.contains("limitSkills = next;"), "skill updates notify the model");
   const auto description = fkIosRuntimePayload::read(output+"/LunarLtk/Pages/InfoPopups/GeneralDetail.qml");

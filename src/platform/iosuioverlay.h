@@ -97,18 +97,28 @@ inline QString prepare(const QString &source, const QString &cache, QString *err
     hash.addData(it.key().toUtf8()); hash.addData("\0", 1); hash.addData(it.value());
   }
   const QByteArray revision = hash.result().toHex();
-  if (fkIosRuntimePayload::read(cache + "/revision").trimmed() == revision && QFile::exists(cache + "/Fk/qmldir")) return cache;
+  bool current = fkIosRuntimePayload::read(cache + "/revision").trimmed() == revision;
+  if (current) {
+    for (auto it = files.cbegin(); it != files.cend(); ++it) {
+      if (fkIosRuntimePayload::read(cache + '/' + it.key()) != it.value()) { current = false; break; }
+    }
+    if (current) return cache;
+  }
   // Reject paths that could contain the source, or an unrelated existing tree.
   const QString target = QFileInfo(cache).absoluteFilePath();
   const QString origin = QFileInfo(source).absoluteFilePath();
+  const QByteArray owner = "FreeKill generated iOS UI\n";
   if (target == origin || origin.startsWith(target + '/') ||
-      (QFile::exists(cache) && !QFile::exists(cache + "/revision"))) {
+      (QFile::exists(cache) && !QFile::exists(cache + "/revision") &&
+       fkIosRuntimePayload::read(cache + "/.generated") != owner)) {
     if (error) *error = "UI cache is not an owned generated directory"; return {};
   }
   // Only this generated, dedicated tree is removed. Never touch the source core.
   if (QFileInfo(cache).isSymLink() || (!QDir(cache).removeRecursively() && QFile::exists(cache))) {
     if (error) *error = "UI cache cannot be replaced"; return {};
   }
+  // Establish ownership first, so an interrupted copy can be safely retried.
+  if (!fkIosRuntimePayload::writeAtomic(cache + "/.generated", owner)) return {};
   for (auto it = files.cbegin(); it != files.cend(); ++it) {
     if (!fkIosRuntimePayload::writeAtomic(cache + '/' + it.key(), it.value())) {
       if (error) *error = "UI cache write failed"; return {};

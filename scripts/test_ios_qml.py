@@ -6,7 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
 os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "Material")
 from PySide6.QtCore import QUrl, QMetaObject, Qt, Q_RETURN_ARG, qInstallMessageHandler
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QFontDatabase, QFont
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 SOURCE = Path(__file__).resolve().parents[1] / "runtime"
@@ -15,6 +15,10 @@ RUN_AUTH_TEST = os.environ.get("FK_TEST_AUTH", "1") != "0"
 logs = []
 qInstallMessageHandler(lambda kind, context, message: logs.append(message))
 app = QGuiApplication([])
+if os.environ.get("FK_TEST_FONT"):
+    font_id=QFontDatabase.addApplicationFont(os.environ["FK_TEST_FONT"])
+    assert font_id >= 0, "test font loads"
+    app.setFont(QFont(QFontDatabase.applicationFontFamilies(font_id)[0]))
 workspace = tempfile.TemporaryDirectory(dir=os.environ.get("FK_TEST_TMP"))
 base = Path(workspace.name)
 def put(name, value):
