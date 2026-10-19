@@ -1,5 +1,7 @@
 # Android 测试版源码
 
+2026-10-19 对局、观战和出牌卡顿热修复见 [测试与修复记录](../docs/安卓卡顿热修复-20261019.md)。可用 Qt 6.8.3 执行 `python android/tools/test_gameplay_work.py --work-dir 测试输出目录`，验证普通游戏消息不触发好友状态重绑、对局停止全树扫描，并保留入口和弹窗生命周期。
+
 `payload/` 与 2026-10-19 分发 APK 的自定义运行时文件逐项对应。`java/` 包含启动文件更新、Git 目录恢复和跨服务器下载源同步；不改动服务器校验或上传账号数据。
 
 构建需要 Android SDK（API 36、Build Tools 36.0.0）、JDK 21，以及已下载的同包名测试版 APK 作为原生 Qt / 引擎基线。设置 `ANDROID_HOME` 和 `JAVA_HOME` 后：

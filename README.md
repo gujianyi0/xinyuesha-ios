@@ -10,7 +10,7 @@ Android、Windows PC、iOS 三端客户端，基于 [FreeKill / 新月杀](https
 
 | 平台 | 安装包 | 要求与安装方式 |
 | --- | --- | --- |
-| Android | [下载 APK](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019-r2/xinyuesha-test-android-20261019.apk) | Android 9+、ARM64；已有同签名测试版可直接覆盖安装，保留应用数据。 |
+| Android | [下载 APK](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019-r3/xinyuesha-test-android-20261019.apk) | Android 9+、ARM64；已有同签名测试版可直接覆盖安装，保留应用数据。 |
 | Windows PC | [下载完整包](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019/xinyuesha-test-windows-20261019.7z) · [已有版本更新补丁](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019/xinyuesha-test-windows-patch-20261019.zip) | 64 位 Windows；完整解压后运行“启动新月杀测试版.cmd”；更新前关闭游戏。 |
 | iOS | [下载独立 IPA](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019-r2/xinyuesha-test-ios-20261019-unsigned.ipa) · [含工具的安装整合包](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019-r2/xinyuesha-test-ios-bundle-20261019.zip) | 游戏最低 iOS 16.0；IPA 未签名，需要兼容的签名或安装工具。覆盖安装沿用旧版应用标识与签名身份。 |
 
@@ -33,7 +33,7 @@ Android、Windows PC、iOS 三端客户端，基于 [FreeKill / 新月杀](https
 | Windows PC | 提供完整包及界面更新补丁；二者对应文件一致。 | 本轮 Android 的下载源桥接修正尚未移植到 PC，未做本轮 PC 双服验证。 |
 | iOS | 新 IPA 原生构建成功；Lua 栈、当前核心 UI、弹窗列表、阴阳状态与好友账号键协议测试通过。 | 尚未进行本轮 iPhone 真机验收；实际可用安装方式取决于设备系统和签名条件。 |
 
-本轮修复范围、测试证据及尚未验收项见 [修复记录](docs/修复记录-20261019-r2.md)。Android 与 iOS 下载为 r2 候选包，PC 沿用此前分发文件。
+本轮修复范围、测试证据及尚未验收项见 [修复记录](docs/修复记录-20261019-r2.md)。Android 下载为 r3 卡顿热修复候选包，iOS 为 r2 候选包，PC 沿用此前分发文件。[安卓热修复与测试记录](docs/安卓卡顿热修复-20261019.md)。
 
 ## 连接主力服
 
