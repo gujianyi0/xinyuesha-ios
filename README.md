@@ -6,7 +6,7 @@ Android、Windows PC、iOS 三端客户端，基于 [FreeKill / 新月杀](https
 
 ## 下载与安装
 
-[查看本次三端测试版与全部文件](https://github.com/gujianyi0/xinyuesha-ios/releases/tag/test-0.5.25-20261019-r2) · [SHA256 校验清单](downloads/SHA256SUMS.txt)
+[查看安卓卡顿热修复](https://github.com/gujianyi0/xinyuesha-ios/releases/tag/test-0.5.25-20261019-r3) · [查看 iOS 修复与其他文件](https://github.com/gujianyi0/xinyuesha-ios/releases/tag/test-0.5.25-20261019-r2) · [SHA256 校验清单](downloads/SHA256SUMS.txt)
 
 | 平台 | 安装包 | 要求与安装方式 |
 | --- | --- | --- |
