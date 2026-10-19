@@ -27,10 +27,16 @@ inline QString adapt(const QString &path, QString text) {
     text.replace("text: Lua.tr(\"Exit Lobby\")",
       "text: Lua.tr(\"Exit Lobby\")\n    contentItem: Text {\n      text: parent.text; color: parent.enabled ? 'black' : 'gray'\n      font: parent.font\n      horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter\n      elide: Text.ElideRight\n    }");
   } else if (path == "LunarLtk/Pages/InfoPopups/GeneralDetail.qml") {
+    text.replace("property list<string> generals", "property var generals: []");
     // A Flickable has zero implicitHeight. Filling its ColumnLayout parent's
     // height creates a zero-height cycle, so skill text exists but is invisible.
     text.replace("height: parent.height\n      contentHeight: skillDesc.height",
       "Layout.fillWidth: true\n      Layout.preferredHeight: skillDesc.implicitHeight\n      contentHeight: skillDesc.height");
+  } else if (path == "LunarLtk/Pages/InfoPopups/ViewPile.qml" || path == "LunarLtk/Pages/InfoPopups/ViewGeneralPile.qml") {
+    // Qt 6.8 does not consistently initialize/consume primitive QML list
+    // properties as models when created with a JavaScript property map.
+    text.replace("property list<int> ids", "property var ids: []");
+    text.replace("property list<string> cardNames", "property var cardNames: []");
   } else if (path == "Fk/Widgets/PopupItem.qml") {
     text.replace("    item.destroy();\n    item = null;", "    if (item) item.destroy();\n    item = null;");
     text.replace("item = component.createObject(container, prop);",

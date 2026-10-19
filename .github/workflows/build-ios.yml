@@ -54,11 +54,26 @@ jobs:
           sudo apt-get install -y libegl1 libxkbcommon0
           python3 -m pip install 'PySide6==6.8.3'
           python3 scripts/test_ios_qml.py
+      - name: Verify current server core UI without modifying the bundled core
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+          FK_TEST_AUTH: '0'
+          FK_TEST_UI: ${{ runner.temp }}/server-ui
+        run: |
+          git init "$RUNNER_TEMP/server-core"
+          git -C "$RUNNER_TEMP/server-core" remote add origin https://cnb.cool/Qsgs-Fans/notify-ctrl/freekill-core
+          git -C "$RUNNER_TEMP/server-core" fetch --depth=1 origin 5337ea1bbf4beabeee950e88329da3e8bd91eb09
+          git -C "$RUNNER_TEMP/server-core" checkout --detach FETCH_HEAD
+          "$RUNNER_TEMP/test-ios-ui" "$RUNNER_TEMP/server-core" "$RUNNER_TEMP/server-ui"
+          python3 scripts/test_ios_qml.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ios-ui-test-fixture
-          path: ${{ runner.temp }}/ios-ui
+          path: |
+            ${{ runner.temp }}/ios-ui
+            ${{ runner.temp }}/server-ui
   build:
     name: Build iOS arm64
     needs: test-core-repair

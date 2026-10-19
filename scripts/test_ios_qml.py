@@ -8,8 +8,10 @@ os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "Material")
 from PySide6.QtCore import QUrl, QMetaObject, Qt, Q_RETURN_ARG, qInstallMessageHandler
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQuick import QQuickWindow
 SOURCE = Path(__file__).resolve().parents[1] / "runtime"
 UI = Path(os.environ.get("FK_TEST_UI", str(SOURCE)))
+RUN_AUTH_TEST = os.environ.get("FK_TEST_AUTH", "1") != "0"
 logs = []
 qInstallMessageHandler(lambda kind, context, message: logs.append(message))
 app = QGuiApplication([])
@@ -85,7 +87,7 @@ Window {
  QtObject {id:photo;property list<var> limitSkills:[]; SKILL_METHOD }
  LimitSkillArea {id:skillArea;skillModel:photo.limitSkills}
  LimitSkillItem {id:switchSkill;skillname:"switch_test";usedtimes:1}
- function setup(){host.refreshCompatibility();photo.updateLimitSkill("switch_test",0);popup.setSourceComponent(Qt.createComponent("GeneralDetail.qml"),{generals:["test"]});popup.open();worker.sendMessage({generation:1,server:"test:9527",username:"测试用户",password:"test-only-password"});}
+ function setup(){host.refreshCompatibility();photo.updateLimitSkill("switch_test",0);popup.setSourceComponent(Qt.createComponent("GeneralDetail.qml"),{generals:["test"]});popup.open();if (RUN_AUTH_TEST) worker.sendMessage({generation:1,server:"test:9527",username:"测试用户",password:"test-only-password"});}
  function changeSkill(){photo.updateLimitSkill("switch_test",1);}
  function skillState(){const rep=Array.from(skillArea.children).find(c=>typeof c.itemAt==="function");return String(rep.itemAt(0).children[0].source);}
  function generalHeight(){return popup.item.contentHeight;}
@@ -102,7 +104,7 @@ Window {
    exitContentWidth:exitButton.contentItem.width,exitWidth:exitButton.width
  });}
 }
-'''.replace("AUTH_SOURCE", (SOURCE / "card-counter/SocialAuth.js").as_uri()).replace("VERSION_EXPRESSION",version_expression).replace("SKILL_METHOD",skill_method).replace("EXIT_CONTENT",exit_content))
+'''.replace("AUTH_SOURCE", (SOURCE / "card-counter/SocialAuth.js").as_uri()).replace("VERSION_EXPRESSION",version_expression).replace("SKILL_METHOD",skill_method).replace("EXIT_CONTENT",exit_content).replace("RUN_AUTH_TEST",str(RUN_AUTH_TEST).lower()))
 engine = QQmlApplicationEngine(); engine.addImportPath(str(base))
 engine.rootContext().setContextProperty("AppPath", QUrl.fromLocalFile(str(base)))
 engine.load(QUrl.fromLocalFile(str(base / "Main.qml")))
@@ -122,7 +124,7 @@ QMetaObject.invokeMethod(window,"showCards",Qt.DirectConnection);pump(.25)
 card_count=invoke("cardCount")
 QMetaObject.invokeMethod(window,"changeToggle",Qt.DirectConnection);pump(.1)
 deadline=time.monotonic()+90
-while time.monotonic()<deadline:
+while RUN_AUTH_TEST and time.monotonic()<deadline:
     app.processEvents();time.sleep(.01)
     auth = window.property("authResult")
     if hasattr(auth, "toVariant"): auth = auth.toVariant()
@@ -142,6 +144,7 @@ assert result["switchSource"].endswith("/switch-yin"), "initial Yin value must r
 assert "white" in result["toggleIcon"] and "M16" in result["toggleIcon"], "chat toggle tracks collapsed/expanded state"
 salt=json.dumps(["freekill-social-account-v1","test:9527","测试用户"],ensure_ascii=False,separators=(",",":")).encode()
 expected=hashlib.pbkdf2_hmac("sha256",b"test-only-password",salt,210000,32).hex()
-assert result["authResult"]["key"] == expected, "WorkerScript identity remains compatible"
+if RUN_AUTH_TEST: assert result["authResult"]["key"] == expected, "WorkerScript identity remains compatible"
 assert not [line for line in logs if any(s in line for s in ("TypeError", "ReferenceError", "SyntaxError", "Cannot assign", "Unable to assign", "Binding loop"))], logs
+if os.environ.get("FK_TEST_PREVIEW"): window.grabWindow().save(os.environ["FK_TEST_PREVIEW"])
 window.close();engine.deleteLater();app.processEvents()
