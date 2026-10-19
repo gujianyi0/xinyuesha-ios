@@ -687,6 +687,12 @@ Control {
   Connections {
     target: Mediator
     function onCommandGot(sender, command, data) {
+      // Card moves, skill animations and button updates do not change social
+      // identity/presence. Do not rebind hidden social UI for each game packet.
+      if (["Setup", "SetServerSettings", "EnterLobby", "EnterRoom", "ChangeRoom",
+           "StartGame", "ChangeRoomPage", "GameOver", "BackToRoom", "BackToStart",
+           "RoomInviteSettings", "RoomInvitePlayers", "RoomInviteResult", "ErrorMsg",
+           "ErrorDlg", "AddPlayer", "ArrangeSeats", "PushPage", "PopPage"].indexOf(command) < 0) return;
       if (command === "PushPage" && host.networkGame) {
         host.utilityPageDepth++; host.findNavigationStack();
       } else if (command === "PopPage") host.utilityPageDepth = Math.max(0, host.utilityPageDepth - 1);

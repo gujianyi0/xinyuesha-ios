@@ -62,6 +62,9 @@ QtObject {
     // A temporary dummy/observer game model is not an avatar removal request.
     if (sameAccount && !value.avatar && context.avatar)
       value = Object.assign({}, value, {avatar: context.avatar});
+    if (sameAccount && context.valid === value.valid && context.name === value.name &&
+        context.state === value.state && context.roomId === value.roomId &&
+        context.roomName === value.roomName && context.avatar === value.avatar) return;
     const changed = context.server !== value.server || context.gameId !== value.gameId ||
       context.state !== value.state || context.roomId !== value.roomId || context.valid !== value.valid || context.avatar !== value.avatar;
     const key = value.valid ? value.server + "/" + value.gameId : "";

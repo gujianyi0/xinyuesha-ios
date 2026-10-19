@@ -1,9 +1,11 @@
-name: Test Android gameplay UI work
+name: Test client gameplay UI work
 on:
   workflow_dispatch:
   push:
     paths:
       - 'android/payload/**'
+      - 'runtime/card-counter/**'
+      - 'pc/payload/**'
       - 'android/tools/test_gameplay_work.py'
       - '.github/workflows/test-android-ui.yml'
 permissions:
@@ -12,16 +14,29 @@ jobs:
   gameplay:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Android
+            qt: '6.8.3'
+            payload: android/payload
+          - platform: iOS
+            qt: '6.8.3'
+            payload: runtime
+          - platform: Windows
+            qt: '6.10.0'
+            payload: pc/payload
     env:
       QT_QPA_PLATFORM: offscreen
       QT_QUICK_BACKEND: software
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update -qq && sudo apt-get install -y libegl1 libxkbcommon0 fonts-noto-cjk
-      - run: python3 -m pip install 'PySide6==6.8.3'
-      - run: python3 android/tools/test_gameplay_work.py --work-dir "$RUNNER_TEMP/android-gameplay" --result "$RUNNER_TEMP/android-gameplay/result.json"
+      - run: python3 -m pip install 'PySide6==${{ matrix.qt }}'
+      - run: python3 android/tools/test_gameplay_work.py --work-dir "$RUNNER_TEMP/client-gameplay" --payload '${{ matrix.payload }}' --platform '${{ matrix.platform }}' --cycles 60 --result "$RUNNER_TEMP/client-gameplay/result.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: android-gameplay-result
-          path: ${{ runner.temp }}/android-gameplay/result.json
+          name: client-gameplay-${{ matrix.platform }}
+          path: ${{ runner.temp }}/client-gameplay/result.json

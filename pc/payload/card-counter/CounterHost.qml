@@ -9,6 +9,8 @@ Item {
   id: host
   objectName: "fkCounterHost"
   property var currentScene: null
+  readonly property var activeRoomScene: Ltk.roomScene || null
+  onActiveRoomSceneChanged: Qt.callLater(host.syncScene)
   property var popup: null
   property var deckHit: null
   property var deckItem: null
@@ -42,7 +44,9 @@ Item {
     };
     return "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">'+shapes[kind]+'</svg>');
   }
-  function refreshCompatibility() {
+  function refreshCompatibility(rootItem) {
+    // Periodic whole-tree scans must never run during a match or spectating.
+    if (activeRoomScene && !rootItem) return;
     const window = host.Window.window;
     if (!window) return;
     // Cache surviving controls so bindings are installed once per instance.
@@ -134,11 +138,20 @@ Item {
       // Native FileDialog objects are in data, not visual children.
       for (const child of item.data || []) scan(child,depth+1,serverPage,lobbyPage,chatBox);
     }
-    scan(window.contentItem,0,false,false,false);
+    scan(rootItem || window.contentItem,0,false,false,false);
   }
-  Timer { interval: 1000; repeat: true; running: host.settingsReady; onTriggered: host.refreshCompatibility(); }
+  Timer { interval: 1000; repeat: true; running: host.settingsReady && !host.activeRoomScene; onTriggered: host.refreshCompatibility(); }
+  Connections {
+    target: host.currentScene
+    ignoreUnknownSignals: true
+    function onPopupItemChanged() { Qt.callLater(host.adaptRoomPopup); }
+  }
+  function adaptRoomPopup() {
+    const item = currentScene && currentScene.popupItem;
+    if (item) refreshCompatibility(item);
+  }
   property var fallbackButton: null
-  onClientContextChanged: { bootstrapReady = false; if (clientContext) Qt.callLater(host.ensureBootstrap); else Qt.callLater(host.releaseScene); }
+  onClientContextChanged: { bootstrapReady = false; if (clientContext) Qt.callLater(host.syncScene); else Qt.callLater(host.releaseScene); }
   Connections {
     target: Config
     // Do not save while loadConf is assigning defaults and stored values.
@@ -212,12 +225,10 @@ Item {
       MouseArea { anchors.fill: parent; onClicked: counter.toggle() }
     }
   }
-  Timer {
-    interval:500;repeat:true;running:host.clientContext!==null;triggeredOnStart:true
-    onTriggered: {
+  function syncScene() {
       // Backend uses the current Lua VM; a new login gets a fresh host module.
-      host.ensureBootstrap();
-      const scene=Ltk.roomScene;
+      if (!host.ensureBootstrap()) return;
+      const scene=host.activeRoomScene;
       if (!scene || !scene.dataModel) { if (host.currentScene) host.releaseScene(); return; }
       if (scene!==host.currentScene) {
         host.releaseScene();
@@ -228,16 +239,31 @@ Item {
         host.currentScene=scene;
         host.fallbackButton=fallbackComponent.createObject(scene,{counter:host.popup});
         host.deckItem=null;host.deckHit=null;host.deckSearchTicks=0;
+        host.refreshCompatibility(scene); // Adapt once when a new table is created.
         console.log("[CardCounter] standalone UI attached");
       }
-      if (!host.deckHit && (host.deckSearchTicks++ % 10 === 0)) {
-        const item=host.findDeck(scene);
+      host.linkDeck();
+      host.adaptRoomPopup();
+  }
+  function linkDeck() {
+      if (!host.deckHit && host.currentScene) {
+        const item=host.findDeck(host.currentScene);
         if (item) {
           if (host.fallbackButton) host.fallbackButton.visible=false;
           host.deckItem=item;host.deckHit=hitComponent.createObject(item,{counter:host.popup});
           console.log("[CardCounter] original deck icon linked");
         }
       }
-    }
+      }
+  Timer {
+    // Retry only while the newly-created client is not ready. The steady-state
+    // room no longer needs a 500 ms scene-discovery callback.
+    interval:500;repeat:true;running:host.clientContext!==null && !host.bootstrapReady
+    onTriggered:host.syncScene()
+  }
+  Timer {
+    interval:500;repeat:true
+    running:host.clientContext!==null && host.currentScene!==null && !host.deckHit && host.deckSearchTicks<3
+    onTriggered:{host.deckSearchTicks++;host.linkDeck();}
   }
 }

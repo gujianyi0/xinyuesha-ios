@@ -4,7 +4,7 @@ from pathlib import Path
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 os.environ.setdefault('QT_QUICK_BACKEND', 'software')
 os.environ.setdefault('QT_QUICK_CONTROLS_STYLE', 'Material')
-from PySide6.QtCore import QObject, QTimer, QUrl, QMetaObject, Q_RETURN_ARG, qInstallMessageHandler
+from PySide6.QtCore import QObject, QTimer, QUrl, QMetaObject, Q_RETURN_ARG, qInstallMessageHandler, QEventLoop, QEvent
 from PySide6.QtGui import QGuiApplication, QFontDatabase, QFont
 from PySide6.QtQml import QQmlApplicationEngine
 
@@ -12,6 +12,8 @@ parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--work-dir',type=Path,required=True)
 parser.add_argument('--payload',type=Path,default=Path(__file__).resolve().parents[1]/'payload')
 parser.add_argument('--measure-only',action='store_true')
+parser.add_argument('--platform',choices=['Android','iOS','Windows'],default='Android')
+parser.add_argument('--cycles',type=int,default=0,help='Repeat match/observer/return lifecycles and check retained objects')
 parser.add_argument('--result',type=Path)
 args=parser.parse_args();args.work_dir.mkdir(parents=True,exist_ok=True)
 logs=[];qInstallMessageHandler(lambda kind,ctx,msg:logs.append(msg))
@@ -29,7 +31,7 @@ import QtQuick
 QtObject {property string roomBg:"";property string lobbyBg:"";property string serverAddr:"test";property int serverPort:9527;property string screenName:"fixture";property string password:"";property bool observing:false;property bool replaying:false;property bool consoleStartRequested:false;function saveConf(){}}''')
     put('Fk/Cpp.qml','''pragma Singleton
 import QtQuick
-QtObject {property string os:"Android";property var self:({id:1,screenName:"fixture",avatar:""});function notifyServer(c,d){}}''')
+QtObject {property string os:"PLATFORM";property var self:({id:1,screenName:"fixture",avatar:""});function notifyServer(c,d){}}'''.replace('PLATFORM',args.platform))
     put('Fk/Lua.qml','''pragma Singleton
 import QtQuick
 QtObject {function ev(s){return true;}function tr(s){return s;}function getPlayersAndObservers(){return [];}}''')
@@ -63,6 +65,14 @@ Window {
   Item {id:deck;property string source:"card-back";width:32;height:42}
   Item {id:choice;property var generalCardList:[];property bool draggingCard:false;property var dataModel:({});width:800;height:600}
  }
+ property var stressScene:null
+ Component {id:stressSceneFactory
+  Item {width:1200;height:540;property var dataModel:({});property var popupItem:null
+   property alias drawPile:stressDeck;property alias choice:stressChoice
+   Item {id:stressDeck;property string source:"card-back";width:32;height:42}
+   Item {id:stressChoice;property var generalCardList:[];property bool draggingCard:false;property var dataModel:({});width:800;height:600}
+  }
+ }
  Connections {target:social.socialClient;function onContextChanged(){win.contextChanges++;}}
  function prepare(){
   social.profiles={"test:9527/1":{enabled:false}};social.profilesLoaded=true;
@@ -87,6 +97,9 @@ Window {
  function leave(){Ltk.roomScene=null;Mediator.commandGot(null,"EnterLobby",[]);}
  function utility(){Mediator.commandGot(null,"PushPage",[]);return social.visible;}
  function back(){Mediator.commandGot(null,"PopPage",[]);return social.visible;}
+ function enterFreshScene(){Config.observing=false;stressScene=stressSceneFactory.createObject(win.contentItem);Ltk.roomScene=stressScene;Mediator.commandGot(null,"StartGame",[]);}
+ function freshChoice(){stressScene.popupItem=stressScene.choice;}
+ function leaveFreshScene(){Ltk.roomScene=null;stressScene.destroy();stressScene=null;Mediator.commandGot(null,"EnterLobby",[]);}
 }''')
     engine=QQmlApplicationEngine();engine.addImportPath(str(base))
     client=QObject();engine.rootContext().setContextProperty('ClientInstance',client)
@@ -95,10 +108,12 @@ Window {
     window=engine.rootObjects()[0]
     def invoke(name):return QMetaObject.invokeMethod(window,name,Q_RETURN_ARG('QVariant'))
     def pump(seconds):
-        deadline=time.monotonic()+seconds
-        while time.monotonic()<deadline:app.processEvents();time.sleep(.005)
+        # Use an actual event loop: repeated processEvents() alone does not
+        # drain DeferredDelete and would falsely report destroyed scene leaks.
+        loop=QEventLoop();QTimer.singleShot(max(1,round(seconds*1000)),loop.quit);loop.exec()
+        app.sendPostedEvents(None,QEvent.DeferredDelete)
     pump(.1);invoke('prepare');pump(.05)
-    result={'gameplay_burst':json.loads(invoke('burst')),'same_context':json.loads(invoke('sameContext')),'five_idle_scans_ms':invoke('scan')}
+    result={'platform':args.platform,'gameplay_burst':json.loads(invoke('burst')),'same_context':json.loads(invoke('sameContext')),'five_idle_scans_ms':invoke('scan')}
     invoke('enterScene');pump(.65)
     result['match_state']=json.loads(invoke('state'));result['five_match_scans_ms']=invoke('measureMatchScan')
     beats=[];last=[time.perf_counter()]
@@ -111,6 +126,33 @@ Window {
     invoke('observe');pump(.05);result['observe_state']=json.loads(invoke('state'))
     invoke('leave');pump(.05);result['lobby_state']=json.loads(invoke('state'))
     result['utility_visible']=invoke('utility');result['back_visible']=invoke('back')
+    if args.cycles:
+        engine.collectGarbage();pump(.03)
+        from collections import Counter
+        initial_types=Counter(o.metaObject().className().split('_QML')[0] for o in window.findChildren(QObject))
+        initial_objects=len(window.findChildren(QObject));counts=[];writes_before=engine.singletonInstance('Fk','Backend').property('writes')
+        changes=[]
+        for cycle in range(args.cycles):
+            invoke('enterFreshScene');pump(.02)
+            current=json.loads(invoke('state'))
+            assert current['popup'] and current['deck'],(cycle,current)
+            changes.append(json.loads(invoke('burst'))['contextChanges'])
+            invoke('freshChoice');pump(.01)
+            invoke('observe');pump(.01)
+            assert not json.loads(invoke('state'))['visible']
+            invoke('leaveFreshScene');pump(.02)
+            after=json.loads(invoke('state'))
+            assert not after['popup'] and not after['deck'],(cycle,after)
+            counts.append(len(window.findChildren(QObject)))
+        engine.collectGarbage();pump(.03)
+        result['lifecycle_stress']={'cycles':args.cycles,'gameplay_packets':args.cycles*1000,
+          'social_context_changes':sum(changes),'initial_objects':initial_objects,
+          'final_objects':len(window.findChildren(QObject)),'max_objects_after_return':max(counts),
+          'profile_writes':engine.singletonInstance('Fk','Backend').property('writes')-writes_before,
+          'retained_type_growth':dict(Counter(o.metaObject().className().split('_QML')[0] for o in window.findChildren(QObject))-initial_types)}
+        if args.result:args.result.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
+        assert result['lifecycle_stress']['final_objects']<=initial_objects+5,result['lifecycle_stress']
+        assert not sum(changes),result['lifecycle_stress']
     errors=[m for m in logs if 'ReferenceError' in m or 'TypeError' in m or 'is not a type' in m or 'Cannot assign' in m]
     result['qml_errors']=errors
     print(json.dumps(result,ensure_ascii=False,indent=2))
