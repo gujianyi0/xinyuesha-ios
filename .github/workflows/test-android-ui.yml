@@ -7,6 +7,7 @@ on:
       - 'runtime/card-counter/**'
       - 'pc/payload/**'
       - 'android/tools/test_gameplay_work.py'
+      - 'scripts/test_counter_catalogue.py'
       - '.github/workflows/test-android-ui.yml'
 permissions:
   contents: read
@@ -35,8 +36,17 @@ jobs:
       - run: sudo apt-get update -qq && sudo apt-get install -y libegl1 libxkbcommon0 fonts-noto-cjk
       - run: python3 -m pip install 'PySide6==${{ matrix.qt }}'
       - run: python3 android/tools/test_gameplay_work.py --work-dir "$RUNNER_TEMP/client-gameplay" --payload '${{ matrix.payload }}' --platform '${{ matrix.platform }}' --cycles 60 --result "$RUNNER_TEMP/client-gameplay/result.json"
+      - if: matrix.platform == 'iOS'
+        run: |
+          sudo apt-get install -y liblua5.4-0
+          python3 scripts/test_counter_catalogue.py --work-dir "$RUNNER_TEMP/counter-catalogue" --lua-library liblua5.4.so.0 --result "$RUNNER_TEMP/counter-catalogue/result.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: client-gameplay-${{ matrix.platform }}
           path: ${{ runner.temp }}/client-gameplay/result.json
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.platform == 'iOS'
+        with:
+          name: ios-counter-catalogue
+          path: ${{ runner.temp }}/counter-catalogue/result.json

@@ -65,3 +65,5 @@ Android、Windows PC、iOS 三端客户端，基于 [FreeKill / 新月杀](https
 ## 许可证与原项目
 
 保留 [LICENSE](LICENSE) 与各源码文件、第三方组件的原有许可证和作者声明。原项目：[FreeKill](https://github.com/Qsgs-Fans/FreeKill)，核心游戏逻辑：[freekill-core](https://github.com/Qsgs-Fans/freekill-core)。本仓库为社区测试版，游戏服务器的规则和资源校验继续生效。
+
+最新 iOS 记牌器大牌池滑动修正与验证范围见 [专项记录](docs/iOS记牌器滑动性能-20261020.md)；此项尚待 iPhone 真机复测。

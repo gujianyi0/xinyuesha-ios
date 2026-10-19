@@ -19,23 +19,39 @@ Item {
   property bool hideZero: false
   property string selectedKey: "slash"
   property string lastPayload: ""
+  property var rowLookup: ({})
+  property var catalogueRows: []
+  property var rows: []
+  property string catalogueSignature: ""
+  property string visibleSignature: ""
   property string lastError: ""
   property string titleFont: "Microsoft YaHei"
   property var readSnapshot: function() {
     if (typeof ClientInstance === "undefined" || !ClientInstance)
       return {ready:false,rows:[],message:"等待客户端连接"};
-    return Lua.ev('(function() if not FkCardCounterV2 then FkCardCounterV2 = dofile("card-counter/counter.lua") end return FkCardCounterV2.current() end)()');
+    return Lua.ev('(function() if not FkCardCounterV2 then FkCardCounterV2 = dofile("card-counter/counter.lua") end return FkCardCounterV2.current('+JSON.stringify(root.selectedKey)+') end)()');
   }
   property var cardPicture: function(name) { return SkinBank.getCardPicture(name); }
   readonly property string scopeTitle: ({unseen:"未见牌",discard:"弃牌堆",hand:"我的手牌"})[scope]
-  readonly property var selectedRow: (snapshot.rows || []).find(function(r) { return r.key === selectedKey; }) || null
-  readonly property var rows: (snapshot.rows || []).filter(function(r) {
-    return (!category || r.kind===category) && (!hideZero || r[scope]>0)
-      && (!filterText || r.name.indexOf(filterText)>=0 || r.key.indexOf(filterText.toLowerCase())>=0);
-  })
+  readonly property var selectedRow: rowLookup[selectedKey] || null
+  // Keep GridView's catalogue model stable when only live counts change.
+  // Replacing a JS array model tears down visible delegates and interrupts flicks.
+  function updateRows() {
+    const next = (catalogueRows || []).filter(function(r) {
+      return (!category || r.kind===category) && (!hideZero || (rowLookup[r.key] || {})[scope]>0)
+        && (!filterText || r.name.indexOf(filterText)>=0 || r.key.indexOf(filterText.toLowerCase())>=0);
+    });
+    const signature=JSON.stringify(next);
+    if (signature!==visibleSignature) { visibleSignature=signature; rows=next; }
+  }
+  onCategoryChanged: updateRows()
+  onHideZeroChanged: updateRows()
+  onScopeChanged: updateRows()
+  onFilterTextChanged: updateRows()
+  onSelectedKeyChanged: if (expanded) refresh()
   readonly property color gold: "#CCAD76"
   readonly property color pale: "#F0E2C6"
-  function open() { expanded=true; refresh(); forceActiveFocus(); }
+  function open() { expanded=true; forceActiveFocus(); }
   function close() { expanded=false; }
   function toggle() { if (expanded) close(); else open(); }
   function refresh() {
@@ -43,7 +59,17 @@ Item {
       const value=readSnapshot();
       if (!value) return;
       const payload=JSON.stringify(value);
-      if (payload!==lastPayload) { snapshot=value; lastPayload=payload; }
+      if (payload!==lastPayload) {
+        const lookup=({});
+        const catalogue=(value.rows || []).map(function(row) {
+          lookup[row.key]=row;
+          return {key:row.key,name:row.name,kind:row.kind,total:row.total};
+        });
+        const signature=JSON.stringify(catalogue);
+        rowLookup=lookup; snapshot=value; lastPayload=payload;
+        if (signature!==catalogueSignature) { catalogueSignature=signature; catalogueRows=catalogue; }
+        updateRows();
+      }
       if (value.error && lastError!==value.error) { lastError=value.error; console.warn("[CardCounter] "+value.error); }
     } catch(e) {
       if (String(e)!==lastError) console.warn("[CardCounter] "+e);
@@ -68,7 +94,9 @@ Item {
   }
   onExpandedChanged: if (expanded) refresh()
   Keys.onEscapePressed: close()
-  Timer { interval:500; running:root.expanded; repeat:true; onTriggered:root.refresh() }
+  // Do not marshal a large Lua snapshot onto the UI thread during a gesture.
+  // Counts catch up immediately after dragging/flicking stops.
+  Timer { interval:500; running:root.expanded && !cards.moving; repeat:true; onTriggered:root.refresh() }
   Rectangle { anchors.fill:parent; color:"#9900090D" }
   MouseArea { anchors.fill:parent; onClicked:root.close() }
 
@@ -154,18 +182,20 @@ Item {
           y:39; width:parent.width; height:parent.height-66
           clip:true; cellWidth:width/5; cellHeight:82; model:root.rows
           boundsBehavior:Flickable.StopAtBounds
+          reuseItems:true; cacheBuffer:cellHeight*2
+          onMovingChanged: if (!moving && root.expanded) Qt.callLater(root.refresh)
           ScrollBar.vertical:ScrollBar { policy:ScrollBar.AsNeeded }
           delegate:Item {
             id:tile
             required property var modelData
             width:cards.cellWidth; height:cards.cellHeight
             readonly property bool selected:root.selectedKey===modelData.key
-            readonly property int amount:modelData[root.scope] || 0
+            readonly property int amount:(root.rowLookup[modelData.key] || {})[root.scope] || 0
             Rectangle {
               anchors.fill:parent; anchors.rightMargin:7; anchors.bottomMargin:7; radius:5
               color:tile.selected ? "#394039" : (tileMouse.containsMouse ? "#2F3832" : "#252E2B")
               border.color:tile.selected ? "#D1AF70" : "#485044"; border.width:tile.selected ? 2 : 1
-              Image { x:5; y:5; width:44; height:63; fillMode:Image.PreserveAspectCrop; smooth:true; source:root.cardPicture(tile.modelData.key); opacity:tile.amount ? 0.95 : 0.30 }
+              Image { x:5; y:5; width:44; height:63; fillMode:Image.PreserveAspectCrop; smooth:true; asynchronous:true; sourceSize:Qt.size(132,189); source:root.cardPicture(tile.modelData.key); opacity:tile.amount ? 0.95 : 0.30 }
               Text {
                 x:55; y:8; width:parent.width-59; height:24; text:tile.modelData.name
                 color:tile.amount ? "#E6DFC8" : "#8F978B"; font.pixelSize:12
@@ -202,7 +232,7 @@ Item {
           x:2; spacing:14
           Rectangle {
             width:68; height:94; radius:4; color:"#BCAE8E"; border.color:"#DDC58D"
-            Image { anchors.fill:parent; anchors.margins:2; fillMode:Image.PreserveAspectFit; source:root.selectedRow ? root.cardPicture(root.selectedRow.key) : "" }
+            Image { anchors.fill:parent; anchors.margins:2; fillMode:Image.PreserveAspectFit; asynchronous:true; sourceSize:Qt.size(204,282); source:root.selectedRow ? root.cardPicture(root.selectedRow.key) : "" }
           }
           Column {
             spacing:6; y:3

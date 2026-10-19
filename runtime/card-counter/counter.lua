@@ -3,7 +3,7 @@
 local M = {}
 local catalogs = setmetatable({}, { __mode = "k" })
 
-function M.snapshot(room, engine, viewer)
+function M.snapshot(room, engine, viewer, detailKey)
   if not room or not viewer or not viewer.player_cards then
     return { ready = false, rows = {}, message = "等待牌局数据" }
   end
@@ -32,6 +32,7 @@ function M.snapshot(room, engine, viewer)
     if suit < 1 or suit > 5 then suit = 5 end
     if number < 0 or number > 13 then number = 0 end
     local d = row.details[field]
+    if not d then return end
     d.suits[suit] = d.suits[suit] + 1
     local index = (suit - 1) * 14 + number + 1
     d.points[index] = d.points[index] + 1
@@ -82,8 +83,9 @@ function M.snapshot(room, engine, viewer)
       if not row then
         row = { key = key, name = engine:translate(key), kind = c.type or 0,
           total = 0, unseen = 0, known = 0, hand = 0, discard = 0,
-          details = {unseen=distribution(), discard=distribution(), hand=distribution(), total=distribution()} }
-        row.suits = row.details.unseen.suits
+          details = (not detailKey or detailKey == key) and
+            {unseen=distribution(), discard=distribution(), hand=distribution(), total=distribution()} or {} }
+        row.suits = row.details.unseen and row.details.unseen.suits or nil
         byName[key] = row
         rows[#rows + 1] = row
       end
@@ -116,8 +118,8 @@ function M.snapshot(room, engine, viewer)
     message = "未见含牌堆及未知手牌；数字按实体原始牌面统计" }
 end
 
-function M.current()
-  local ok, result = pcall(M.snapshot, ClientInstance, Fk, Self)
+function M.current(detailKey)
+  local ok, result = pcall(M.snapshot, ClientInstance, Fk, Self, detailKey)
   if ok then return result end
   return { ready = false, rows = {}, message = "记牌数据暂不可用", error = tostring(result) }
 end
