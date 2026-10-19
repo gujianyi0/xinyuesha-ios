@@ -20,3 +20,17 @@ DerivedData/
 
 # Local Windows shortcut
 *.lnk
+
+# Platform build products and local signing/configuration
+android/build/
+android/tools/__pycache__/
+pc/tools/__pycache__/
+*.apk
+*.7z
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.local
+**/social-private/
+**/client.db
