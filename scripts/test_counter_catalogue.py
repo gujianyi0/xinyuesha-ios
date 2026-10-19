@@ -39,6 +39,7 @@ with tempfile.TemporaryDirectory(dir=args.work_dir) as temp:
 Window {
  id:win;width:1200;height:540;visible:true
  property int tick:0;property int reads:0
+ property bool failSnapshot:false
  function sample(){
   const rows=[];
   for(let i=0;i<300;i++){
@@ -48,7 +49,7 @@ Window {
   }
   return {ready:true,rows:rows,total:900,unseen:900-tick%2,hand:0,discard:0};
  }
- CardCounter {id:counter;selectedKey:"c17";readSnapshot:function(){win.reads++;return win.sample();};cardPicture:function(n){return "";}}
+ CardCounter {id:counter;selectedKey:"c17";readSnapshot:function(){win.reads++;if(win.failSnapshot) throw new Error("fixture snapshot unavailable");return win.sample();};cardPicture:function(n){return "";}}
  function open(){counter.open();}
  function close(){counter.close();}
  function change(){tick++;counter.refresh();}
@@ -60,6 +61,8 @@ Window {
  function startFlick(){counter.testGrid.contentY=0;counter.testGrid.flick(0,-2000);}
  function stopFlick(){counter.testGrid.cancelFlick();}
  function focusSearch(){counter.testSearch.forceActiveFocus();counter.testSearch.text="测试输入";}
+ function failRead(){counter.testSearch.text="";win.failSnapshot=true;counter.refresh();}
+ function recoverRead(){win.failSnapshot=false;counter.refresh();}
  function inputGeometry(){const field=counter.testSearch;const cursor=field.cursorRectangle;return JSON.stringify({y:cursor.y,height:cursor.height,fieldHeight:field.height,topPadding:field.topPadding,bottomPadding:field.bottomPadding});}
  function state(){return JSON.stringify({reads:reads,creates:counter.testCreates,count:counter.rows.length,gridCount:counter.testGrid.count,moving:counter.testGrid.moving,y:counter.testGrid.contentY,selected:counter.selectedRow?counter.selectedRow.key:"",amount:counter.selectedRow?counter.selectedRow.unseen:-1});}
 }''')
@@ -79,6 +82,9 @@ Window {
     invoke('clearSearch');pump(.02);assert state()['count']==300,state()
     invoke('focusSearch');pump(.02);raw_geometry=invoke('inputGeometry');assert raw_geometry,logs
     input_geometry=json.loads(raw_geometry)
+    if not args.measure_only:
+        invoke('failRead');pump(.01);assert state()['count']==0,state()
+        invoke('recoverRead');pump(.01);assert state()['count']==300,state()
     invoke('close');closed=state();pump(.6);assert state()['reads']==closed['reads'],'hidden counter must not poll'
     result={'initial':initial,'after_live_counts':updated,'during_flick_start':start,'during_flick_end':moving,'after_flick':stopped,
       'delegates_created_by_count_updates':updated['creates']-initial['creates'],'snapshots_during_flick':moving['reads']-start['reads'],

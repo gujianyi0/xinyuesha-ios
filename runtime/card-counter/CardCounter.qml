@@ -74,6 +74,8 @@ Item {
     } catch(e) {
       if (String(e)!==lastError) console.warn("[CardCounter] "+e);
       lastError=String(e); snapshot={ready:false,rows:[],message:"记牌数据暂不可用"};
+      rowLookup=({}); catalogueRows=[]; rows=[];
+      catalogueSignature=""; visibleSignature=""; lastPayload="";
     }
   }
   function suitCount(suit) {
