@@ -75,6 +75,16 @@ Item {
     };
     return "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">'+shapes[kind]+'</svg>');
   }
+  function adaptTouchLog(view) {
+    if (adaptedControls.indexOf(view)>=0) return;
+    adaptedControls.push(view);
+    // LogEdit follows the last selected index, rather than the viewport. A
+    // manual drag must leave that index before the next live log is appended.
+    view.movementStarted.connect(function() { view.currentIndex=-1; });
+    view.movementEnded.connect(function() {
+      if (view.atYEnd && view.count>0) view.currentIndex=view.count-1;
+    });
+  }
   function refreshCompatibility(rootItem) {
     // Never walk the entire animated table from a periodic UI-thread callback.
     // Android room popups are adapted through popupItemChanged, in isolation.
@@ -91,6 +101,8 @@ Item {
       if (!item || (typeof item !== "object" && typeof item !== "function") || seen.has(item) || depth > 24 || ++visited > 12000) return;
       seen.add(item);
       const type = String(item);
+      if ((Cpp.os==="Android" || Cpp.os==="iOS") && type.indexOf("LogEdit_QMLTYPE")===0)
+        host.adaptTouchLog(item);
       serverPage = serverPage || ("selectedServer" in item && "serverListUrl" in item);
       lobbyPage = lobbyPage || ("roomModel" in item && "serverPlayerNum" in item);
       chatBox = chatBox || type.indexOf("ChatBox_QMLTYPE") === 0;
