@@ -39,6 +39,7 @@ jobs:
       - run: |
           sudo apt-get install -y liblua5.4-0
           python3 scripts/test_counter_catalogue.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/counter-catalogue" --lua-library liblua5.4.so.0 --result "$RUNNER_TEMP/counter-catalogue/result.json"
+      - run: python3 scripts/test_social_session.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/social-session"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -10,6 +10,9 @@ QtObject {
   property string recoveryCode: ""
   property string accountKey: "" // Memory only: never persisted, displayed or logged.
   property string credentialScope: ""
+  // Reuse the already issued bearer session; no password/KDF key is written.
+  property bool usingSavedSession: false
+  property var pendingCredentials: null // Memory only; cleared on account switch.
   property int credentialGeneration: 0
   property bool deriving: false
   property bool accountBound: false
@@ -53,6 +56,7 @@ QtObject {
     for (const entry of calls) entry.xhr.abort();
     calls = []; busy = false; token = ""; recoveryCode = ""; me = ({});
     credentialGeneration++; credentialScope = ""; accountKey = ""; deriving = false;
+    usingSavedSession = false; pendingCredentials = null;
     accountBound = false; accountConnected = false; authenticating = false;
     inviteMode = ""; policyReady = false;
     friends = []; avatarCache = ({}); requests = []; invitations = []; reservations = []; visibility = "online"; error = "";
@@ -152,8 +156,17 @@ QtObject {
     if (!context.valid || endpoint !== defaultEndpoint || !username || !password) return;
     // The authenticated game account ID also separates local profiles. Never use
     // a public nickname or game ID as a social authentication secret.
+    pendingCredentials = {server:server, username:username, password:password};
+    if (!enabled) return;
     const scope = profileKey + "|" + username;
     if (credentialScope === scope) return;
+    if (accountBound && token) {
+      credentialScope = scope; usingSavedSession = true;
+      // The normal sync request validates the bearer token on the server.
+      if (enabled) Qt.callLater(refresh);
+      return;
+    }
+    usingSavedSession = false;
     credentialScope = scope; credentialGeneration++; deriving = true;
     if (typeof Backend !== "undefined" && typeof Backend.deriveSocialAccountKey === "function") {
       const generation = credentialGeneration;
@@ -207,8 +220,19 @@ QtObject {
         error = data.error || "暂时连不上好友服务，请检查地址或服务是否启动";
         if (request.status === 401) {
           token = ""; accountConnected = false; friends = []; requests = []; invitations = []; me = ({});
-          if (!accountKey) enabled = false;
-          persist();
+          if (usingSavedSession && pendingCredentials) {
+            // An expired/revoked cached session falls back to the same account
+            // derivation exactly once. The original protocol stays unchanged.
+            usingSavedSession = false; accountBound = false; credentialScope = "";
+            persist();
+            Qt.callLater(function() {
+              const c=api.pendingCredentials;
+              if (api.enabled && api.context.valid && c) api.setCredentials(c.server,c.username,c.password);
+            });
+          } else {
+            if (!accountKey) enabled = false;
+            persist();
+          }
         }
         return;
       }
@@ -223,6 +247,11 @@ QtObject {
   function connectService() {
     if (!context.valid || busy || deriving) return;
     enabled = true;
+    if (endpoint === defaultEndpoint && !accountKey && (!token || !accountBound) && pendingCredentials) {
+      const c=pendingCredentials;
+      setCredentials(c.server,c.username,c.password);
+      return;
+    }
     if (endpoint === defaultEndpoint && accountKey && !accountConnected) {
       authenticating = true;
       call("POST", "/v1/accounts/login", {key:accountKey, name:context.name || "新月杀玩家"}, function(data) {
@@ -231,7 +260,10 @@ QtObject {
       });
       return;
     }
-    if (token) { persist(); refresh(); return; }
+    if (token) {
+      if (endpoint === defaultEndpoint && accountBound && !accountKey) usingSavedSession = true;
+      persist(); refresh(); return;
+    }
     if (recoveryCode.length === 32) { linkDevice(recoveryCode); return; }
     if (endpoint === defaultEndpoint) { error = "请先登录游戏账号；也可使用已有恢复码恢复好友"; return; }
     call("POST", "/v1/register", {name: context.name || "新月杀玩家"}, function(data) {
@@ -251,6 +283,7 @@ QtObject {
       roomId: context.roomId, roomName: context.roomName};
     if (context.avatar) presence.avatar = context.avatar;
     const receive = function(data) {
+      if (usingSavedSession) accountConnected = true;
       applyMe(data.me); friends = data.friends || []; requests = data.requests || [];
       invitations = data.invitations || []; reservations = data.reservations || [];
     };
