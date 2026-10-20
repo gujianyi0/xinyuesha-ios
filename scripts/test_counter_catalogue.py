@@ -36,23 +36,29 @@ with tempfile.TemporaryDirectory(dir=args.work_dir) as temp:
     put('CardCounter.qml',source)
     shutil.copyfile(args.payload/'card-counter/SuitIcon.qml',base/'SuitIcon.qml')
     put('Main.qml','''import QtQuick
+import QtQuick.Controls
 Window {
  id:win;width:1200;height:540;visible:true
  property int tick:0;property int reads:0
  property bool failSnapshot:false
+ property bool extraCards:false
  function sample(){
   const rows=[];
   for(let i=0;i<300;i++){
    let points=Array(70).fill(0);points[1]=1;
    let details={unseen:{suits:[1,0,0,0,0],points:points},discard:{suits:[0,0,0,0,0],points:Array(70).fill(0)},hand:{suits:[0,0,0,0,0],points:Array(70).fill(0)}};
-   rows.push({key:"c"+i,name:"卡牌"+i,kind:i%3+1,total:3,unseen:i===17?tick%2:3,hand:0,discard:0,details:details});
+   rows.push({key:"c"+i,name:"卡牌"+i,kind:i%3+1,total:i===17?3+tick%2:3,unseen:i===17?tick%2:3,hand:0,discard:0,details:details});
   }
+  if(extraCards) for(let n=0;n<5;n++) rows.unshift({key:"generated"+n,name:"衍生牌"+n,kind:2,total:1,unseen:1,hand:0,discard:0,details:{}});
   return {ready:true,rows:rows,total:900,unseen:900-tick%2,hand:0,discard:0};
  }
  CardCounter {id:counter;selectedKey:"c17";readSnapshot:function(){win.reads++;if(win.failSnapshot) throw new Error("fixture snapshot unavailable");return win.sample();};cardPicture:function(n){return "";}}
  function open(){counter.open();}
  function close(){counter.close();}
  function change(){tick++;counter.refresh();}
+ function scrollMiddle(){counter.testGrid.positionViewAtIndex(120,GridView.Beginning);counter.testGrid.contentY+=17;}
+ function addGenerated(){extraCards=true;counter.refresh();}
+ function removeGenerated(){extraCards=false;counter.refresh();}
  function hideZero(){counter.hideZero=true;}
  function showZero(){counter.hideZero=false;}
  function choose(){counter.selectedKey="c18";}
@@ -64,16 +70,25 @@ Window {
  function failRead(){counter.testSearch.text="";win.failSnapshot=true;counter.refresh();}
  function recoverRead(){win.failSnapshot=false;counter.refresh();}
  function inputGeometry(){const field=counter.testSearch;const cursor=field.cursorRectangle;return JSON.stringify({y:cursor.y,height:cursor.height,fieldHeight:field.height,topPadding:field.topPadding,bottomPadding:field.bottomPadding});}
- function state(){return JSON.stringify({reads:reads,creates:counter.testCreates,count:counter.rows.length,gridCount:counter.testGrid.count,moving:counter.testGrid.moving,y:counter.testGrid.contentY,selected:counter.selectedRow?counter.selectedRow.key:"",amount:counter.selectedRow?counter.selectedRow.unseen:-1});}
+ function state(){return JSON.stringify({reads:reads,creates:counter.testCreates,count:counter.rows.length,gridCount:counter.testGrid.count,moving:counter.testGrid.moving,y:counter.testGrid.contentY,topKey:counter.rows[Math.max(0,Math.floor((counter.testGrid.contentY-counter.testGrid.originY)/counter.testGrid.cellHeight))*5]?.key || "",selected:counter.selectedRow?counter.selectedRow.key:"",amount:counter.selectedRow?counter.selectedRow.unseen:-1});}
 }''')
     engine=QQmlApplicationEngine();engine.addImportPath(str(base));engine.load(QUrl.fromLocalFile(str(base/'Main.qml')))
     assert engine.rootObjects(),logs
     window=engine.rootObjects()[0]
     def invoke(name):return QMetaObject.invokeMethod(window,name,Q_RETURN_ARG('QVariant'))
     def state():return json.loads(invoke('state'))
-    invoke('open');pump(.08);initial=state();assert initial['count']==300,initial
+    invoke('open');pump(.08);invoke('scrollMiddle');pump(.08);initial=state();assert initial['count']==300,initial
     for _ in range(20):invoke('change');pump(.01)
-    updated=state();invoke('startFlick');pump(.05);start=state();pump(.7);moving=state()
+    updated=state()
+    assert initial['y']>500,initial
+    if not args.measure_only:
+        assert abs(updated['y']-initial['y'])<1,(initial,updated)
+        invoke('addGenerated');pump(.06);generated=state()
+        assert generated['count']==305 and generated['topKey']==updated['topKey'],(updated,generated)
+        invoke('removeGenerated');pump(.06);removed=state()
+        assert removed['count']==300 and removed['topKey']==updated['topKey'],(updated,removed)
+    else:generated=None;removed=None
+    invoke('startFlick');pump(.05);start=state();pump(.7);moving=state()
     invoke('stopFlick');pump(.1);stopped=state()
     invoke('hideZero');pump(.02);assert state()['count']==299,state()
     invoke('change');pump(.02);assert state()['count']==300,state()
@@ -86,7 +101,7 @@ Window {
         invoke('failRead');pump(.01);assert state()['count']==0,state()
         invoke('recoverRead');pump(.01);assert state()['count']==300,state()
     invoke('close');closed=state();pump(.6);assert state()['reads']==closed['reads'],'hidden counter must not poll'
-    result={'initial':initial,'after_live_counts':updated,'during_flick_start':start,'during_flick_end':moving,'after_flick':stopped,
+    result={'generated_cards':generated,'removed_generated_cards':removed,'initial':initial,'after_live_counts':updated,'during_flick_start':start,'during_flick_end':moving,'after_flick':stopped,
       'delegates_created_by_count_updates':updated['creates']-initial['creates'],'snapshots_during_flick':moving['reads']-start['reads'],
       'input_geometry':input_geometry,'qml_errors':[m for m in logs if any(e in m for e in ['TypeError','ReferenceError','SyntaxError','Cannot assign','is not a type'])]}
     if not args.measure_only:

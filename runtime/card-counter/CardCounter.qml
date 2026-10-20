@@ -24,6 +24,7 @@ Item {
   property var rows: []
   property string catalogueSignature: ""
   property string visibleSignature: ""
+  property int viewRevision: 0
   property string lastError: ""
   property string titleFont: "Microsoft YaHei"
   property var readSnapshot: function() {
@@ -36,13 +37,35 @@ Item {
   readonly property var selectedRow: rowLookup[selectedKey] || null
   // Keep GridView's catalogue model stable when only live counts change.
   // Replacing a JS array model tears down visible delegates and interrupts flicks.
-  function updateRows() {
+  function updateRows(preservePosition) {
     const next = (catalogueRows || []).filter(function(r) {
       return (!category || r.kind===category) && (!hideZero || (rowLookup[r.key] || {})[scope]>0)
         && (!filterText || r.name.indexOf(filterText)>=0 || r.key.indexOf(filterText.toLowerCase())>=0);
     });
     const signature=JSON.stringify(next);
-    if (signature!==visibleSignature) { visibleSignature=signature; rows=next; }
+    if (signature!==visibleSignature) {
+      const columns=Math.max(1,Math.floor(cards.width/cards.cellWidth));
+      const oldY=Math.max(0,cards.contentY-cards.originY);
+      const first=Math.floor(oldY/cards.cellHeight)*columns;
+      const offset=oldY%cards.cellHeight;
+      const oldRows=rows;
+      const revision=++viewRevision;
+      visibleSignature=signature; rows=next;
+      if (preservePosition && oldY>0 && next.length && oldRows.length) {
+        // Derived cards and hide-zero membership can change the catalogue too.
+        // Keep the first surviving visible card, with its fractional row offset.
+        let anchor=-1;
+        for (let i=first;i<oldRows.length && anchor<0;i++)
+          anchor=next.findIndex(r => r.key===oldRows[i].key);
+        if (anchor<0) anchor=Math.min(first,next.length-1);
+        Qt.callLater(function() {
+          if (root.viewRevision!==revision || cards.moving) return;
+          cards.forceLayout();
+          const y=cards.originY+Math.floor(anchor/columns)*cards.cellHeight+offset;
+          cards.contentY=Math.max(cards.originY,Math.min(y,cards.originY+Math.max(0,cards.contentHeight-cards.height)));
+        });
+      }
+    }
   }
   onCategoryChanged: updateRows()
   onHideZeroChanged: updateRows()
@@ -63,12 +86,12 @@ Item {
         const lookup=({});
         const catalogue=(value.rows || []).map(function(row) {
           lookup[row.key]=row;
-          return {key:row.key,name:row.name,kind:row.kind,total:row.total};
+          return {key:row.key,name:row.name,kind:row.kind};
         });
         const signature=JSON.stringify(catalogue);
         rowLookup=lookup; snapshot=value; lastPayload=payload;
         if (signature!==catalogueSignature) { catalogueSignature=signature; catalogueRows=catalogue; }
-        updateRows();
+        updateRows(true);
       }
       if (value.error && lastError!==value.error) { lastError=value.error; console.warn("[CardCounter] "+value.error); }
     } catch(e) {
@@ -201,6 +224,7 @@ Item {
             required property var modelData
             width:cards.cellWidth; height:cards.cellHeight
             readonly property bool selected:root.selectedKey===modelData.key
+            readonly property int total:(root.rowLookup[modelData.key] || {}).total || 0
             readonly property int amount:(root.rowLookup[modelData.key] || {})[root.scope] || 0
             Rectangle {
               anchors.fill:parent; anchors.rightMargin:7; anchors.bottomMargin:7; radius:5
@@ -213,10 +237,10 @@ Item {
                 font.bold:true; elide:Text.ElideRight; verticalAlignment:Text.AlignVCenter
               }
               Text { x:55; y:31; text:tile.amount; color:tile.amount ? "#EFDA9E" : "#778477"; font.pixelSize:27; font.bold:true }
-              Text { anchors.right:parent.right; anchors.rightMargin:8; y:49; text:"/ "+tile.modelData.total; color:"#89968A"; font.pixelSize:10 }
+              Text { anchors.right:parent.right; anchors.rightMargin:8; y:49; text:"/ "+tile.total; color:"#89968A"; font.pixelSize:10 }
               Rectangle {
                 x:55; y:65; width:Math.max(0,parent.width-63); height:2; color:"#111C18"
-                Rectangle { width:parent.width*Math.min(1,tile.amount/Math.max(1,tile.modelData.total)); height:2; color:tile.selected ? "#C8AC72" : "#72856B" }
+                Rectangle { width:parent.width*Math.min(1,tile.amount/Math.max(1,tile.total)); height:2; color:tile.selected ? "#C8AC72" : "#72856B" }
               }
               MouseArea { id:tileMouse; anchors.fill:parent; hoverEnabled:true; cursorShape:Qt.PointingHandCursor; onClicked:root.selectedKey=tile.modelData.key }
             }

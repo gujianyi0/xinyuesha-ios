@@ -68,6 +68,9 @@ Window {
  Item {id:page;anchors.fill:parent
   Counter.SocialHost {id:social}
   Repeater {model:3500;Item {width:1;height:1}}
+  GridView {id:overviewGrid;width:300;height:300;cellWidth:100;cellHeight:140;model:20
+   delegate:Item {width:93;height:130;property var generalCardList:[];property bool draggingCard:false;property var dataModel:({})}
+  }
  }
  Item {id:scene;width:1200;height:540;property var dataModel:({});property var popupItem:null
   property alias drawPile:deck
@@ -128,6 +131,7 @@ Window {
  }
  function overviewLobby(){testStack.currentItem=testStack.lobby;Mediator.commandGot(null,"PopPage",[]);}
  function overviewPage(){testStack.currentItem=testStack.utility;Mediator.commandGot(null,"PushPage",[]);}
+ function overviewGridScale(){return overviewGrid.itemAtIndex(0).scale;}
  function traversalMetrics(){return JSON.stringify({counter:counter.testTraversals,social:social.testTraversals});}
  function freshChoice(){stressScene.popupItem=stressScene.choice;}
  function leaveFreshScene(){Ltk.roomScene=null;stressScene.destroy();stressScene=null;Mediator.commandGot(null,"EnterLobby",[]);}
@@ -198,8 +202,10 @@ Window {
         invoke('overviewLobby');pump(.3);overview['lobby']=measure_overview()
         invoke('overviewPage');pump(.3);overview['utility_return']=measure_overview()
         result['overview']=overview
+        result['overview_grid_delegate_scale']=invoke('overviewGridScale')
         if not args.measure_only:
             assert all(not sum(v['traversals'].values()) for v in overview.values()),overview
+            assert result['overview_grid_delegate_scale']==1,'overview grid delegates must not be traversed/adapted'
     errors=[m for m in logs if 'ReferenceError' in m or 'TypeError' in m or 'is not a type' in m or 'Cannot assign' in m]
     result['qml_errors']=errors
     print(json.dumps(result,ensure_ascii=False,indent=2))

@@ -19,23 +19,62 @@ Item {
   property bool hideZero: false
   property string selectedKey: "slash"
   property string lastPayload: ""
+  property var rowLookup: ({})
+  property var catalogueRows: []
+  property var rows: []
+  property string catalogueSignature: ""
+  property string visibleSignature: ""
+  property int viewRevision: 0
   property string lastError: ""
   property string titleFont: "Microsoft YaHei"
   property var readSnapshot: function() {
     if (typeof ClientInstance === "undefined" || !ClientInstance)
       return {ready:false,rows:[],message:"等待客户端连接"};
-    return Lua.ev('(function() if not FkCardCounterV2 then FkCardCounterV2 = dofile("card-counter/counter.lua") end return FkCardCounterV2.current() end)()');
+    return Lua.ev('(function() if not FkCardCounterV2 then FkCardCounterV2 = dofile("card-counter/counter.lua") end return FkCardCounterV2.current('+JSON.stringify(root.selectedKey)+') end)()');
   }
   property var cardPicture: function(name) { return SkinBank.getCardPicture(name); }
   readonly property string scopeTitle: ({unseen:"未见牌",discard:"弃牌堆",hand:"我的手牌"})[scope]
-  readonly property var selectedRow: (snapshot.rows || []).find(function(r) { return r.key === selectedKey; }) || null
-  readonly property var rows: (snapshot.rows || []).filter(function(r) {
-    return (!category || r.kind===category) && (!hideZero || r[scope]>0)
-      && (!filterText || r.name.indexOf(filterText)>=0 || r.key.indexOf(filterText.toLowerCase())>=0);
-  })
+  readonly property var selectedRow: rowLookup[selectedKey] || null
+  // Keep GridView's catalogue model stable when only live counts change.
+  // Replacing a JS array model tears down visible delegates and interrupts flicks.
+  function updateRows(preservePosition) {
+    const next = (catalogueRows || []).filter(function(r) {
+      return (!category || r.kind===category) && (!hideZero || (rowLookup[r.key] || {})[scope]>0)
+        && (!filterText || r.name.indexOf(filterText)>=0 || r.key.indexOf(filterText.toLowerCase())>=0);
+    });
+    const signature=JSON.stringify(next);
+    if (signature!==visibleSignature) {
+      const columns=Math.max(1,Math.floor(cards.width/cards.cellWidth));
+      const oldY=Math.max(0,cards.contentY-cards.originY);
+      const first=Math.floor(oldY/cards.cellHeight)*columns;
+      const offset=oldY%cards.cellHeight;
+      const oldRows=rows;
+      const revision=++viewRevision;
+      visibleSignature=signature; rows=next;
+      if (preservePosition && oldY>0 && next.length && oldRows.length) {
+        // Derived cards and hide-zero membership can change the catalogue too.
+        // Keep the first surviving visible card, with its fractional row offset.
+        let anchor=-1;
+        for (let i=first;i<oldRows.length && anchor<0;i++)
+          anchor=next.findIndex(r => r.key===oldRows[i].key);
+        if (anchor<0) anchor=Math.min(first,next.length-1);
+        Qt.callLater(function() {
+          if (root.viewRevision!==revision || cards.moving) return;
+          cards.forceLayout();
+          const y=cards.originY+Math.floor(anchor/columns)*cards.cellHeight+offset;
+          cards.contentY=Math.max(cards.originY,Math.min(y,cards.originY+Math.max(0,cards.contentHeight-cards.height)));
+        });
+      }
+    }
+  }
+  onCategoryChanged: updateRows()
+  onHideZeroChanged: updateRows()
+  onScopeChanged: updateRows()
+  onFilterTextChanged: updateRows()
+  onSelectedKeyChanged: if (expanded) refresh()
   readonly property color gold: "#CCAD76"
   readonly property color pale: "#F0E2C6"
-  function open() { expanded=true; refresh(); forceActiveFocus(); }
+  function open() { expanded=true; forceActiveFocus(); }
   function close() { expanded=false; }
   function toggle() { if (expanded) close(); else open(); }
   function refresh() {
@@ -43,11 +82,23 @@ Item {
       const value=readSnapshot();
       if (!value) return;
       const payload=JSON.stringify(value);
-      if (payload!==lastPayload) { snapshot=value; lastPayload=payload; }
+      if (payload!==lastPayload) {
+        const lookup=({});
+        const catalogue=(value.rows || []).map(function(row) {
+          lookup[row.key]=row;
+          return {key:row.key,name:row.name,kind:row.kind};
+        });
+        const signature=JSON.stringify(catalogue);
+        rowLookup=lookup; snapshot=value; lastPayload=payload;
+        if (signature!==catalogueSignature) { catalogueSignature=signature; catalogueRows=catalogue; }
+        updateRows(true);
+      }
       if (value.error && lastError!==value.error) { lastError=value.error; console.warn("[CardCounter] "+value.error); }
     } catch(e) {
       if (String(e)!==lastError) console.warn("[CardCounter] "+e);
       lastError=String(e); snapshot={ready:false,rows:[],message:"记牌数据暂不可用"};
+      rowLookup=({}); catalogueRows=[]; rows=[];
+      catalogueSignature=""; visibleSignature=""; lastPayload="";
     }
   }
   function suitCount(suit) {
@@ -68,7 +119,9 @@ Item {
   }
   onExpandedChanged: if (expanded) refresh()
   Keys.onEscapePressed: close()
-  Timer { interval:500; running:root.expanded; repeat:true; onTriggered:root.refresh() }
+  // Do not marshal a large Lua snapshot onto the UI thread during a gesture.
+  // Counts catch up immediately after dragging/flicking stops.
+  Timer { interval:500; running:root.expanded && !cards.moving; repeat:true; onTriggered:root.refresh() }
   Rectangle { anchors.fill:parent; color:"#9900090D" }
   MouseArea { anchors.fill:parent; onClicked:root.close() }
 
@@ -144,8 +197,17 @@ Item {
           id:search
           objectName:"counterSearch"
           anchors.right:parent.right; width:Math.min(176,parent.width-categories.width-12); height:28
-          placeholderText:"搜索牌名…"; color:root.pale; placeholderTextColor:"#7D8C83"; font.pixelSize:12
-          leftPadding:10; rightPadding:8; selectionColor:"#5C6245"; onTextChanged:root.filterText=text
+          // This compact field uses its own placeholder instead of Material's
+          // floating label, which sits above a 28 px field when the IME opens.
+          placeholderText:""; color:root.pale; font.pixelSize:12
+          leftPadding:10; rightPadding:8; topPadding:0; bottomPadding:0
+          verticalAlignment:TextInput.AlignVCenter
+          selectionColor:"#5C6245"; onTextChanged:root.filterText=text
+          Text {
+            anchors.fill:parent; anchors.leftMargin:10; anchors.rightMargin:8
+            verticalAlignment:Text.AlignVCenter; text:"搜索牌名…"; color:"#7D8C83"
+            font:search.font; visible:!search.text && !search.activeFocus; elide:Text.ElideRight
+          }
           background:Rectangle { radius:4; color:"#10191B"; border.color:search.activeFocus ? "#B89C65" : "#3F4D46" }
         }
         GridView {
@@ -154,28 +216,31 @@ Item {
           y:39; width:parent.width; height:parent.height-66
           clip:true; cellWidth:width/5; cellHeight:82; model:root.rows
           boundsBehavior:Flickable.StopAtBounds
+          reuseItems:true; cacheBuffer:cellHeight*2
+          onMovingChanged: if (!moving && root.expanded) Qt.callLater(root.refresh)
           ScrollBar.vertical:ScrollBar { policy:ScrollBar.AsNeeded }
           delegate:Item {
             id:tile
             required property var modelData
             width:cards.cellWidth; height:cards.cellHeight
             readonly property bool selected:root.selectedKey===modelData.key
-            readonly property int amount:modelData[root.scope] || 0
+            readonly property int total:(root.rowLookup[modelData.key] || {}).total || 0
+            readonly property int amount:(root.rowLookup[modelData.key] || {})[root.scope] || 0
             Rectangle {
               anchors.fill:parent; anchors.rightMargin:7; anchors.bottomMargin:7; radius:5
               color:tile.selected ? "#394039" : (tileMouse.containsMouse ? "#2F3832" : "#252E2B")
               border.color:tile.selected ? "#D1AF70" : "#485044"; border.width:tile.selected ? 2 : 1
-              Image { x:5; y:5; width:44; height:63; fillMode:Image.PreserveAspectCrop; smooth:true; source:root.cardPicture(tile.modelData.key); opacity:tile.amount ? 0.95 : 0.30 }
+              Image { x:5; y:5; width:44; height:63; fillMode:Image.PreserveAspectCrop; smooth:true; asynchronous:true; sourceSize:Qt.size(132,189); source:root.cardPicture(tile.modelData.key); opacity:tile.amount ? 0.95 : 0.30 }
               Text {
                 x:55; y:8; width:parent.width-59; height:24; text:tile.modelData.name
                 color:tile.amount ? "#E6DFC8" : "#8F978B"; font.pixelSize:12
                 font.bold:true; elide:Text.ElideRight; verticalAlignment:Text.AlignVCenter
               }
               Text { x:55; y:31; text:tile.amount; color:tile.amount ? "#EFDA9E" : "#778477"; font.pixelSize:27; font.bold:true }
-              Text { anchors.right:parent.right; anchors.rightMargin:8; y:49; text:"/ "+tile.modelData.total; color:"#89968A"; font.pixelSize:10 }
+              Text { anchors.right:parent.right; anchors.rightMargin:8; y:49; text:"/ "+tile.total; color:"#89968A"; font.pixelSize:10 }
               Rectangle {
                 x:55; y:65; width:Math.max(0,parent.width-63); height:2; color:"#111C18"
-                Rectangle { width:parent.width*Math.min(1,tile.amount/Math.max(1,tile.modelData.total)); height:2; color:tile.selected ? "#C8AC72" : "#72856B" }
+                Rectangle { width:parent.width*Math.min(1,tile.amount/Math.max(1,tile.total)); height:2; color:tile.selected ? "#C8AC72" : "#72856B" }
               }
               MouseArea { id:tileMouse; anchors.fill:parent; hoverEnabled:true; cursorShape:Qt.PointingHandCursor; onClicked:root.selectedKey=tile.modelData.key }
             }
@@ -202,7 +267,7 @@ Item {
           x:2; spacing:14
           Rectangle {
             width:68; height:94; radius:4; color:"#BCAE8E"; border.color:"#DDC58D"
-            Image { anchors.fill:parent; anchors.margins:2; fillMode:Image.PreserveAspectFit; source:root.selectedRow ? root.cardPicture(root.selectedRow.key) : "" }
+            Image { anchors.fill:parent; anchors.margins:2; fillMode:Image.PreserveAspectFit; asynchronous:true; sourceSize:Qt.size(204,282); source:root.selectedRow ? root.cardPicture(root.selectedRow.key) : "" }
           }
           Column {
             spacing:6; y:3

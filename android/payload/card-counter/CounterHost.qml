@@ -94,6 +94,12 @@ Item {
       serverPage = serverPage || ("selectedServer" in item && "serverListUrl" in item);
       lobbyPage = lobbyPage || ("roomModel" in item && "serverPlayerNum" in item);
       chatBox = chatBox || type.indexOf("ChatBox_QMLTYPE") === 0;
+      // Do not traverse the overview's dense delegate trees during navigation.
+      if (!serverPage && !lobbyPage && "cellWidth" in item && "cellHeight" in item && "delegate" in item && "model" in item) return;
+      if (serverPage && adaptedControls.indexOf(item) < 0 && "model" in item && "countChanged" in item && "contentItem" in item) {
+        item.countChanged.connect(host.requestCompatibility);
+        adaptedControls.push(item);
+      }
       const children = item.children || [];
       if (adaptedControls.indexOf(item) < 0 && "generalCardList" in item && "draggingCard" in item && "dataModel" in item) {
         // Fit the complete selection box, including both borders and buttons.
