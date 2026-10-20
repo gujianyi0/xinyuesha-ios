@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 import Fk
@@ -17,6 +18,35 @@ Item {
   property var clientContext: typeof ClientInstance !== "undefined" ? ClientInstance : null
   property bool bootstrapReady: false
   property bool settingsReady: false
+  // Follow the stock StackView without walking its full object tree each second.
+  property var navigationRoot: null
+  readonly property var navigationStack: navigationRoot
+    ? navigationRoot.children.find(c => c && "currentItem" in c && "depth" in c && typeof c.get === "function") || null : null
+  readonly property var navigationPage: navigationStack ? navigationStack.currentItem : null
+  onNavigationRootChanged: requestCompatibility()
+  onNavigationPageChanged: requestCompatibility()
+  Connections {
+    target: host.navigationStack
+    ignoreUnknownSignals: true
+    function onBusyChanged() { if (!host.navigationStack.busy) host.requestCompatibility(); }
+  }
+  Connections {
+    target: host.Overlay.overlay
+    function onChildrenChanged() { overlayAdapt.restart(); }
+  }
+  function requestCompatibility() { if (settingsReady) pageAdapt.restart(); }
+  Timer {
+    id: pageAdapt; interval: 32
+    onTriggered: {
+      if (host.activeRoomScene) return;
+      const window = host.Window.window;
+      host.refreshCompatibility(host.navigationPage || host.navigationRoot || (window ? window.contentItem : null));
+    }
+  }
+  Timer {
+    id: overlayAdapt; interval: 32
+    onTriggered: if (host.settingsReady && host.Overlay.overlay) host.refreshCompatibility(host.Overlay.overlay)
+  }
   property var photoLocations: []
   property bool hideTitles: false
   property bool preferencesLoaded: false
@@ -28,6 +58,7 @@ Item {
       const data = JSON.parse(Backend.readFileFromAssets("client-ui.json") || "{}");
       hideTitles = data.hideTitles === true;
       preferencesLoaded = true;
+      requestCompatibility();
     } catch (_) { console.warn("[ClientUI] preferences unreadable; preserving file"); }
   }
   function setHideTitles(value) {
@@ -63,6 +94,14 @@ Item {
       serverPage = serverPage || ("selectedServer" in item && "serverListUrl" in item);
       lobbyPage = lobbyPage || ("roomModel" in item && "serverPlayerNum" in item);
       chatBox = chatBox || type.indexOf("ChatBox_QMLTYPE") === 0;
+      // Overview card/general grids contain no compatibility controls. Do not
+      // inspect thousands of delegates when opening these utility pages.
+      if (!serverPage && !lobbyPage && "cellWidth" in item && "cellHeight" in item && "delegate" in item && "model" in item) return;
+      if (serverPage && adaptedControls.indexOf(item) < 0 && "model" in item && "countChanged" in item && "contentItem" in item) {
+        // Server probes populate delegates after the page is first displayed.
+        item.countChanged.connect(host.requestCompatibility);
+        adaptedControls.push(item);
+      }
       const children = item.children ? Array.from(item.children) : [];
       if (adaptedControls.indexOf(item) < 0 && "generalCardList" in item && "draggingCard" in item && "dataModel" in item) {
         // Fit the complete selection box, including both borders and buttons.
@@ -155,7 +194,7 @@ Item {
     }
     scan(rootItem || window.contentItem,0,false,false,false);
   }
-  Timer { interval: 1000; repeat: true; running: host.settingsReady && !host.activeRoomScene; onTriggered: host.refreshCompatibility(); }
+  // No steady-state whole-window timer: large overview pages must remain idle.
   Connections {
     target: host.currentScene
     ignoreUnknownSignals: true

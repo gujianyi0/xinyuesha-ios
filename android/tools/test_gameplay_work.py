@@ -15,6 +15,7 @@ parser.add_argument('--measure-only',action='store_true')
 parser.add_argument('--platform',choices=['Android','iOS','Windows'],default='Android')
 parser.add_argument('--cycles',type=int,default=0,help='Repeat match/observer/return lifecycles and check retained objects')
 parser.add_argument('--result',type=Path)
+parser.add_argument('--overview',action='store_true',help='Measure steady lobby/utility page traversal, including actual timers')
 args=parser.parse_args();args.work_dir.mkdir(parents=True,exist_ok=True)
 logs=[];qInstallMessageHandler(lambda kind,ctx,msg:logs.append(msg))
 app=QGuiApplication([])
@@ -47,6 +48,14 @@ QtObject {signal commandGot(var sender,string command,var data)}''')
     put('LunarLtk/qmldir','module LunarLtk\nsingleton Ltk 1.0 Ltk.qml\n')
     put('LunarLtk/Ltk.qml','pragma Singleton\nimport QtQuick\nQtObject {property var roomScene:null;}')
     shutil.copytree(args.payload/'card-counter',base/'card-counter')
+    if args.overview:
+        for file,function in [('CounterHost.qml','refreshCompatibility(rootItem)'),('SocialHost.qml','refreshRoomBridge()')]:
+            copied=base/'card-counter'/file
+            source=copied.read_text(encoding='utf-8')
+            source=source.replace('  id: host','  id: host\n  property int testTraversals: 0',1)
+            marker='    const window = host.Window.window;' if file=='CounterHost.qml' else '    let anchor = null;'
+            source=source.replace(marker,'    host.testTraversals++;\n'+marker,1)
+            copied.write_text(source,encoding='utf-8')
     put('Main.qml','''import QtQuick
 import Fk
 import LunarLtk
@@ -98,6 +107,28 @@ Window {
  function utility(){Mediator.commandGot(null,"PushPage",[]);return social.visible;}
  function back(){Mediator.commandGot(null,"PopPage",[]);return social.visible;}
  function enterFreshScene(){Config.observing=false;stressScene=stressSceneFactory.createObject(win.contentItem);Ltk.roomScene=stressScene;Mediator.commandGot(null,"StartGame",[]);}
+ property var testStack:null
+ Component {id:testStackFactory
+  Item {
+   property var currentItem:utilityPage;property int depth:2;property bool busy:false
+   property alias lobby: lobbyPage;property alias utility: utilityPage
+   function get(index){return currentItem;}function push(){}
+   Item {id:lobbyPage;property int lobbyPlayerNum:1;property int serverPlayerNum:1;property alias roomModel:testRooms
+    ListModel {id:testRooms}
+   }
+   Item {id:utilityPage;objectName:"largeOverview"}
+  }
+ }
+ function setupOverview(){
+  Ltk.roomScene=null;counter.settingsReady=true;
+  testStack=testStackFactory.createObject(page);
+  if ("navigationRoot" in counter) counter.navigationRoot=page;
+  Mediator.commandGot(null,"EnterLobby",[]);
+  Mediator.commandGot(null,"PushPage",[]);
+ }
+ function overviewLobby(){testStack.currentItem=testStack.lobby;Mediator.commandGot(null,"PopPage",[]);}
+ function overviewPage(){testStack.currentItem=testStack.utility;Mediator.commandGot(null,"PushPage",[]);}
+ function traversalMetrics(){return JSON.stringify({counter:counter.testTraversals,social:social.testTraversals});}
  function freshChoice(){stressScene.popupItem=stressScene.choice;}
  function leaveFreshScene(){Ltk.roomScene=null;stressScene.destroy();stressScene=null;Mediator.commandGot(null,"EnterLobby",[]);}
 }''')
@@ -153,6 +184,22 @@ Window {
         if args.result:args.result.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
         assert result['lifecycle_stress']['final_objects']<=initial_objects+5,result['lifecycle_stress']
         assert not sum(changes),result['lifecycle_stress']
+    if args.overview:
+        invoke('setupOverview');pump(.3)
+        def measure_overview():
+            initial=json.loads(invoke('traversalMetrics'));gaps=[];tick=[time.perf_counter()]
+            pulse=QTimer();pulse.setInterval(16)
+            def sample():
+                now=time.perf_counter();gaps.append((now-tick[0])*1000);tick[0]=now
+            pulse.timeout.connect(sample);pulse.start();pump(2.25);pulse.stop()
+            final=json.loads(invoke('traversalMetrics'))
+            return {'traversals':{k:final[k]-initial[k] for k in initial},'max_event_loop_gap_ms':round(max(gaps,default=0),1)}
+        overview={'utility':measure_overview()}
+        invoke('overviewLobby');pump(.3);overview['lobby']=measure_overview()
+        invoke('overviewPage');pump(.3);overview['utility_return']=measure_overview()
+        result['overview']=overview
+        if not args.measure_only:
+            assert all(not sum(v['traversals'].values()) for v in overview.values()),overview
     errors=[m for m in logs if 'ReferenceError' in m or 'TypeError' in m or 'is not a type' in m or 'Cannot assign' in m]
     result['qml_errors']=errors
     print(json.dumps(result,ensure_ascii=False,indent=2))

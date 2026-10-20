@@ -35,7 +35,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update -qq && sudo apt-get install -y libegl1 libxkbcommon0 fonts-noto-cjk
       - run: python3 -m pip install 'PySide6==${{ matrix.qt }}'
-      - run: python3 android/tools/test_gameplay_work.py --work-dir "$RUNNER_TEMP/client-gameplay" --payload '${{ matrix.payload }}' --platform '${{ matrix.platform }}' --cycles 60 --result "$RUNNER_TEMP/client-gameplay/result.json"
+      - run: python3 android/tools/test_gameplay_work.py --work-dir "$RUNNER_TEMP/client-gameplay" --payload '${{ matrix.payload }}' --platform '${{ matrix.platform }}' --cycles 60 --overview --result "$RUNNER_TEMP/client-gameplay/result.json"
       - if: matrix.platform == 'iOS'
         run: |
           sudo apt-get install -y liblua5.4-0

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 import QtQuick.Dialogs
@@ -18,6 +19,35 @@ Item {
   property var clientContext: typeof ClientInstance !== "undefined" ? ClientInstance : null
   property bool bootstrapReady: false
   property bool settingsReady: false
+  // Follow the stock StackView without walking its full object tree each second.
+  property var navigationRoot: null
+  readonly property var navigationStack: navigationRoot
+    ? navigationRoot.children.find(c => c && "currentItem" in c && "depth" in c && typeof c.get === "function") || null : null
+  readonly property var navigationPage: navigationStack ? navigationStack.currentItem : null
+  onNavigationRootChanged: requestCompatibility()
+  onNavigationPageChanged: requestCompatibility()
+  Connections {
+    target: host.navigationStack
+    ignoreUnknownSignals: true
+    function onBusyChanged() { if (!host.navigationStack.busy) host.requestCompatibility(); }
+  }
+  Connections {
+    target: host.Overlay.overlay
+    function onChildrenChanged() { overlayAdapt.restart(); }
+  }
+  function requestCompatibility() { if (settingsReady) pageAdapt.restart(); }
+  Timer {
+    id: pageAdapt; interval: 32
+    onTriggered: {
+      if (host.activeRoomScene) return;
+      const window = host.Window.window;
+      host.refreshCompatibility(host.navigationPage || host.navigationRoot || (window ? window.contentItem : null));
+    }
+  }
+  Timer {
+    id: overlayAdapt; interval: 32
+    onTriggered: if (host.settingsReady && host.Overlay.overlay) host.refreshCompatibility(host.Overlay.overlay)
+  }
   property var photoLocations: []
   property bool hideTitles: false
   property bool preferencesLoaded: false
@@ -29,6 +59,7 @@ Item {
       const data = JSON.parse(Backend.readFileFromAssets("client-ui.json") || "{}");
       hideTitles = data.hideTitles === true;
       preferencesLoaded = true;
+      requestCompatibility();
     } catch (_) { console.warn("[ClientUI] preferences unreadable; preserving file"); }
   }
   function setHideTitles(value) {
@@ -136,11 +167,13 @@ Item {
       }
       for (const child of children) scan(child,depth+1,serverPage,lobbyPage,chatBox);
       // Native FileDialog objects are in data, not visual children.
-      for (const child of item.data || []) scan(child,depth+1,serverPage,lobbyPage,chatBox);
+      const data = item.data;
+      if (data && typeof data === "object" && typeof data.length === "number")
+        for (let i=0; i<data.length; i++) scan(data[i],depth+1,serverPage,lobbyPage,chatBox);
     }
     scan(rootItem || window.contentItem,0,false,false,false);
   }
-  Timer { interval: 1000; repeat: true; running: host.settingsReady && !host.activeRoomScene; onTriggered: host.refreshCompatibility(); }
+  // No steady-state whole-window timer: large overview pages must remain idle.
   Connections {
     target: host.currentScene
     ignoreUnknownSignals: true

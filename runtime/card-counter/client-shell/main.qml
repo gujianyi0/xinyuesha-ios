@@ -19,7 +19,7 @@ Window {
   visibility: skinDebuggerMode ? Window.Hidden : (androidMode ? Window.FullScreen : Window.AutomaticVisibility)
   title: "新月杀测试版" + " v" + Cpp.version
 
-  Counter.CounterHost { id: counterHost; photoLocations: StandardPaths.standardLocations(StandardPaths.PicturesLocation) }
+  Counter.CounterHost { id: counterHost; navigationRoot: gamePage.item; photoLocations: StandardPaths.standardLocations(StandardPaths.PicturesLocation) }
 
   onXChanged: if (!skinDebuggerMode && !androidMode) Config.winX = x;
   onYChanged: if (!skinDebuggerMode && !androidMode) Config.winY = y;

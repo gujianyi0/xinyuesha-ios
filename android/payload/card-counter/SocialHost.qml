@@ -35,8 +35,21 @@ Control {
   Connections {
     target: host.navigationStack
     ignoreUnknownSignals: true
-    function onCurrentItemChanged() { host.scheduleLauncherUpdate(); Qt.callLater(host.finishJoin); }
-    function onBusyChanged() { if (host.navigationStack && !host.navigationStack.busy) Qt.callLater(host.finishJoin); }
+    function onCurrentItemChanged() { host.scheduleLauncherUpdate(); Qt.callLater(host.refreshRoomBridge); Qt.callLater(host.finishJoin); }
+    function onBusyChanged() { if (host.navigationStack && !host.navigationStack.busy) { Qt.callLater(host.refreshRoomBridge); Qt.callLater(host.finishJoin); } }
+  }
+  readonly property var bridgePage: navigationStack ? navigationStack.currentItem : null
+  readonly property var bridgeRoomModel: bridgePage && "roomModel" in bridgePage ? bridgePage.roomModel : null
+  Connections {
+    target: host.bridgeRoomModel
+    ignoreUnknownSignals: true
+    function onCountChanged() { Qt.callLater(host.refreshRoomBridge); }
+  }
+  property var roomGrid: null
+  Connections {
+    target: host.roomGrid ? host.roomGrid.contentItem : null
+    ignoreUnknownSignals: true
+    function onChildrenChanged() { Qt.callLater(host.refreshRoomBridge); }
   }
   property var readyReminders: []
   property bool gameOnline: false
@@ -613,6 +626,7 @@ Control {
     let content = null;
     function scan(node, depth, delegate) {
       if (!node || node === host || depth > 18) return;
+      if (host.bridgeRoomModel && "model" in node && node.model === host.bridgeRoomModel && "contentItem" in node) host.roomGrid = node;
       if (node.objectName === "waitingRoomInviteButton") inviteNode = node;
       if (node.objectName === "roomGameLoader") content = node;
       if (node.objectName === "waitingRoomInviteButton" && node.visible) anchor = node;
@@ -633,7 +647,8 @@ Control {
       const children = node.children || [];
       for (let i = 0; i < children.length; i++) scan(children[i], depth + 1, choice);
     }
-    scan(host.parent, 0, null);
+    hookedButtons = hookedButtons.filter(button => button && button.parent);
+    scan(host.bridgePage || host.parent, 0, null);
     // Prefer the room's Chat button and sit immediately to its right, like the
     // other bottom-row actions. Observers cannot invite, so the invite button
     // is hidden; its sibling Chat button is still the stable anchor.
@@ -798,7 +813,9 @@ Control {
           host.notice = "邀请请求超时，请稍后重试";
         }
       }
-      host.refreshRoomBridge();
+      const previousStack = host.navigationStack;
+      host.findNavigationStack();
+      if (host.navigationStack !== previousStack) Qt.callLater(host.refreshRoomBridge);
     }
   }
   Timer {
