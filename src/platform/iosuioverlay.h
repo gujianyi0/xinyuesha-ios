@@ -44,6 +44,18 @@ inline QString adapt(const QString &path, QString text) {
       "    if (!item) { console.warn('[iOS UI] Popup creation failed: ' + component.errorString()); close(); return; }\n"
       "    item.width = Qt.binding(function() { return container.width; });\n"
       "    item.height = Qt.binding(function() { return container.height; });");
+  } else if (path == "LunarLtk/LtkLuaUtil.qml") {
+    // list<var> exposes map values as QVariantMap copies in Qt 6.8. Mutating
+    // the returned entry neither writes back nor notifies an existing delegate.
+    // Replace the list element so count, popup data and description all update.
+    const QRegularExpression markUpdate(
+      "    if \\(elem\\) \\{\\s*elem\\.value = textValue;\\s*elem\\.origValue = value;"
+      "\\s*elem\\.qml = qmlComponentSpec;\\s*elem\\.desc = desc;\\s*\\} else \\{");
+    text.replace(markUpdate, R"QML(    if (elem) {
+      marks.splice(elemIdx, 1, Object.assign({}, elem, {
+        value: textValue, origValue: value, qml: qmlComponentSpec, desc: desc
+      }));
+    } else {)QML");
   } else if (path == "LunarLtk/Models/PhotoModel.qml") {
     // QVariantList iteration can expose temporary map wrappers in Qt 6.8.
     // Mutating each wrapper does not update the original list; publish copies.

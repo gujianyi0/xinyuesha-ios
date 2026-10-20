@@ -28,6 +28,9 @@ int main(int argc, char **argv) {
   const auto model = fkIosRuntimePayload::read(output+"/LunarLtk/Models/PhotoModel.qml");
   require(model.contains("limitSkills = next;"), "skill updates notify the model");
   require(model.contains("targetTip = Array.from(dataList || []"), "target tips publish translated map copies");
+  const auto util = fkIosRuntimePayload::read(output+"/LunarLtk/LtkLuaUtil.qml");
+  require(util.contains("marks.splice(elemIdx, 1, Object.assign({}, elem"), "repeated mark updates replace the typed list element");
+  require(!util.contains("elem.value = textValue;"), "do not mutate a temporary mark wrapper");
   const auto description = fkIosRuntimePayload::read(output+"/LunarLtk/Pages/InfoPopups/GeneralDetail.qml");
   require(description.contains("Layout.preferredHeight: skillDesc.implicitHeight"), "nonzero skill description layout");
   const auto server = fkIosRuntimePayload::read(output+"/Fk/Pages/Common/JoinServer.qml");
