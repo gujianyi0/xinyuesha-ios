@@ -114,12 +114,26 @@ Window {
  Component {id:testStackFactory
   Item {
    property var currentItem:utilityPage;property int depth:2;property bool busy:false
-   property alias lobby: lobbyPage;property alias utility: utilityPage
+   property alias lobby: lobbyPage;property alias utility: utilityPage;property alias room: roomPage
    function get(index){return currentItem;}function push(){}
    Item {id:lobbyPage;property int lobbyPlayerNum:1;property int serverPlayerNum:1;property alias roomModel:testRooms
     ListModel {id:testRooms}
    }
    Item {id:utilityPage;objectName:"largeOverview"}
+   Item {id:roomPage;width:1200;height:540
+    property var gameComponent:null;property alias gameContent:waitingLoader.item;property alias loader:waitingLoader
+    Loader {id:waitingLoader;width:1000;height:480;x:90;y:30;scale:0.9;active:false;sourceComponent:waitingFactory}
+    Component {id:waitingFactory
+     Item {property bool isOwner:true;property bool isAllReady:false
+      property alias invite:inviteButton
+      Row {x:580;y:390;spacing:8
+       Rectangle {id:inviteButton;objectName:"waitingRoomInviteButton";width:0;height:35;property string text:"Invite Players";signal clicked()}
+       Rectangle {width:70;height:35;property string text:"Chat";signal clicked()}
+      }
+      Timer {interval:60;running:true;onTriggered:inviteButton.width=100}
+     }
+    }
+   }
   }
  }
  function setupOverview(){
@@ -133,6 +147,11 @@ Window {
  function overviewPage(){testStack.currentItem=testStack.utility;Mediator.commandGot(null,"PushPage",[]);}
  function overviewGridScale(){return overviewGrid.itemAtIndex(0).scale;}
  function traversalMetrics(){return JSON.stringify({counter:counter.testTraversals,social:social.testTraversals});}
+ function waitingRoom(){Config.observing=false;testStack.currentItem=testStack.room;testStack.room.loader.active=true;Mediator.commandGot(null,"EnterRoom",[0,0,{roomId:123}]);}
+ function resultPage(){Mediator.commandGot(null,"StartGame",[]);Mediator.commandGot(null,"GameOver",[]);}
+ function resetWaiting(){testStack.room.loader.active=false;Mediator.commandGot(null,"RestartGame",[]);testStack.room.loader.active=true;return social.roomLauncherReady;}
+ function moveWaiting(){testStack.room.loader.x=35;testStack.room.loader.y=9;testStack.room.loader.scale=0.72;}
+ function positionState(){const a=social.inviteAnchor;const pos=a?a.mapToItem(social,0,0):({x:0,y:0});const end=a?a.mapToItem(social,0,a.height):({x:0,y:0});const h=Math.abs(end.y-pos.y);return JSON.stringify({ready:social.roomLauncherReady,match:social.matchViewActive,visible:social.visible,x:social.roomLauncher.x,y:social.roomLauncher.y,expectedX:Math.max(8,pos.x-h*1.72-6),expectedY:pos.y});}
  function freshChoice(){stressScene.popupItem=stressScene.choice;}
  function leaveFreshScene(){Ltk.roomScene=null;stressScene.destroy();stressScene=null;Mediator.commandGot(null,"EnterLobby",[]);}
 }''')
@@ -206,6 +225,16 @@ Window {
         if not args.measure_only:
             assert all(not sum(v['traversals'].values()) for v in overview.values()),overview
             assert result['overview_grid_delegate_scale']==1,'overview grid delegates must not be traversed/adapted'
+        invoke('waitingRoom');pump(.2);initial_room=json.loads(invoke('positionState'))
+        invoke('resultPage');pump(.02);result_page=json.loads(invoke('positionState'))
+        early_ready=invoke('resetWaiting');pump(.2);reset_room=json.loads(invoke('positionState'))
+        invoke('moveWaiting');pump(.1);moved_room=json.loads(invoke('positionState'))
+        result['waiting_room_positions']={'initial':initial_room,'results':result_page,'ready_before_layout':early_ready,'reset':reset_room,'moved':moved_room}
+        if not args.measure_only:
+            assert result_page['match'] and not result_page['visible'],'GameOver does not expose the friends launcher over results'
+            assert not early_ready,'new waiting-room buttons must finish layout before the launcher is shown'
+            for state in [initial_room,reset_room,moved_room]:
+                assert state['ready'] and state['visible'] and abs(state['x']-state['expectedX'])<.01 and abs(state['y']-state['expectedY'])<.01,state
     errors=[m for m in logs if 'ReferenceError' in m or 'TypeError' in m or 'is not a type' in m or 'Cannot assign' in m]
     result['qml_errors']=errors
     print(json.dumps(result,ensure_ascii=False,indent=2))

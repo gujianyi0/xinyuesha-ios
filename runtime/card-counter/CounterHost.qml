@@ -86,6 +86,23 @@ Item {
       if (view.atYEnd && view.count>0) view.currentIndex=view.count-1;
     });
   }
+  function attachRoleVoices(chat) {
+    if (adaptedControls.indexOf(chat) >= 0 || chat.isLobby) return;
+    let sound = null, input = null;
+    const pending = [chat];
+    while (pending.length) {
+      const node = pending.pop();
+      if (!node) continue;
+      if ("soundIdx" in node && "delegate" in node && "model" in node) sound = node;
+      if (node.children && Array.from(node.children).some(c => "maximumLength" in c && "accepted" in c)) input = node;
+      if (!("model" in node) && node.children) pending.push(...Array.from(node.children));
+    }
+    if (!sound || !input) return;
+    const component = Qt.createComponent("RoleVoiceControl.qml");
+    if (component.status !== Component.Ready) { console.warn(component.errorString()); return; }
+    const control = component.createObject(input, {chatBox:chat, soundList:sound});
+    if (control) adaptedControls.push(chat);
+  }
   function refreshCompatibility(rootItem) {
     // Periodic whole-tree scans must never run during a match or spectating.
     if (activeRoomScene && !rootItem) return;
@@ -101,6 +118,8 @@ Item {
       if (!item || typeof item !== "object" || seen.has(item) || depth > 24 || ++visited > 12000) return;
       seen.add(item);
       const type = String(item);
+      if (type.indexOf("AvatarChatBox_QMLTYPE") === 0 && typeof item.loadSkills === "function")
+        host.attachRoleVoices(item);
       if ((Cpp.os==="Android" || Cpp.os==="iOS") && type.indexOf("LogEdit_QMLTYPE")===0)
         host.adaptTouchLog(item);
       serverPage = serverPage || ("selectedServer" in item && "serverListUrl" in item);

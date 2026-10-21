@@ -3,6 +3,7 @@
   "card-counter/CardCounter.qml": "8c80f41085de19e06b29413a9a208db822f435bb3101bdd0b157f56b420f1641",
   "card-counter/CounterHost.qml": "91c60de5dd3c46817f9bfe26d69598577d9e7e22ba72b897415161fe272f0bf8",
   "card-counter/CounterViewport.qml": "86e30b8f7e308375daaca23b4ee6bae6b5debd501a5e1ae84ecda912580c2e6d",
+  "card-counter/RoleVoiceControl.qml": "ef2c5e96cc85ac290a2d79d1c1ead1575b73e7136c3e2b77a36c281da8736f75",
   "card-counter/SocialAuth.js": "47a55593ea42a333fc80529213ad4194771d639be051524b119a3d332004c861",
   "card-counter/SocialClient.qml": "5980d5016d5676f2cf4ef6f57f0df5db3984cf92cd44295e02ab9061a6485dbe",
   "card-counter/SocialHost.qml": "a8a6b3be73bf2969a63978b5a53d80c2bfa104ed93e37cd50276621f6babbfe5",

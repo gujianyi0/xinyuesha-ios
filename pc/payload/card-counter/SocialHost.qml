@@ -94,6 +94,26 @@ Control {
   property double invitationClock: Date.now()
   property var inviteAnchor: null
   property bool launcherRightOfAnchor: false
+  property bool roomLauncherReady: false
+  readonly property var roomContent: bridgePage && "gameContent" in bridgePage ? bridgePage.gameContent : null
+  onRoomContentChanged: {
+    roomLauncherReady = false; inviteAnchor = null;
+    gameContentItem = roomContent ? roomContent.parent : null;
+    if (roomContent && "isOwner" in roomContent && "isAllReady" in roomContent)
+      matchViewActive = false;
+    Qt.callLater(host.refreshRoomBridge);
+  }
+  Connections {
+    target: host.inviteAnchor
+    ignoreUnknownSignals: true
+    function onXChanged() { host.scheduleLauncherUpdate(); }
+    function onYChanged() { host.scheduleLauncherUpdate(); }
+    function onWidthChanged() { host.scheduleLauncherUpdate(); }
+    function onHeightChanged() { host.scheduleLauncherUpdate(); }
+    function onVisibleChanged() { host.scheduleLauncherUpdate(); }
+  }
+  onWidthChanged: scheduleLauncherUpdate()
+  onHeightChanged: scheduleLauncherUpdate()
   property var roomLauncher: ({x: 0, y: 0, width: 60, height: 35})
   // The room page animates gameLoader's x/y/scale for the drawer transition.
   // Follow those changes so the launcher moves with the other room buttons.
@@ -202,7 +222,7 @@ Control {
       const child = children[i];
       if (child !== host && "currentItem" in child && "depth" in child &&
           typeof child.get === "function" && typeof child.push === "function") {
-        navigationStack = child; return;
+        if (navigationStack !== child) navigationStack = child; return;
       }
     }
   }
@@ -602,20 +622,24 @@ Control {
   function updateLauncherPosition() {
     launcherUpdatePending = false;
     const anchor = inviteAnchor;
-    if (host.gameState === "lobby") return;
-    if (anchor && host.gameState !== "offline") {
+    if (host.gameState === "lobby") { roomLauncherReady = false; return; }
+    if (anchor && anchor.visible && anchor.width > 0 && anchor.height > 0 && host.gameState !== "offline") {
       const point = anchor.mapToItem(host, 0, 0);
       const end = anchor.mapToItem(host, 0, anchor.height);
       const h = Math.abs(end.y - point.y);
       const w = h * 1.72;
+      if (h < 8) { roomLauncherReady = false; return; }
       if (launcherRightOfAnchor) {
         const right = anchor.mapToItem(host, anchor.width, 0);
         roomLauncher = {x: Math.min(host.width - w - 8, right.x + 6), y: point.y, width: w, height: h};
       } else {
         roomLauncher = {x: Math.max(8, point.x - w - 6), y: point.y, width: w, height: h};
       }
-    } else if (host.gameState === "waiting" || host.gameState === "observing") {
-      roomLauncher = {x: Math.max(310, host.width - 644), y: Math.max(8, host.height - 70), width: 60, height: 35};
+      roomLauncherReady = true;
+    } else {
+      // A newly created waiting room has not laid out its buttons yet.
+      // Do not expose an old/fallback position over the original interface.
+      roomLauncherReady = false;
     }
   }
   function refreshRoomBridge() {
@@ -623,15 +647,19 @@ Control {
     if (!host.socialUiAvailable) return;
     let anchor = null;
     let inviteNode = null;
-    let content = null;
+    let content = host.roomContent ? host.roomContent.parent : null;
     function scan(node, depth, delegate) {
       if (!node || node === host || depth > 18) return;
       if (host.bridgeRoomModel && "model" in node && node.model === host.bridgeRoomModel && "contentItem" in node) host.roomGrid = node;
       if (node.objectName === "waitingRoomInviteButton") inviteNode = node;
       if (node.objectName === "roomGameLoader") content = node;
       if (node.objectName === "waitingRoomInviteButton" && node.visible) anchor = node;
-      if ("roomInviteButton" in node && node.roomInviteButton && node.roomInviteButton.visible)
-        anchor = node.roomInviteButton;
+      if ("roomInviteButton" in node && node.roomInviteButton) {
+        inviteNode = node.roomInviteButton;
+        if (node.roomInviteButton.visible) anchor = node.roomInviteButton;
+      }
+      if (!inviteNode && host.roomContent && "clicked" in node && "text" in node &&
+          (node.text === Lua.tr("Invite Players") || node.text === Lua.tr("Invite Player"))) inviteNode = node;
       const choice = "roomId" in node && "capacity" in node && "hasPassword" in node ? node : delegate;
       if (choice && node.clicked && hookedButtons.indexOf(node) < 0) {
         const roomChoice = choice;
@@ -653,6 +681,14 @@ Control {
     // other bottom-row actions. Observers cannot invite, so the invite button
     // is hidden; its sibling Chat button is still the stable anchor.
     let chatNode = null;
+    if (!inviteNode && host.roomContent) {
+      const pending = [host.roomContent];
+      while (pending.length) {
+        const node = pending.pop();
+        if (node && node.visible && "clicked" in node && "text" in node && node.text === Lua.tr("Chat")) { chatNode = node; break; }
+        if (node && !("model" in node) && node.children) pending.push(...Array.from(node.children));
+      }
+    }
     if (inviteNode && inviteNode.parent) {
       const siblings = inviteNode.parent.children || [];
       for (let i = 0; i < siblings.length; i++) {
@@ -705,7 +741,7 @@ Control {
       // Card moves, skill animations and button updates do not change social
       // identity/presence. Do not rebind hidden social UI for each game packet.
       if (["Setup", "SetServerSettings", "EnterLobby", "EnterRoom", "ChangeRoom",
-           "StartGame", "ChangeRoomPage", "GameOver", "BackToRoom", "BackToStart",
+           "StartGame", "ChangeRoomPage", "GameOver", "BackToRoom", "RestartGame", "BackToStart",
            "RoomInviteSettings", "RoomInvitePlayers", "RoomInviteResult", "ErrorMsg",
            "ErrorDlg", "AddPlayer", "ArrangeSeats", "PushPage", "PopPage"].indexOf(command) < 0) return;
       if (command === "PushPage" && host.networkGame) {
@@ -748,7 +784,7 @@ Control {
         host.gameState = Config.observing ? "observing" : "playing";
       } else if (command === "GameOver") {
         host.gameState = Config.observing ? "observing" : "waiting";
-      } else if (command === "BackToRoom") {
+      } else if ((command === "BackToRoom" || command === "RestartGame")) {
         host.utilityPageDepth = 0;
         host.matchViewActive = false;
         host.gameState = Config.observing ? "observing" : "waiting";
@@ -784,7 +820,7 @@ Control {
       host.updateContext();
       if (command === "AddPlayer" || command === "EnterRoom" || command === "BackToRoom" || command === "ArrangeSeats")
         Qt.callLater(host.refreshPublicAvatars);
-      if (command === "EnterLobby" || command === "EnterRoom" || command === "BackToRoom") Qt.callLater(host.refreshRoomBridge);
+      if (command === "EnterLobby" || command === "EnterRoom" || command === "BackToRoom" || command === "RestartGame") Qt.callLater(host.refreshRoomBridge);
     }
   }
   Connections {
@@ -827,7 +863,7 @@ Control {
 
   Rectangle {
     objectName: "friendsLauncher"
-    visible: host.socialUiAvailable
+    visible: host.socialUiAvailable && (host.gameState === "lobby" || host.roomLauncherReady)
     x: host.gameState === "lobby" ? 6 : host.roomLauncher.x
     y: host.gameState === "lobby" ? 112 : host.roomLauncher.y
     width: host.gameState === "lobby" ? 60 : host.roomLauncher.width
