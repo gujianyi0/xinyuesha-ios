@@ -222,8 +222,18 @@ QtObject {
       calls = calls.filter(item => item !== entry); busy = calls.length > 0;
       if (key !== generationKey) return;
       const status = timedOut ? 0 : request.status;
-      let data = {};
-      try { if (status) data = JSON.parse(request.responseText || "{}"); } catch (_) {}
+      let data = {}, validJson = false;
+      const responseText = status ? request.responseText || "" : "";
+      try {
+        data = JSON.parse(responseText);
+        validJson = data !== null && typeof data === "object" && !Array.isArray(data);
+        if (!validJson) data = {};
+      } catch (_) {}
+      if (status >= 200 && status < 300 && !validJson) {
+        if (path === "/v1/accounts/login") authenticating = false;
+        error = "好友服务返回格式异常（HTTP " + status + "），请截图反馈";
+        return;
+      }
       if (status < 200 || status >= 300) {
         // Both published origins bind to the same service/database. Only
         // account login and presence sync are safe to replay after a timeout.
@@ -234,7 +244,11 @@ QtObject {
           return;
         }
         if (path === "/v1/accounts/login") authenticating = false;
-        error = data.error || (attempt > 0 ? "好友服务主、备用入口均连接失败，请切换网络后重试" : timedOut ? "好友服务请求超时，请稍后重试" : "暂时连不上好友服务，请检查地址或服务是否启动");
+        if (typeof data.error === "string" && data.error) error = data.error;
+        else if (status === 403 && /\b1010\b/.test(responseText))
+          error = "好友请求被 Cloudflare 拦截（HTTP 403 / 1010），请截图反馈";
+        else if (status) error = "好友服务返回 HTTP " + status + "，请截图反馈";
+        else error = (attempt > 0 ? "好友服务主、备用入口均连接失败，请切换网络后重试" : timedOut ? "好友服务请求超时，请稍后重试" : "暂时连不上好友服务，请检查地址或服务是否启动") + "（未收到 HTTP 响应）";
         if (status === 401) {
           token = ""; accountConnected = false; friends = []; requests = []; invitations = []; me = ({});
           if (usingSavedSession && pendingCredentials) {
@@ -261,6 +275,8 @@ QtObject {
       if (request.readyState === XMLHttpRequest.DONE) finish(false);
     };
     request.open(method, origin + path);
+    request.setRequestHeader("User-Agent", "Xinyuesha-Test/0.5.25");
+    request.setRequestHeader("Accept", "application/json");
     if (!anonymous && token) request.setRequestHeader("Authorization", "Bearer " + token);
     if (method === "POST") request.setRequestHeader("Content-Type", "application/json");
     request.send(method === "POST" ? JSON.stringify(payload || {}) : "");

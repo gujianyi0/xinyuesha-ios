@@ -1,0 +1,8 @@
+{
+  "name": "freekill-friends",
+  "pages_build_output_dir": "../friends-fallback/dist",
+  "compatibility_date": "2026-10-17",
+  "services": [
+    { "binding": "FRIENDS_SERVICE", "service": "freekill-friends" }
+  ]
+}

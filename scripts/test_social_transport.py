@@ -10,15 +10,19 @@ from PySide6.QtQml import QQmlApplicationEngine
 p=argparse.ArgumentParser();p.add_argument('--payload',type=Path,required=True);p.add_argument('--work-dir',type=Path,required=True);a=p.parse_args();a.work_dir.mkdir(parents=True,exist_ok=True)
 class Service(ThreadingHTTPServer):
  daemon_threads=True
- def __init__(self):super().__init__(('127.0.0.1',0),Handler);self.mode='ok';self.calls=[];self.friend_effects=0
+ def __init__(self):super().__init__(('127.0.0.1',0),Handler);self.mode='ok';self.calls=[];self.agents=[];self.friend_effects=0
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args):pass
  def do_POST(self):
   body=self.rfile.read(int(self.headers.get('Content-Length',0)));self.server.calls.append(self.path)
+  self.server.agents.append((self.headers.get('User-Agent'),self.headers.get('Accept')))
   if self.path=='/v1/friends/request':self.server.friend_effects+=1
   mode=self.server.mode
   if mode=='drop':self.connection.shutdown(socket.SHUT_RDWR);self.connection.close();return
   if mode=='timeout':time.sleep(2);return
+  if mode in ['bic','html','unavailable']:
+   blob={'bic':b'error code: 1010\n','html':b'<html>not an API response</html>','unavailable':b'upstream unavailable'}[mode]
+   self.send_response({'bic':403,'html':200,'unavailable':503}[mode]);self.send_header('Content-Length',str(len(blob)));self.end_headers();self.wfile.write(blob);return
   me={'id':'same-cloud-identity','name':'fixture','inviteMode':'original'}
   status=200
   if self.path=='/v1/accounts/login':data={'token':'valid','me':me}
@@ -78,5 +82,13 @@ QtObject {
  primary.mode='timeout';backup.mode='ok';e,r=create();start=len(backup.calls);invoke(r,'setup');invoke(r,'clear');pump(.7)
  assert len(backup.calls)==start and state(r)['calls']==0,'logout abort must not launch fallback with stale credentials'
  results['logout_cancels_without_fallback']=True;e.deleteLater();pump(.05)
+ if a.payload.name=='runtime':
+  for mode,expected in [('bic','403 / 1010'),('html','格式异常'),('unavailable','HTTP 503')]:
+   primary.mode=mode;backup.mode='ok';start=len(backup.calls);e,r=create();invoke(r,'setup');pump(.3);s=state(r)
+   assert expected in s['error'] and not s['busy'] and s['calls']==0,s
+   assert len(backup.calls)==start,'HTTP response errors must not be replayed'
+   assert primary.agents[-1]==('Xinyuesha-Test/0.5.25','application/json')
+   assert s['token']=='valid','an unexpected response must not erase saved identity'
+   results[mode+'_diagnostic']=s['error'];invoke(r,'clear');e.deleteLater();pump(.05)
 for s in [primary,backup]:s.shutdown()
 print(json.dumps(results,ensure_ascii=False,indent=2));(a.work_dir/'result.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf-8')
