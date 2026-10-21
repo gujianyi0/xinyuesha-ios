@@ -34,3 +34,5 @@ pc/tools/__pycache__/
 *.local
 **/social-private/
 **/client.db
+**/.wrangler/
+services/**/worker-configuration.d.ts

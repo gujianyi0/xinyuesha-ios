@@ -1,0 +1,8 @@
+{
+  "name": "xinyuesha-friends-api",
+  "pages_build_output_dir": "dist",
+  "compatibility_date": "2026-10-21",
+  "services": [
+    { "binding": "FRIENDS_SERVICE", "service": "freekill-friends" }
+  ]
+}

@@ -5,6 +5,8 @@ import QtQml.WorkerScript
 QtObject {
   id: api
   readonly property string defaultEndpoint: "https://freekill-friends.pages.dev"
+  readonly property string fallbackEndpoint: "https://xinyuesha-friends-api.pages.dev"
+  property bool useBackupTransport: false
   property string endpoint: defaultEndpoint
   property string token: ""
   property string recoveryCode: ""
@@ -53,8 +55,8 @@ QtObject {
   }
   function clearSession() {
     presenceDirty = false;
-    for (const entry of calls) entry.xhr.abort();
-    calls = []; busy = false; token = ""; recoveryCode = ""; me = ({});
+    for (const entry of calls) { entry.settled = true; entry.xhr.abort(); }
+    calls = []; busy = false; useBackupTransport = false; token = ""; recoveryCode = ""; me = ({});
     credentialGeneration++; credentialScope = ""; accountKey = ""; deriving = false;
     usingSavedSession = false; pendingCredentials = null;
     accountBound = false; accountConnected = false; authenticating = false;
@@ -79,10 +81,11 @@ QtObject {
       if (key) {
         const saved = readProfile(key) || {};
         const previousEndpoint = saved.endpoint || "";
+        useBackupTransport = saved.backupTransport === true || previousEndpoint === fallbackEndpoint;
         // This published service contains the migrated local identities.
         // Preserve tokens only for that known migration; custom services stay separate.
         const migratedService = /^http:\/\/(127\.0\.0\.1|localhost):19528\/?$/.test(previousEndpoint) ||
-          previousEndpoint === "https://freekill-friends.c2115259095.workers.dev";
+          previousEndpoint === "https://freekill-friends.c2115259095.workers.dev" || previousEndpoint === fallbackEndpoint;
         endpoint = !previousEndpoint || migratedService ? defaultEndpoint : previousEndpoint;
         token = saved.token || "";
         recoveryCode = saved.recoveryCode || "";
@@ -100,7 +103,7 @@ QtObject {
     }
   }
   function persist() {
-    if (profileKey) writeProfile(profileKey, {endpoint: endpoint, token: token, recoveryCode: recoveryCode, enabled: enabled, accountBound: accountBound, inviteMode: inviteMode, avatarCache: avatarCache});
+    if (profileKey) writeProfile(profileKey, {endpoint: endpoint, token: token, recoveryCode: recoveryCode, enabled: enabled, accountBound: accountBound, inviteMode: inviteMode, avatarCache: avatarCache, backupTransport: useBackupTransport});
   }
   function validAvatar(value) {
     return typeof value === "string" && /^[A-Za-z0-9_\u4e00-\u9fff#-]{1,128}$/.test(value);
@@ -197,28 +200,42 @@ QtObject {
   }
   function configure(url) {
     url = url.trim().replace(/\/$/, "");
+    const backupRequested = url === fallbackEndpoint;
+    if (backupRequested) url = defaultEndpoint;
     if (!validEndpoint(url)) { error = "请输入 HTTPS 服务地址；本机测试可用 http://127.0.0.1:19528"; return false; }
     if (url !== endpoint) {
       endpoint = url; clearSession(); enabled = false; persist();
     }
+    if (backupRequested) { useBackupTransport = true; persist(); }
     return true;
   }
-  function call(method, path, payload, callback, anonymous) {
+  function call(method, path, payload, callback, anonymous, attempt) {
     if (!validEndpoint(endpoint)) { error = "好友服务地址不正确"; return; }
     const key = generationKey;
+    const origin = endpoint === defaultEndpoint && useBackupTransport ? fallbackEndpoint : endpoint;
     const request = new XMLHttpRequest();
-    const entry = {xhr: request, deadline: Date.now() + 10000};
+    const entry = {xhr: request, deadline: Date.now() + 10000, settled:false};
     calls = calls.concat([entry]); busy = true;
-    request.onreadystatechange = function() {
-      if (request.readyState !== XMLHttpRequest.DONE) return;
+    const finish = function(timedOut) {
+      if (entry.settled) return;
+      entry.settled = true;
       calls = calls.filter(item => item !== entry); busy = calls.length > 0;
       if (key !== generationKey) return;
+      const status = timedOut ? 0 : request.status;
       let data = {};
-      try { data = JSON.parse(request.responseText || "{}"); } catch (_) {}
-      if (request.status < 200 || request.status >= 300) {
+      try { if (status) data = JSON.parse(request.responseText || "{}"); } catch (_) {}
+      if (status < 200 || status >= 300) {
+        // Both published origins bind to the same service/database. Only
+        // account login and presence sync are safe to replay after a timeout.
+        if (status === 0 && endpoint === defaultEndpoint && !(attempt > 0) &&
+            (path === "/v1/accounts/login" || path === "/v1/sync")) {
+          useBackupTransport = origin !== fallbackEndpoint;
+          call(method, path, payload, callback, anonymous, 1);
+          return;
+        }
         if (path === "/v1/accounts/login") authenticating = false;
-        error = data.error || "暂时连不上好友服务，请检查地址或服务是否启动";
-        if (request.status === 401) {
+        error = data.error || (attempt > 0 ? "好友服务主、备用入口均连接失败，请切换网络后重试" : timedOut ? "好友服务请求超时，请稍后重试" : "暂时连不上好友服务，请检查地址或服务是否启动");
+        if (status === 401) {
           token = ""; accountConnected = false; friends = []; requests = []; invitations = []; me = ({});
           if (usingSavedSession && pendingCredentials) {
             // An expired/revoked cached session falls back to the same account
@@ -239,7 +256,11 @@ QtObject {
       error = "";
       if (callback) callback(data);
     };
-    request.open(method, endpoint + path);
+    entry.finish = finish;
+    request.onreadystatechange = function() {
+      if (request.readyState === XMLHttpRequest.DONE) finish(false);
+    };
+    request.open(method, origin + path);
     if (!anonymous && token) request.setRequestHeader("Authorization", "Bearer " + token);
     if (method === "POST") request.setRequestHeader("Content-Type", "application/json");
     request.send(method === "POST" ? JSON.stringify(payload || {}) : "");
@@ -347,11 +368,10 @@ QtObject {
     interval: 500; repeat: true; running: api.calls.length > 0
     onTriggered: {
       const expired = api.calls.filter(item => item.deadline < Date.now());
-      for (const entry of expired) entry.xhr.abort();
-      api.calls = api.calls.filter(item => item.deadline >= Date.now());
-      api.busy = api.calls.length > 0;
-      if (expired.length) api.error = "好友服务请求超时，请稍后重试";
-      if (expired.length) api.authenticating = false;
+      for (const entry of expired) {
+        entry.finish(true);
+        entry.xhr.abort();
+      }
     }
   }
 }

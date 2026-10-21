@@ -9,6 +9,7 @@ on:
       - 'android/tools/test_gameplay_work.py'
       - 'scripts/test_counter_catalogue.py'
       - 'scripts/test_social_session.py'
+      - 'scripts/test_social_transport.py'
       - 'scripts/test_touch_log.py'
       - 'scripts/test_role_voice.py'
       - '.github/workflows/test-android-ui.yml'
@@ -43,6 +44,7 @@ jobs:
           sudo apt-get install -y liblua5.4-0
           python3 scripts/test_counter_catalogue.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/counter-catalogue" --lua-library liblua5.4.so.0 --result "$RUNNER_TEMP/counter-catalogue/result.json"
       - run: python3 scripts/test_social_session.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/social-session"
+      - run: python3 scripts/test_social_transport.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/social-transport"
       - run: python3 scripts/test_touch_log.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/touch-log"
       - run: python3 scripts/test_role_voice.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/role-voice"
       - uses: actions/upload-artifact@v4
