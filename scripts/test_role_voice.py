@@ -4,9 +4,11 @@ from pathlib import Path
 import argparse,json,os,shutil,tempfile,time
 os.environ.setdefault('QT_QPA_PLATFORM','offscreen');os.environ.setdefault('QT_QUICK_BACKEND','software')
 os.environ.setdefault('QT_QUICK_CONTROLS_STYLE','Material')
-from PySide6.QtCore import QUrl,QMetaObject,Qt,Q_RETURN_ARG,qInstallMessageHandler
+from PySide6.QtCore import QUrl,QMetaObject,QPoint,Qt,Q_RETURN_ARG,qInstallMessageHandler
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQuick import QQuickWindow
+from PySide6.QtTest import QTest
 p=argparse.ArgumentParser();p.add_argument('--payload',type=Path,default=Path('runtime'));p.add_argument('--work-dir',type=Path,required=True);a=p.parse_args();a.work_dir.mkdir(parents=True,exist_ok=True)
 R=Path(__file__).resolve().parents[1]/'runtime';logs=[]
 qInstallMessageHandler(lambda kind,context,message:logs.append(message));app=QGuiApplication([])
@@ -63,6 +65,8 @@ Window {
  Counter.CounterHost {id:counter}
  function voice(){return chat.children[0].children[0];}
  function control(){const q=[chat];while(q.length){const n=q.pop();if(n.objectName==="roleVoiceControl")return n;if(n.children)q.push(...Array.from(n.children));}return null;}
+ function buttonGeometry(){const c=control(),b=c.children.find(x=>x.objectName==="roleVoiceButton"),p=b.mapToItem(null,b.width/2,b.height/2);return JSON.stringify({parent:String(c.parent),width:b.width,height:b.height,x:p.x,y:p.y});}
+ function pickerVisible(){return control().pickerVisible;}
  function setup(){counter.attachRoleVoices(chat);counter.attachRoleVoices(chat);}
  function pickB(){control().refreshPool();control().choose("b");}
  function pickC(){control().choose("c");}
@@ -85,7 +89,13 @@ def pump(t=.12):
  while time.monotonic()<end:app.processEvents();time.sleep(.003)
 def invoke(n):return QMetaObject.invokeMethod(win,n,Qt.DirectConnection,Q_RETURN_ARG('QVariant'))
 def call(n):QMetaObject.invokeMethod(win,n,Qt.DirectConnection);pump()
-call('setup');call('pickB');initial=json.loads(invoke('snapshot'))
+call('setup')
+geometry=json.loads(invoke('buttonGeometry'))
+assert 'RowLayout' in geometry['parent'] and geometry['width']>=40 and geometry['height']>=30,geometry
+assert 20<=geometry['x']<=500 and 10<=geometry['y']<=510,geometry
+QTest.mouseClick(win,Qt.LeftButton,Qt.NoModifier,QPoint(round(geometry['x']),round(geometry['y'])))
+pump(.3);assert invoke('pickerVisible') is True,'visible role button must accept a real pointer click'
+call('pickB');pump(.3);initial=json.loads(invoke('snapshot'))
 assert initial['controls']==1 and initial['selected']=='b',initial
 assert [r['name'] for r in initial['rows']].count('skill_b')==1,initial
 assert all(r['id'] in ['b','c'] for r in initial['pool'])
@@ -101,5 +111,5 @@ assert any(r['name']=='normal' and not r['specific'] for r in generic['rows']),g
 assert invoke('fast') is True
 final=json.loads(invoke('snapshot'));assert final['sent'][-1]['data']['msg']=='$fastchat_f:2',final
 errors=[m for m in logs if any(x in m for x in ['TypeError','ReferenceError','SyntaxError','Unable to assign','Cannot assign','Binding loop','is not a type'])]
-print(json.dumps({'initial':initial,'banned':banned,'final':final,'errors':errors},ensure_ascii=False,indent=2));assert not errors,errors
+print(json.dumps({'button_geometry':geometry,'initial':initial,'banned':banned,'final':final,'errors':errors},ensure_ascii=False,indent=2));assert not errors,errors
 win.close();engine.deleteLater();app.processEvents()

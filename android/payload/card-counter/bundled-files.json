@@ -1,9 +1,9 @@
 {
   "Fk/main.qml": "ec93295f176397057eff7f8dc69234fa5098023226b59d82ad2fb2ae11981c33",
   "card-counter/CardCounter.qml": "8c80f41085de19e06b29413a9a208db822f435bb3101bdd0b157f56b420f1641",
-  "card-counter/CounterHost.qml": "1b42c43d581fc472fd7eec3a0f1dc9c8aed2d818d4d1416acd2de1da21ef2ed6",
+  "card-counter/CounterHost.qml": "cbb812ddb03c881c2390e5129ee7fecc61589c20a88af013079f350716ff31e8",
   "card-counter/CounterViewport.qml": "86e30b8f7e308375daaca23b4ee6bae6b5debd501a5e1ae84ecda912580c2e6d",
-  "card-counter/RoleVoiceControl.qml": "ef2c5e96cc85ac290a2d79d1c1ead1575b73e7136c3e2b77a36c281da8736f75",
+  "card-counter/RoleVoiceControl.qml": "d55a0bc9ad5b3180c38b44c2f8dba8ad1aba90103f797d9c182dc0883c819386",
   "card-counter/SocialAuth.js": "47a55593ea42a333fc80529213ad4194771d639be051524b119a3d332004c861",
   "card-counter/SocialClient.qml": "16f7ea7849b71a7b1d308cb1353bf1128fd9ac1457bc225f133a3443ce590468",
   "card-counter/SocialHost.qml": "4ded417151407800f30148bf0e52f9aefa58cd22389dadb8154dfc436e894185",

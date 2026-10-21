@@ -16,6 +16,7 @@ Item {
   property string notice: ""
   property bool installed: false
   property bool revealSelected: false
+  readonly property bool pickerVisible: picker.visible
   implicitWidth: 56
   implicitHeight: 44
   Layout.preferredWidth: 56
@@ -121,6 +122,7 @@ Item {
   }
   Button {
     anchors.fill: parent
+    objectName: "roleVoiceButton"
     text: "角色"
     Accessible.name: "选择角色语音"
     ToolTip.visible: hovered
@@ -129,6 +131,11 @@ Item {
   }
   Popup {
     id: picker
+    objectName: "roleVoicePicker"
+    palette.window: "#f5f3ec"
+    palette.windowText: "#202c2e"
+    palette.text: "#202c2e"
+    background: Rectangle { color: "#f5f3ec"; radius: 8; border.color: "#ac9661"; border.width: 1 }
     parent: root.chatBox
     x: 4; y: 4
     width: Math.max(100,parent.width - 8)

@@ -94,7 +94,8 @@ Item {
       const node = pending.pop();
       if (!node) continue;
       if ("soundIdx" in node && "delegate" in node && "model" in node) sound = node;
-      if (node.children && Array.from(node.children).some(c => "maximumLength" in c && "accepted" in c)) input = node;
+      if (String(node).indexOf("RowLayout") >= 0 && node.children &&
+          Array.from(node.children).some(c => "maximumLength" in c && "accepted" in c)) input = node;
       if (!("model" in node) && node.children) pending.push(...Array.from(node.children));
     }
     if (!sound || !input) return;
