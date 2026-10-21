@@ -645,6 +645,10 @@ Control {
   function refreshRoomBridge() {
     host.findNavigationStack();
     if (!host.socialUiAvailable) return;
+    if (host.gameState !== "lobby" && host.roomContent &&
+        !("isAllReady" in host.roomContent || "roomInviteButton" in host.roomContent)) {
+      roomLauncherReady = false; inviteAnchor = null; return;
+    }
     let anchor = null;
     let inviteNode = null;
     let content = host.roomContent ? host.roomContent.parent : null;
@@ -770,7 +774,7 @@ Control {
         host.updateContext(); Qt.callLater(host.finishJoin);
       } else if (command === "EnterRoom" || command === "ChangeRoom") {
         if (command === "EnterRoom") { host.utilityPageDepth = 0; host.findNavigationStack(); }
-        if (command === "EnterRoom") { host.matchViewActive = false; host.nativeFailureNeedsRoomId = false; }
+        if (command === "EnterRoom") { host.roomLauncherReady = false; host.inviteAnchor = null; host.matchViewActive = false; host.nativeFailureNeedsRoomId = false; }
         const settings = data[2] || {};
         host.roomId = Math.floor(settings.roomId || (command === "EnterRoom" ?
           (Date.now() < host.selectedRoomDeadline ? host.selectedRoomId : 0) : host.roomId) || 0);
@@ -785,6 +789,7 @@ Control {
       } else if (command === "GameOver") {
         host.gameState = Config.observing ? "observing" : "waiting";
       } else if ((command === "BackToRoom" || command === "RestartGame")) {
+        host.roomLauncherReady = false; host.inviteAnchor = null;
         host.utilityPageDepth = 0;
         host.matchViewActive = false;
         host.gameState = Config.observing ? "observing" : "waiting";

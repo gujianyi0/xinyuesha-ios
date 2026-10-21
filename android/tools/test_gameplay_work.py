@@ -122,6 +122,11 @@ Window {
    Item {id:utilityPage;objectName:"largeOverview"}
    Item {id:roomPage;width:1200;height:540
     property var gameComponent:null;property alias gameContent:waitingLoader.item;property alias loader:waitingLoader
+    function showTable(){waitingLoader.sourceComponent=tableFactory;}
+    function showWaiting(){waitingLoader.sourceComponent=waitingFactory;}
+    Component {id:tableFactory
+     Item {property var dataModel:({});Rectangle {y:400;width:70;height:35;property string text:"Chat";signal clicked()}}
+    }
     Loader {id:waitingLoader;width:1000;height:480;x:90;y:30;scale:0.9;active:false;sourceComponent:waitingFactory}
     Component {id:waitingFactory
      Item {property bool isOwner:true;property bool isAllReady:false
@@ -148,10 +153,11 @@ Window {
  function overviewGridScale(){return overviewGrid.itemAtIndex(0).scale;}
  function traversalMetrics(){return JSON.stringify({counter:counter.testTraversals,social:social.testTraversals});}
  function waitingRoom(){Config.observing=false;testStack.currentItem=testStack.room;testStack.room.loader.active=true;Mediator.commandGot(null,"EnterRoom",[0,0,{roomId:123}]);}
- function resultPage(){Mediator.commandGot(null,"StartGame",[]);Mediator.commandGot(null,"GameOver",[]);}
- function resetWaiting(){testStack.room.loader.active=false;Mediator.commandGot(null,"RestartGame",[]);testStack.room.loader.active=true;return social.roomLauncherReady;}
+ function resultPage(){testStack.room.showTable();Mediator.commandGot(null,"StartGame",[]);Mediator.commandGot(null,"GameOver",[]);}
+ function earlyBack(){Mediator.commandGot(null,"BackToRoom",[]);}
+ function resetWaiting(){testStack.room.loader.active=false;Mediator.commandGot(null,"RestartGame",[]);testStack.room.showWaiting();testStack.room.loader.active=true;return social.roomLauncherReady;}
  function moveWaiting(){testStack.room.loader.x=35;testStack.room.loader.y=9;testStack.room.loader.scale=0.72;}
- function positionState(){const a=social.inviteAnchor;const pos=a?a.mapToItem(social,0,0):({x:0,y:0});const end=a?a.mapToItem(social,0,a.height):({x:0,y:0});const h=Math.abs(end.y-pos.y);return JSON.stringify({ready:social.roomLauncherReady,match:social.matchViewActive,visible:social.visible,x:social.roomLauncher.x,y:social.roomLauncher.y,expectedX:Math.max(8,pos.x-h*1.72-6),expectedY:pos.y});}
+ function positionState(){const a=social.inviteAnchor;const pos=a?a.mapToItem(social,0,0):({x:0,y:0});const end=a?a.mapToItem(social,0,a.height):({x:0,y:0});const h=Math.abs(end.y-pos.y);const launcher=Array.from(social.children).find(c=>c.objectName==="friendsLauncher");return JSON.stringify({ready:social.roomLauncherReady,match:social.matchViewActive,visible:social.visible,launcherVisible:launcher.visible,x:social.roomLauncher.x,y:social.roomLauncher.y,expectedX:Math.max(8,pos.x-h*1.72-6),expectedY:pos.y});}
  function freshChoice(){stressScene.popupItem=stressScene.choice;}
  function leaveFreshScene(){Ltk.roomScene=null;stressScene.destroy();stressScene=null;Mediator.commandGot(null,"EnterLobby",[]);}
 }''')
@@ -227,12 +233,14 @@ Window {
             assert result['overview_grid_delegate_scale']==1,'overview grid delegates must not be traversed/adapted'
         invoke('waitingRoom');pump(.2);initial_room=json.loads(invoke('positionState'))
         invoke('resultPage');pump(.02);result_page=json.loads(invoke('positionState'))
+        invoke('earlyBack');pump(.02);old_table=json.loads(invoke('positionState'))
         early_ready=invoke('resetWaiting');pump(.2);reset_room=json.loads(invoke('positionState'))
         invoke('moveWaiting');pump(.1);moved_room=json.loads(invoke('positionState'))
-        result['waiting_room_positions']={'initial':initial_room,'results':result_page,'ready_before_layout':early_ready,'reset':reset_room,'moved':moved_room}
+        result['waiting_room_positions']={'initial':initial_room,'results':result_page,'old_table_after_back':old_table,'ready_before_layout':early_ready,'reset':reset_room,'moved':moved_room}
         if not args.measure_only:
             assert result_page['match'] and not result_page['visible'],'GameOver does not expose the friends launcher over results'
             assert not early_ready,'new waiting-room buttons must finish layout before the launcher is shown'
+            assert not old_table['ready'] and not old_table['launcherVisible'],'do not anchor to the old game table Chat button before WaitingRoom exists'
             for state in [initial_room,reset_room,moved_room]:
                 assert state['ready'] and state['visible'] and abs(state['x']-state['expectedX'])<.01 and abs(state['y']-state['expectedY'])<.01,state
     errors=[m for m in logs if 'ReferenceError' in m or 'TypeError' in m or 'is not a type' in m or 'Cannot assign' in m]
