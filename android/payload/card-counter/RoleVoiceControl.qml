@@ -124,6 +124,8 @@ Item {
     anchors.fill: parent
     objectName: "roleVoiceButton"
     text: "角色"
+    leftPadding: 4; rightPadding: 4
+    font.pixelSize: 14
     Accessible.name: "选择角色语音"
     ToolTip.visible: hovered
     ToolTip.text: root.selectedGeneral ? "语音角色：" + Lua.tr(root.selectedGeneral) : "选择房主将池中的角色语音"

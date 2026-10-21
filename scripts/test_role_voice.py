@@ -65,7 +65,7 @@ Window {
  Counter.CounterHost {id:counter}
  function voice(){return chat.children[0].children[0];}
  function control(){const q=[chat];while(q.length){const n=q.pop();if(n.objectName==="roleVoiceControl")return n;if(n.children)q.push(...Array.from(n.children));}return null;}
- function buttonGeometry(){const c=control(),b=c.children.find(x=>x.objectName==="roleVoiceButton"),p=b.mapToItem(null,b.width/2,b.height/2);return JSON.stringify({parent:String(c.parent),width:b.width,height:b.height,x:p.x,y:p.y});}
+ function buttonGeometry(){const c=control(),b=c.children.find(x=>x.objectName==="roleVoiceButton"),p=b.mapToItem(null,b.width/2,b.height/2);return JSON.stringify({parent:String(c.parent),width:b.width,height:b.height,labelWidth:b.contentItem.width,fontSize:b.font.pixelSize,x:p.x,y:p.y});}
  function pickerVisible(){return control().pickerVisible;}
  function setup(){counter.attachRoleVoices(chat);counter.attachRoleVoices(chat);}
  function pickB(){control().refreshPool();control().choose("b");}
@@ -92,6 +92,7 @@ def call(n):QMetaObject.invokeMethod(win,n,Qt.DirectConnection);pump()
 call('setup')
 geometry=json.loads(invoke('buttonGeometry'))
 assert 'RowLayout' in geometry['parent'] and geometry['width']>=40 and geometry['height']>=30,geometry
+assert geometry['labelWidth']>=2*geometry['fontSize'],'role label must fit inside themed button padding'
 assert 20<=geometry['x']<=500 and 10<=geometry['y']<=510,geometry
 QTest.mouseClick(win,Qt.LeftButton,Qt.NoModifier,QPoint(round(geometry['x']),round(geometry['y'])))
 pump(.3);assert invoke('pickerVisible') is True,'visible role button must accept a real pointer click'
