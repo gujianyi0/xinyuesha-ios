@@ -4,6 +4,7 @@
 #define _QMLBACKEND_H
 
 class Replayer;
+class IosFriendTransport;
 
 #include <qtmetamacros.h>
 #include <QList>
@@ -50,6 +51,11 @@ public:
   Q_INVOKABLE QVariant evalLuaExp(const QString &lua);
   Q_INVOKABLE QString deriveSocialAccountKey(const QString &server,
       const QString &username, const QString &password);
+#ifdef Q_OS_IOS
+  Q_INVOKABLE qint64 startSocialRequest(const QString &method, const QString &url,
+      const QString &bearer, const QString &body);
+  Q_INVOKABLE void cancelSocialRequest(qint64 id);
+#endif
 
   Q_INVOKABLE QString getPublicServerList();
   Q_INVOKABLE QString loadConf();
@@ -96,6 +102,10 @@ public:
   void setQuickStartConfig(const QVariantMap &config) { m_quickStartConfig = config; }
 
 signals:
+#ifdef Q_OS_IOS
+  void socialRequestFinished(qint64 id, int status, const QString &body,
+                            int errorCode, const QString &failure);
+#endif
   void quickStartModeChanged();
   void notifyUI(const QString &command, const QVariant &data);
   void assetsDownloadFinished(bool ok, const QString &path,
@@ -122,6 +132,10 @@ private:
   Replayer *replayer;
   QString m_quickStartMode;
   QVariantMap m_quickStartConfig;
+#ifdef Q_OS_IOS
+  IosFriendTransport *m_socialTransport = nullptr;
+  qint64 m_socialRequestId = 0;
+#endif
 #endif
 };
 

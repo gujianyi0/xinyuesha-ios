@@ -59,6 +59,9 @@ set_source_files_properties(
 if (IOS)
   # Objective-C++ bridge: AVAudioSession category + idle timer.
   list(APPEND freekill_SRCS "platform/ioshelper.mm")
+  list(APPEND freekill_SRCS "platform/iosfriendtransport.mm")
+  set_source_files_properties("platform/iosfriendtransport.mm" PROPERTIES
+    LANGUAGE OBJCXX SKIP_PRECOMPILE_HEADERS ON COMPILE_OPTIONS "-fobjc-arc")
   set_source_files_properties("platform/ioshelper.mm" PROPERTIES
     LANGUAGE OBJCXX SKIP_PRECOMPILE_HEADERS ON)
 endif()

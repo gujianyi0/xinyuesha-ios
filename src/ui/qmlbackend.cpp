@@ -11,6 +11,10 @@
 #include <QUrl>
 #include "core/socialaccountkey.h"
 #include "platform/localfileurl.h"
+#ifdef Q_OS_IOS
+#include "platform/iosfriendtransport.h"
+#include <QPointer>
+#endif
 
 QString QmlBackend::importBackground(const QString &source) {
   const QString input = fkLocalFile::path(source);
@@ -372,6 +376,23 @@ QString QmlBackend::deriveSocialAccountKey(const QString &server,
   // Identical to the existing WorkerScript protocol, without the JS delay.
   return fkSocialAccount::deriveKey(server, username, password);
 }
+
+#ifdef Q_OS_IOS
+qint64 QmlBackend::startSocialRequest(const QString &method, const QString &url,
+    const QString &bearer, const QString &body) {
+  if (!m_socialTransport) m_socialTransport = new IosFriendTransport(this);
+  const qint64 id = ++m_socialRequestId;
+  const QPointer<QmlBackend> guard(this);
+  m_socialTransport->send(id, method, url, bearer, body,
+      [guard](qint64 requestId, int status, const QString &text, int code, const QString &failure) {
+        if (guard) emit guard->socialRequestFinished(requestId, status, text, code, failure);
+      });
+  return id;
+}
+void QmlBackend::cancelSocialRequest(qint64 id) {
+  if (m_socialTransport) m_socialTransport->cancel(id);
+}
+#endif
 
 static QString touchAndRead(const QString &fname, QString init_conf) {
   QFile conf(fname);

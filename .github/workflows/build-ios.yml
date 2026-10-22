@@ -121,6 +121,13 @@ jobs:
             aqt install-qt mac desktop 6.8.3 clang_64 -m qtshadertools -O "$HOME/Qt"
           fi
 
+      - name: Test system friend transport on macOS Foundation
+        run: |
+          cmake -S scripts/ios-friend-native-test -B "$RUNNER_TEMP/native-friend-test" \
+            -DCMAKE_PREFIX_PATH="$HOME/Qt/6.8.3/macos" -DCMAKE_BUILD_TYPE=Debug
+          cmake --build "$RUNNER_TEMP/native-friend-test" --parallel 2
+          "$RUNNER_TEMP/native-friend-test/test-ios-friends"
+
       - name: Build Lua / OpenSSL / libgit2
         run: |
           # This cache key pins Qt / OpenSSL / libgit2 versions. Reuse complete

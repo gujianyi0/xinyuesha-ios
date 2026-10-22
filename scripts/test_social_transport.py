@@ -40,7 +40,7 @@ def pump(seconds):
 results={}
 with tempfile.TemporaryDirectory(dir=a.work_dir) as temp:
  B=Path(temp)
- source=(a.payload/'card-counter/SocialClient.qml').read_text(encoding='utf-8').replace('https://freekill-friends.pages.dev',origin(primary)).replace('https://xinyuesha-friends-api.pages.dev',origin(backup)).replace('Date.now() + 10000','Date.now() + 120')
+ source=(a.payload/'card-counter/SocialClient.qml').read_text(encoding='utf-8').replace('https://freekill-friends.pages.dev',origin(primary)).replace('https://xinyuesha-friends-api.pages.dev',origin(backup)).replace('Date.now() + 10000','Date.now() + 120').replace('Date.now() + (useNative ? 16000 : 10000)','Date.now() + 120')
  (B/'SocialClient.qml').write_text(source,encoding='utf-8')
  (B/'SocialAuth.js').write_text('WorkerScript.onMessage=function(m){WorkerScript.sendMessage({generation:m.generation,key:"test-key"});}',encoding='utf-8')
  (B/'Main.qml').write_text('''import QtQml

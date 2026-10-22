@@ -1087,7 +1087,7 @@ Control {
   }
   SocialDialog {
     id: serviceSettings; objectName: "socialServiceSettings"
-    title: "好友与显示设置 · 20261022.3"; anchors.centerIn: parent; modal: true; exit: Transition {}
+    title: "好友与显示设置 · 20261022.4"; anchors.centerIn: parent; modal: true; exit: Transition {}
     width: Math.min(host.width - 36, 650)
     contentItem: ColumnLayout {
       spacing: 14
@@ -1121,6 +1121,7 @@ Control {
           SocialButton { text: "迁移到另一设备"; enabled: !social.busy; onClicked: social.deviceCode() }
         Item { Layout.fillWidth: true }
       }
+      Text { Layout.fillWidth: true; text: social.nativeTransportAvailable ? "联网通道：iOS 系统网络" : "联网通道：兼容模式（请覆盖安装新版 IPA）"; color: "#b6dacb"; font.pixelSize: 12; font.family: host.font.family }
       Text { Layout.fillWidth: true; wrapMode: Text.Wrap; text: social.error || host.notice; color: social.error ? "#f0a795" : "#b6dacb"; font.pixelSize: 13; font.family: host.font.family; textFormat: Text.PlainText }
       SocialButton { text: "关闭"; Layout.alignment: Qt.AlignRight; onClicked: serviceSettings.close() }
     }

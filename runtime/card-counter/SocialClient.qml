@@ -29,6 +29,7 @@ QtObject {
   property string generationKey: profileKey + "|" + endpoint + "|" + token
   property bool enabled: false
   property bool busy: false
+  readonly property bool nativeTransportAvailable: typeof Backend !== "undefined" && Backend !== null && typeof Backend.startSocialRequest === "function"
   property bool presenceDirty: false
   onBusyChanged: if (!busy && enabled && context.valid) {
     if (accountKey && !accountConnected && !authenticating) Qt.callLater(connectService);
@@ -228,14 +229,18 @@ QtObject {
     if (!validEndpoint(endpoint)) { error = "好友服务地址不正确"; return; }
     const key = generationKey;
     const origin = endpoint === defaultEndpoint && useBackupTransport ? fallbackEndpoint : endpoint;
-    const request = new XMLHttpRequest();
-    const entry = {xhr: request, deadline: Date.now() + 10000, settled:false};
+    const useNative = nativeTransportAvailable && endpoint === defaultEndpoint;
+    const request = useNative ? {status:0, responseText:"", abort:function() {
+      if (entry.nativeId && typeof Backend !== "undefined" && Backend !== null) Backend.cancelSocialRequest(entry.nativeId);
+    }} : new XMLHttpRequest();
+    const entry = {xhr: request, nativeId:0, errorCode:0, failure:"", deadline: Date.now() + (useNative ? 16000 : 10000), settled:false};
     calls = calls.concat([entry]); busy = true;
     const finish = function(timedOut) {
       if (entry.settled) return;
       entry.settled = true;
       calls = calls.filter(item => item !== entry); busy = calls.length > 0;
       if (key !== generationKey) return;
+      timedOut = timedOut || entry.errorCode === -1001;
       const status = timedOut ? 0 : request.status;
       let data = {}, validJson = false;
       const responseText = status ? request.responseText || "" : "";
@@ -263,7 +268,8 @@ QtObject {
         else if (status === 403 && /\b1010\b/.test(responseText))
           error = "好友请求被 Cloudflare 拦截（HTTP 403 / 1010），请截图反馈";
         else if (status) error = "好友服务返回 HTTP " + status + "，请截图反馈";
-        else error = (attempt > 0 ? "好友服务主、备用入口均连接失败，请切换网络后重试" : timedOut ? "好友服务请求超时，请稍后重试" : "暂时连不上好友服务，请检查地址或服务是否启动") + "（未收到 HTTP 响应）";
+        else error = (attempt > 0 ? "好友服务主、备用入口均连接失败" : timedOut ? "好友服务请求超时" : "暂时连不上好友服务") +
+            "（未收到 HTTP 响应）" + (entry.failure ? "：" + entry.failure : "，请检查网络后重试");
         if (status === 401) {
           token = ""; accountConnected = false; friends = []; requests = []; invitations = []; me = ({});
           if (usingSavedSession && pendingCredentials) {
@@ -286,6 +292,11 @@ QtObject {
       if (callback) callback(data);
     };
     entry.finish = finish;
+    if (useNative) {
+      entry.nativeId = Backend.startSocialRequest(method, origin + path,
+          !anonymous ? token : "", method === "POST" ? JSON.stringify(payload || {}) : "");
+      return;
+    }
     request.onreadystatechange = function() {
       if (request.readyState === XMLHttpRequest.DONE) finish(false);
     };
@@ -295,6 +306,17 @@ QtObject {
     if (!anonymous && token) request.setRequestHeader("Authorization", "Bearer " + token);
     if (method === "POST") request.setRequestHeader("Content-Type", "application/json");
     request.send(method === "POST" ? JSON.stringify(payload || {}) : "");
+  }
+  property Connections nativeReplies: Connections {
+    target: typeof Backend !== "undefined" ? Backend : null
+    ignoreUnknownSignals: true
+    function onSocialRequestFinished(id, status, body, code, failure) {
+      const entry = api.calls.find(item => item.nativeId === id);
+      if (!entry || entry.settled) return;
+      entry.xhr.status = status; entry.xhr.responseText = body;
+      entry.errorCode = code; entry.failure = failure;
+      entry.finish(false);
+    }
   }
   function connectService() {
     if (!context.valid || busy || deriving) return;
