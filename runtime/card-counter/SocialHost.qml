@@ -1087,7 +1087,7 @@ Control {
   }
   SocialDialog {
     id: serviceSettings; objectName: "socialServiceSettings"
-    title: "好友与显示设置 · 20261022.2"; anchors.centerIn: parent; modal: true; exit: Transition {}
+    title: "好友与显示设置 · 20261022.3"; anchors.centerIn: parent; modal: true; exit: Transition {}
     width: Math.min(host.width - 36, 650)
     contentItem: ColumnLayout {
       spacing: 14
@@ -1103,11 +1103,15 @@ Control {
       Text { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "头像跟随游戏个人资料。隐身只隐藏同游好友服务中的在线和房间信息，不改变主力服的游戏状态。"; color: "#c5d2d4"; font.pixelSize: 14; font.family: host.font.family }
         RowLayout {
           Text { text: "好友服务"; color: "#d6e0df"; font.family: host.font.family; font.pixelSize: 14 }
-          SocialField { id: serviceAddress; objectName: "serviceAddress"; Layout.fillWidth: true; text: social.endpoint; placeholderText: "输入好友服务地址"; maximumLength: 255 }
+          SocialField { id: serviceAddress; objectName: "serviceAddress"; Layout.fillWidth: true; text: social.transportEndpoint; placeholderText: "填服务根地址，不含 /v1/state"; maximumLength: 255 }
           SocialButton { objectName: "friendsConnectButton"; text: social.deriving ? "认证中…" : social.enabled && social.token ? "暂停" : "连接好友"; enabled: !social.busy && !social.deriving && host.networkGame
             onClicked: {
               host.notice = "";
               if (!social.configure(serviceAddress.text)) return;
+              serviceAddress.text = social.transportEndpoint;
+              // Reuse credentials of the currently authenticated game account
+              // after correcting a previously saved service address.
+              host.updateContext();
               if (social.enabled && social.token) social.pauseService();
               else social.connectService();
             } }

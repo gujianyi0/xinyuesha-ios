@@ -47,13 +47,15 @@ with tempfile.TemporaryDirectory(dir=a.work_dir) as temp:
 QtObject {
  id:root;property string mode:"saved";property var saved:({});property int derives:0
  property var api:SocialClient {
-  readProfile:function(k){return {token:root.mode==="fresh"?"":root.mode==="expired"?"expired":"valid",enabled:true,accountBound:root.mode!=="fresh"};}
+  readProfile:function(k){return {endpoint:root.mode==="savedApiPath"?root.api.fallbackEndpoint+"/v1/state/":"",token:root.mode==="fresh"?"":root.mode==="expired"?"expired":"valid",enabled:true,accountBound:root.mode!=="fresh"};}
   writeProfile:function(k,v){root.saved=v;}
   onDerivingChanged:if(deriving)root.derives++
  }
  function setup(){api.bind({valid:true,server:"fixture:9527",gameId:1,name:"fixture",state:"lobby",roomId:0});api.setCredentials("fixture:9527","fixture","test-password");}
  function add(){api.useBackupTransport=false;api.addFriend("123456789ABC");}
  function alias(){return api.configure(api.fallbackEndpoint);}
+ function apiAlias(){return api.configure(api.fallbackEndpoint+"/v1/state/");}
+ function invalidAlias(){return api.configure(api.fallbackEndpoint+"/wrong-path");}
  function state(){return JSON.stringify({id:api.me.id||"",friends:api.friends.length,token:api.token,backup:api.useBackupTransport,busy:api.busy,calls:api.calls.length,error:api.error,scope:api.profileKey,endpoint:api.endpoint,saved:saved,derives:derives});}
  function clear(){api.clearSession();}
 }''',encoding='utf-8')
@@ -66,6 +68,11 @@ QtObject {
  assert s['saved']['endpoint']==origin(primary),'fallback must not change logical identity endpoint'
  assert invoke(r,'alias') and state(r)['token']=='valid' and state(r)['scope']==s['scope'],'explicit alias preserves account'
  results['drop_to_backup']=s
+ if a.payload.name=='runtime':
+  assert invoke(r,'apiAlias') and state(r)['endpoint']==origin(primary) and state(r)['token']=='valid'
+  assert state(r)['derives']==0 and state(r)['id']==s['id'],'test URL normalization must preserve session and identity'
+  assert invoke(r,'invalidAlias') is False and state(r)['token']=='valid','reject unknown API paths before clearing session'
+  assert invoke(r,'alias');results['api_path_configure_preserves_identity']=True
  primary.mode='timeout';start=len(backup.calls);invoke(r,'add');pump(.7)
  assert primary.friend_effects==1 and '/v1/friends/request' not in backup.calls[start:],'do not replay friend requests'
  assert not state(r)['busy'] and '超时' in state(r)['error'],state(r)
@@ -90,5 +97,9 @@ QtObject {
    assert primary.agents[-1]==('Xinyuesha-Test/0.5.25','application/json')
    assert s['token']=='valid','an unexpected response must not erase saved identity'
    results[mode+'_diagnostic']=s['error'];invoke(r,'clear');e.deleteLater();pump(.05)
+  primary.mode='ok';backup.mode='ok';start=len(primary.calls);e,r=create('savedApiPath');invoke(r,'setup');pump(.4);s=state(r)
+  assert s['id']=='same-cloud-identity' and s['backup'] and s['derives']==0 and s['endpoint']==origin(primary),s
+  assert len(primary.calls)==start,'a stored backup test URL must restore the backup transport directly'
+  results['saved_api_path_repaired']=True;invoke(r,'clear');e.deleteLater();pump(.05)
 for s in [primary,backup]:s.shutdown()
 print(json.dumps(results,ensure_ascii=False,indent=2));(a.work_dir/'result.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf-8')

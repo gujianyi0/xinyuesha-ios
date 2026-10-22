@@ -8,6 +8,7 @@ QtObject {
   readonly property string fallbackEndpoint: "https://xinyuesha-friends-api.pages.dev"
   property bool useBackupTransport: false
   property string endpoint: defaultEndpoint
+  readonly property string transportEndpoint: endpoint === defaultEndpoint && useBackupTransport ? fallbackEndpoint : endpoint
   property string token: ""
   property string recoveryCode: ""
   property string accountKey: "" // Memory only: never persisted, displayed or logged.
@@ -53,6 +54,13 @@ QtObject {
     return /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:[0-9]{1,5})?$/.test(value) ||
       /^https:\/\/[a-zA-Z0-9.\-\[\]:]+(\/[a-zA-Z0-9._~%\/-]*)?$/.test(value);
   }
+  function serviceRoot(value) {
+    value = String(value || "").trim().replace(/\/+$/, "");
+    for (const base of [defaultEndpoint, fallbackEndpoint]) {
+      if (value === base + "/v1/state") return base;
+    }
+    return value;
+  }
   function clearSession() {
     presenceDirty = false;
     for (const entry of calls) { entry.settled = true; entry.xhr.abort(); }
@@ -80,7 +88,7 @@ QtObject {
       clearSession(); enabled = false;
       if (key) {
         const saved = readProfile(key) || {};
-        const previousEndpoint = saved.endpoint || "";
+        const previousEndpoint = serviceRoot(saved.endpoint || "");
         useBackupTransport = saved.backupTransport === true || previousEndpoint === fallbackEndpoint;
         // This published service contains the migrated local identities.
         // Preserve tokens only for that known migration; custom services stay separate.
@@ -199,7 +207,13 @@ QtObject {
     }
   }
   function configure(url) {
-    url = url.trim().replace(/\/$/, "");
+    url = serviceRoot(url);
+    for (const base of [defaultEndpoint, fallbackEndpoint]) {
+      if (url.startsWith(base + "/")) {
+        error = "请填写好友服务根地址，不要附加接口路径";
+        return false;
+      }
+    }
     const backupRequested = url === fallbackEndpoint;
     if (backupRequested) url = defaultEndpoint;
     if (!validEndpoint(url)) { error = "请输入 HTTPS 服务地址；本机测试可用 http://127.0.0.1:19528"; return false; }
@@ -207,6 +221,7 @@ QtObject {
       endpoint = url; clearSession(); enabled = false; persist();
     }
     if (backupRequested) { useBackupTransport = true; persist(); }
+    error = "";
     return true;
   }
   function call(method, path, payload, callback, anonymous, attempt) {
