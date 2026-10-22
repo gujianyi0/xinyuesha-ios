@@ -28,7 +28,7 @@ import java.util.Set;
 public final class CounterStartup {
     private CounterStartup() {}
     private static final String[] ORDER = {
-        "card-counter/CardCounter.qml", "card-counter/SuitIcon.qml", "card-counter/CounterHost.qml",
+        "card-counter/CardCounter.qml", "card-counter/SuitIcon.qml", "card-counter/RoleVoiceControl.qml", "card-counter/CounterHost.qml",
         "card-counter/bootstrap.lua", "card-counter/counter.lua", "card-counter/CounterViewport.qml",
         "card-counter/SocialClient.qml", "card-counter/SocialHost.qml", "card-counter/SocialAuth.js",
         "card-counter/client-shell/main.qml", "Fk/main.qml",
@@ -48,6 +48,7 @@ public final class CounterStartup {
             // Verify the whole payload before changing any installed file.
             for (String relative : ORDER) {
                 if (!social && relative.contains("/Social")) continue;
+                if (relative.equals("card-counter/RoleVoiceControl.qml") && !manifest.has(relative)) continue;
                 String expected = manifest.getString(relative);
                 byte[] data;
                 try (InputStream input = context.getAssets().open("res/" + relative)) { data = read(input); }

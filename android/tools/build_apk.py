@@ -1,6 +1,6 @@
 """Package the published testing-edition payload with a matching native baseline."""
 from pathlib import Path
-import argparse, hashlib, json, os, shutil, subprocess, tempfile, zipfile
+import argparse, hashlib, json, os, re, shutil, subprocess, tempfile, zipfile
 from dex_validation import validate_dex
 
 def main():
@@ -22,6 +22,11 @@ def main():
                for p in (root/'payload').rglob('*') if p.is_file()}
     manifest = json.loads(payload.pop('card-counter/bundled-files.json'))
     assert all(name in payload for name in manifest), 'Incomplete published payload'
+    startup = (root/'java/org/notify/FreeKill/CounterStartup.java').read_text(encoding='utf-8')
+    order = startup.split('private static final String[] ORDER = {', 1)[1].split('};', 1)[0]
+    installed = set(re.findall(r'"([^"]+)"', order))
+    assert not (set(manifest)-installed), f'Payload missing from startup installer: {sorted(set(manifest)-installed)}'
+    assert all(name.encode() in dex for name in manifest), 'Recompile helper DEX for the current payload'
     for name in manifest:
         manifest[name] = hashlib.sha256(payload[name]).hexdigest()
     payload['card-counter/bundled-files.json'] = json.dumps(manifest, sort_keys=True, indent=2).encode()
