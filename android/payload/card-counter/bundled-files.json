@@ -3,7 +3,7 @@
   "card-counter/CardCounter.qml": "8c80f41085de19e06b29413a9a208db822f435bb3101bdd0b157f56b420f1641",
   "card-counter/CounterHost.qml": "cbb812ddb03c881c2390e5129ee7fecc61589c20a88af013079f350716ff31e8",
   "card-counter/CounterViewport.qml": "86e30b8f7e308375daaca23b4ee6bae6b5debd501a5e1ae84ecda912580c2e6d",
-  "card-counter/RoleVoiceControl.qml": "62a3225a5c8e1f29e16e2bce1da89f4849bde6e40b5c8bf2ff0dd2836915ad1e",
+  "card-counter/RoleVoiceControl.qml": "ed5b85970c7b5fbfbff5fbc1cba35c281cef5e03100a5ffc811799a767b3c147",
   "card-counter/SocialAuth.js": "47a55593ea42a333fc80529213ad4194771d639be051524b119a3d332004c861",
   "card-counter/SocialClient.qml": "16f7ea7849b71a7b1d308cb1353bf1128fd9ac1457bc225f133a3443ce590468",
   "card-counter/SocialHost.qml": "4ded417151407800f30148bf0e52f9aefa58cd22389dadb8154dfc436e894185",
