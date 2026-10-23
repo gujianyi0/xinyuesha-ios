@@ -216,7 +216,8 @@ Item {
     const key = special ? name : "$" + name + (row.specific ? "_" + row.general : "") + (idx ? idx : "");
     const translated = Lua.tr(key);
     const label = translated === key ? (special ? Lua.tr(name.slice(1)) + (name[0] === "!" ? " · 胜利" : " · 阵亡") : Lua.tr(name) + (idx ? " · " + idx : "")) : translated;
-    return row.general && row.general === selectedGeneral ? "【" + Lua.tr(row.general) + "】" + label : label;
+    const general = String(row.general || (special ? name.slice(1) : ""));
+    return general ? "【" + Lua.tr(general) + "】" + label : label;
   }
   function sendVoice(row) {
     if (cooldown.running || Config.replaying || chatBox.isLobby) return false;
@@ -251,7 +252,14 @@ Item {
   Connections {
     target: Mediator
     function onCommandGot(sender, command, data) {
-      if (["EnterRoom","ChangeRoom","EnterLobby","BackToStart"].indexOf(command) >= 0) {
+      if (command === "ChangeRoom") {
+        // A settings update is still the same room. Preserve the selected
+        // voice; rebuild checks the new host pool before exposing/sending it.
+        if (picker.visible) root.refreshPool();
+        if (root.soundList.visible) Qt.callLater(root.rebuildVoices);
+        return;
+      }
+      if (["EnterRoom","EnterLobby","BackToStart"].indexOf(command) >= 0) {
         scanDelay.stop(); root.scanning = false; root.checkedCount = 0; root.candidates = [];
         if (command === "BackToStart") root.clearAudioCache();
         root.selectedGeneral = ""; root.generals = []; root.filtered = []; catalogModel.clear(); picker.close();

@@ -122,6 +122,10 @@ Window {
  function pickerVisible(){return control().pickerVisible;}
  function setup(){counter.attachRoleVoices(chat);counter.attachRoleVoices(chat);}
  function pickB(){control().refreshPool();control().choose("b");}
+ function doubleGeneral(){Lua.selfPlayer={id:1,general:"self",deputyGeneral:"b"};control().rebuildVoices();}
+ function restoreGeneral(){Lua.selfPlayer={id:1,general:"self",deputyGeneral:""};control().rebuildVoices();}
+ function sameRoomSettings(){Mediator.commandGot(null,"ChangeRoom",["same room",4,15,{}]);}
+ function voiceLabels(){const c=control(),labels=[];for(let i=0;i<c.soundList.model.count;i++)labels.push(c.voiceText(c.soundList.model.get(i)));return JSON.stringify(labels);}
  function pickC(){control().choose("c");}
  function reopen(){control().soundList.visible=true;}
  function refresh(){control().rebuildVoices();}
@@ -170,6 +174,12 @@ assert initial['controls']==1 and initial['selected']=='b',initial
 assert [r['name'] for r in initial['rows']].count('skill_b')==1,initial
 assert {r['id'] for r in initial['pool']}=={'b','c','death','win','zero'},initial['pool']
 call('refresh');assert json.loads(invoke('snapshot'))['count']==initial['count'],'no duplicate voices'
+call('doubleGeneral');dual=json.loads(invoke('snapshot'));labels=json.loads(invoke('voiceLabels'))
+assert dual['selected']=='b' and [r['name'] for r in dual['rows']].count('skill_b')==1,dual
+assert any(s.startswith('【b】') for s in labels) and any(s.startswith('【self】') for s in labels),labels
+assert all(not s.startswith('【') for s in labels if s.startswith('fastchat')),labels
+call('sameRoomSettings');assert json.loads(invoke('snapshot'))['selected']=='b','settings updates must preserve the selected voice'
+call('restoreGeneral')
 assert invoke('sendSpecific') is True;state=json.loads(invoke('snapshot'))
 assert state['sent']==[{'command':'Chat','data':{'type':2,'msg':'$skill_b:1:b'}}],state
 assert not invoke('sendAgain'),'cooldown prevents duplicate packet'
@@ -188,6 +198,7 @@ call('selectZero');zero=json.loads(invoke('snapshot'))
 assert any(r['name']=='zero' and r['idx']==0 for r in zero['rows']),zero
 call('selectDeath');death=json.loads(invoke('snapshot'))
 assert any(r['name']=='~death' for r in death['rows']),death
+assert any(s.startswith('【death】') for s in json.loads(invoke('voiceLabels'))),'death voices identify their general'
 call('selectWin');win_audio=json.loads(invoke('snapshot'))
 assert any(r['name']=='!win' for r in win_audio['rows']),win_audio
 # Specific audio wins even when a shared audio file also exists.

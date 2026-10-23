@@ -307,6 +307,57 @@ Control {
     }
     social.persist();
   }
+  function roomDetails(data) {
+    if (typeof data === "string") { try {data=JSON.parse(data);} catch(_){return {};} }
+    if (!data || typeof data!=="object") return {};
+    const candidates=[data.settings,data.roomSettings,data[2],data[3],data];
+    for (let item of candidates) {
+      if(typeof item==="string") {try {item=JSON.parse(item);}catch(_){continue;}}
+      if(item && typeof item==="object" && ["roomId","room_id","roomName","room_name","gameMode"].some(k=>k in item)) return item;
+    }
+    return {};
+  }
+  function recoverRoomDetails() {
+    if (!networkGame || gameState==="lobby" || gameState==="offline") return;
+    try {
+      const settings=Lua.ev('(function() local s=ClientInstance and ClientInstance.settings or {}; return {roomId=tonumber(s.roomId or s.room_id) or 0, roomName=s.roomName or s.room_name or ""} end)()');
+      const id=Number(settings && settings.roomId), name=settings && settings.roomName;
+      let changed=false;
+      if(Number.isInteger(id) && id>0 && roomId!==id){roomId=id;roomIdProvided=true;changed=true;}
+      if(typeof name==="string" && name && roomName!==name){roomName=name;changed=true;}
+      if(changed)updateContext();
+    } catch(_) { /* Old cores can omit room metadata; allow explicit entry. */ }
+  }
+  function presenceOf(friend) {
+    const p=(friend && friend.presence) || {}, room=p.room || {};
+    const id=Number(p.roomId ?? p.room_id ?? room.id ?? 0);
+    return Object.assign({},p,{server:String(p.server || "").trim().toLowerCase(),
+      roomId:Number.isInteger(id) && id>0 ? id : 0,
+      roomName:String(p.roomName || p.room_name || room.name || "")});
+  }
+  function followPresenceMatches(target, observe) {
+    const friend=social.friends.find(f=>f.id===target.friendId);
+    if(!friend)return false;
+    const p=presenceOf(friend);
+    if(p.server!==target.server || !p.state || ["offline","invisible"].indexOf(p.state)>=0)return false;
+    if(target.manualRoom && p.roomId<=0)return observe;
+    return p.roomId===target.roomId && ["waiting","playing","observing"].indexOf(p.state)>=0 && (observe || p.state==="waiting");
+  }
+  function refreshFollowTarget() {
+    const target=joinDialog.targetRoom;
+    if(!joinDialog.visible || !target || !target.needsRoomId || !target.friendId)return;
+    const friend=social.friends.find(f=>f.id===target.friendId),p=presenceOf(friend);
+    if(p.server===target.server && p.roomId>0 && ["waiting","playing","observing"].indexOf(p.state)>=0) {
+      joinDialog.targetRoom=Object.assign({},target,{roomId:p.roomId,roomName:p.roomName,needsRoomId:false,observe:p.state!=="waiting"});
+      joinDialog.observeOnly=p.state!=="waiting";
+    }
+  }
+  function friendStatus(friend) {
+    const p=presenceOf(friend);
+    const room=p.roomId ? " · 房间 #"+p.roomId+(p.roomName ? " · "+p.roomName : "") :
+      (["waiting","playing","observing"].indexOf(p.state)>=0 ? " · 房间信息待同步" : "");
+    return statusLabel(p.state)+room;
+  }
   function updateContext() {
     loadProfiles();
     social.bind({valid: networkGame && gameAccount > 0, server: gameServer,
@@ -510,17 +561,18 @@ Control {
     if (!target || target.profileKey !== social.profileKey || target.server !== gameServer || !networkGame) {
       social.error = "账号或服务器已改变，请重新接收邀请"; return;
     }
-    // Recheck the last received presence when confirming the dialog. Never
-    // silently enter an old room after the friend moves or starts a match.
-    if (target.friendId) {
-      const friend = social.friends.find(f => f.id === target.friendId);
-      const p = friend && friend.presence;
-      if (!p || p.server !== target.server || Math.floor(p.roomId || 0) !== target.roomId ||
-          ["waiting", "playing", "observing"].indexOf(p.state) < 0) {
-        social.error = "好友的房间状态已改变，请重新跟随"; return;
+    if (target.needsRoomId) {
+      const id=Number(manualFollowRoom.text);
+      if(!/^\d+$/.test(manualFollowRoom.text) || !Number.isInteger(id) || id<=0 || id>2147483647) {
+        social.error="请填写好友当前的实际房间号";manualFollowRoom.forceActiveFocus();return;
       }
-      if (!observe && p.state !== "waiting") {
-        social.error = "好友已开局，请关闭窗口后重新选择跟随观战"; return;
+      target=Object.assign({},target,{roomId:id,manualRoom:true});
+      observe=true;
+    }
+    // Recheck the latest received presence; never follow a known stale room.
+    if (target.friendId) {
+      if (!followPresenceMatches(target,observe)) {
+        social.error = "好友的房间状态已改变，请重新跟随"; return;
       }
     }
     if (gameState === "playing") { social.error = "当前对局尚未结束，无法切换房间"; return; }
@@ -533,28 +585,26 @@ Control {
     else Cpp.notifyServer("QuitRoom", "");
   }
   function canFollowObserve(friend) {
-    const presence = (friend && friend.presence) || {};
-    return networkGame && presence.server === gameServer &&
-      (presence.state === "waiting" || presence.state === "playing" || presence.state === "observing") &&
-      Math.floor(presence.roomId || 0) > 0;
+    const p=presenceOf(friend);
+    return networkGame && p.server===gameServer && !!p.state && ["offline","invisible"].indexOf(p.state)<0;
   }
   function followObserve(friend) {
     updateContext();
-    const presence = (friend && friend.presence) || {};
+    const presence=presenceOf(friend);
     if (!social.enabled || !social.token) { social.error = "先连接好友服务"; return; }
     if (!networkGame) { social.error = "请先登录游戏服务器"; return; }
     if (presence.server !== gameServer) { social.error = "好友在其他服务器，暂时无法跟随观战"; return; }
-    if (["waiting", "playing", "observing"].indexOf(presence.state) < 0) { social.error = "好友当前不在房间中"; return; }
-    const targetRoom = Math.floor(presence.roomId || 0);
-    if (targetRoom <= 0) { social.error = "好友未上报房间号，暂时无法跟随观战"; return; }
+    if (!presence.state || ["offline","invisible"].indexOf(presence.state)>=0) {social.error="好友当前离线或已隐藏状态";return;}
+    const targetRoom=presence.roomId, missing=targetRoom<=0;
     if (targetRoom === roomId && roomId > 0) { social.error = "已经在这个房间中"; return; }
     if (gameState === "playing") { social.error = "当前对局尚未结束，无法切换房间"; return; }
     if (!socialUiAvailable) { social.error = "请返回大厅或等待房间后再跟随观战"; return; }
-    joinDialog.targetRoom = {roomId: targetRoom, roomName: presence.roomName || "",
-      server: gameServer, profileKey: social.profileKey, friendId: friend.id, observe: presence.state !== "waiting"};
-    joinDialog.observeOnly = presence.state !== "waiting";
-    roomPassword.text = "";
+    joinDialog.targetRoom = {roomId:targetRoom,roomName:presence.roomName,
+      server:gameServer,profileKey:social.profileKey,friendId:friend.id,observe:missing || presence.state!=="waiting",needsRoomId:missing};
+    joinDialog.observeOnly=missing || presence.state!=="waiting";
+    roomPassword.text="";manualFollowRoom.text="";social.error="";
     joinDialog.open();
+    if(!social.busy)social.refresh();
   }
   function finishJoin() {
     const target = pendingJoin;
@@ -567,10 +617,7 @@ Control {
     if (navigationStack && (!page || !("roomModel" in page) || !("lobbyPlayerNum" in page))) return;
     pendingJoin = null;
     if (target.friendId) {
-      const friend = social.friends.find(f => f.id === target.friendId);
-      const p = friend && friend.presence;
-      if (!p || p.server !== target.server || Math.floor(p.roomId || 0) !== target.roomId ||
-          ["waiting", "playing", "observing"].indexOf(p.state) < 0 || (!target.observe && p.state !== "waiting")) {
+      if (!followPresenceMatches(target,target.observe)) {
         social.error = "好友的房间状态已改变，请重新跟随"; return;
       }
     }
@@ -748,7 +795,7 @@ Control {
     onIdentityCreated: { host.prepareRecoveredProfile(); if (host.socialUiAvailable) backupDialog.open(); }
     onIdentityRestored: host.prepareRecoveredProfile()
     onPolicyUpdated: Qt.callLater(host.synchronizeInvitationPolicy)
-    onFriendsChanged: { host.filterNativeInvitations(); host.refreshPublicAvatars(); }
+    onFriendsChanged: { host.filterNativeInvitations(); host.refreshPublicAvatars(); host.refreshFollowTarget(); }
     onReservationsChanged: host.remindReservations()
     onMeChanged: if (social.me.id) host.readyReminders = host.readyReminders.filter(id => social.reservations.some(r => r.id === id));
   }
@@ -789,11 +836,11 @@ Control {
       } else if (command === "EnterRoom" || command === "ChangeRoom") {
         if (command === "EnterRoom") { host.utilityPageDepth = 0; host.findNavigationStack(); }
         if (command === "EnterRoom") { host.roomLauncherReady = false; host.inviteAnchor = null; host.matchViewActive = false; host.nativeFailureNeedsRoomId = false; }
-        const settings = data[2] || {};
-        host.roomId = Math.floor(settings.roomId || (command === "EnterRoom" ?
+        const settings = host.roomDetails(data);
+        host.roomId = Math.floor(settings.roomId || settings.room_id || (command === "EnterRoom" ?
           (Date.now() < host.selectedRoomDeadline ? host.selectedRoomId : 0) : host.roomId) || 0);
         host.roomIdProvided = host.roomId > 0;
-        host.roomName = settings.roomName || (command === "EnterRoom" ?
+        host.roomName = settings.roomName || settings.room_name || (command === "EnterRoom" ?
           (Date.now() < host.selectedRoomDeadline ? host.selectedRoomName : "") : host.roomName) || "";
         if (command === "EnterRoom") { host.selectedRoomId = 0; host.selectedRoomName = ""; }
         host.gameState = Config.observing ? "observing" : "waiting";
@@ -837,6 +884,7 @@ Control {
         host.selectedRoomId = 0; host.selectedRoomName = ""; host.selectedRoomDeadline = 0;
       }
       host.updateContext();
+      if (["EnterRoom","ChangeRoom","StartGame","BackToRoom"].indexOf(command)>=0) Qt.callLater(host.recoverRoomDetails);
       if (command === "AddPlayer" || command === "EnterRoom" || command === "BackToRoom" || command === "ArrangeSeats")
         Qt.callLater(host.refreshPublicAvatars);
       if (command === "EnterLobby" || command === "EnterRoom" || command === "BackToRoom" || command === "RestartGame") Qt.callLater(host.refreshRoomBridge);
@@ -954,14 +1002,14 @@ Control {
           SocialButton { text: "恢复已有好友"; enabled: !social.busy; onClicked: linkDialog.open() }
         }
         RowLayout {
-          visible: !host.roomIdProvided && (!host.nativeInvitesSupported || host.nativeFailureNeedsRoomId) && host.gameState !== "lobby" && host.gameState !== "offline"
+          visible: !host.roomIdProvided && host.gameState !== "lobby" && host.gameState !== "offline"
           Text { text: "当前房间号"; color: "#adbec0"; font.family: host.font.family; font.pixelSize: 13 }
           SocialField { id: manualRoom; Layout.preferredWidth: 90; placeholderText: "如 123"; maximumLength: 10
             validator: IntValidator { bottom: 1; top: 2147483647 } }
           SocialButton { text: "确认"; enabled: manualRoom.acceptableInput
                     onClicked: { host.roomId = parseInt(manualRoom.text); host.roomIdProvided = true; host.updateContext(); social.refresh(); } }
           Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: "#bdcdd0"; font.family: host.font.family; font.pixelSize: 13
-            text: host.nativeFailureNeedsRoomId ? "原版邀请未成功，可填写当前房间号，改用好友服务跨房间邀请。" : "服务器未提供房间号，发送邀请前请按实际房间填写。" }
+            text: host.nativeFailureNeedsRoomId ? "原版邀请未成功，可填写当前房间号，改用好友服务跨房间邀请。" : "服务器未提供房间号，请按实际房间填写，好友才能直接跟随或接收邀请。" }
         }
         Text { Layout.fillWidth: true; visible: text !== ""; text: host.profileStorageError || social.error || host.notice
           wrapMode: Text.Wrap; color: social.error ? "#f0a795" : "#b6dacb"; font.family: host.font.family; font.pixelSize: 13; textFormat: Text.PlainText }
@@ -1027,14 +1075,14 @@ Control {
                   ColumnLayout {
                     Layout.fillWidth: true; spacing: 3
                     Text { Layout.fillWidth: true; elide: Text.ElideRight; text: modelData.name + " · " + modelData.code; color: "#f1e6d0"; font.family: host.font.family; font.pixelSize: 15; textFormat: Text.PlainText }
-                    Text { text: host.statusLabel(modelData.presence.state) + (modelData.presence.roomId ? " · 房间 #" + modelData.presence.roomId : "") +
+                    Text { Layout.fillWidth:true;elide:Text.ElideRight;textFormat:Text.PlainText;text: host.friendStatus(modelData) +
                         (social.friends.filter(friend => friend.name === modelData.name).length > 1 ? " · 同名不同好友码" : "")
                       color: "#c1d1d4"; font.family: host.font.family; font.pixelSize: 13 }
                   }
                   SocialButton {
                     objectName: "followObserveFriend_" + modelData.id
                     visible: host.canFollowObserve(modelData)
-                    text: modelData.presence.state === "waiting" ? "跟随入房" : "跟随观战"
+                    text: host.presenceOf(modelData).roomId<=0 ? "跟随／补充房间" : host.presenceOf(modelData).state === "waiting" ? "跟随入房" : "跟随观战"
                     enabled: !social.busy
                     onClicked: host.followObserve(modelData)
                   }
@@ -1208,10 +1256,13 @@ Control {
     width: Math.min(host.width - 32, 450)
     contentItem: ColumnLayout {
       Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: "#e4edeb"; font.family: host.font.family; font.pixelSize: 15
-        text: (joinDialog.observeOnly
+        text: joinDialog.targetRoom && joinDialog.targetRoom.needsRoomId
+          ? "好友未同步房间号，可能在大厅或使用旧版。请向好友确认实际房间号后填写，仅以旁观身份进入。对方更新并同步房间信息后可直接跟随；密码和准入限制由游戏服务器检查。"
+          : (joinDialog.observeOnly
           ? "好友正在房间 #" + (joinDialog.targetRoom ? joinDialog.targetRoom.roomId : "") + " 对局或观战，将以旁观身份进入。"
           : "确认离开当前等待房间或旁观，前往房间 #" + (joinDialog.targetRoom ? joinDialog.targetRoom.roomId : "") + "？") +
           "房间密码和准入限制仍由游戏服务器检查。" }
+      SocialField {id:manualFollowRoom;objectName:"manualFollowRoom";Layout.fillWidth:true;visible:!!joinDialog.targetRoom && joinDialog.targetRoom.needsRoomId===true;maximumLength:10;inputMethodHints:Qt.ImhDigitsOnly;placeholderText:"好友当前房间号"}
       SocialField { id: roomPassword; Layout.fillWidth: true; echoMode: TextInput.Password; maximumLength: 64; placeholderText: "房间密码（如需）" }
       RowLayout {
         SocialButton { text: "取消"; onClicked: joinDialog.close() }

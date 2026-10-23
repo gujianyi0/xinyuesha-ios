@@ -72,7 +72,7 @@ QtObject {
         context.state === value.state && context.roomId === value.roomId &&
         context.roomName === value.roomName && context.avatar === value.avatar) return;
     const changed = context.server !== value.server || context.gameId !== value.gameId ||
-      context.state !== value.state || context.roomId !== value.roomId || context.valid !== value.valid || context.avatar !== value.avatar;
+      context.state !== value.state || context.roomId !== value.roomId || context.roomName !== value.roomName || context.valid !== value.valid || context.avatar !== value.avatar;
     const key = value.valid ? value.server + "/" + value.gameId : "";
     if (key !== profileKey) {
       // Invalidate callbacks before aborting requests from the previous account.
