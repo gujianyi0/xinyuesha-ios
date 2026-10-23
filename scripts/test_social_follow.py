@@ -15,7 +15,7 @@ with tempfile.TemporaryDirectory(dir=a.work_dir) as temp:
  put('Fk/qmldir','module Fk\n'+''.join('singleton '+n+' 1.0 '+n+'.qml\n' for n in ['Config','Cpp','Lua','Backend','SkinBank','Mediator']))
  put('Fk/Config.qml','pragma Singleton\nimport QtQuick\nQtObject {property string serverAddr:"test";property int serverPort:9527;property bool consoleStartRequested:false;property bool replaying:false;property bool observing:false;property string screenName:"fixture";property string password:"";}')
  put('Fk/Cpp.qml','pragma Singleton\nimport QtQuick\nQtObject {property var self:({id:1,screenName:"fixture",avatar:""});property var packets:[];function notifyServer(c,d){packets=packets.concat([{command:c,data:d}]);}}')
- put('Fk/Lua.qml','pragma Singleton\nimport QtQuick\nQtObject {property var room:({});function tr(s){return s;}function ev(s){return room;}function getPlayersAndObservers(){return [];}}')
+ put('Fk/Lua.qml','pragma Singleton\nimport QtQuick\nQtObject {property var room:({});property int queries:0;function tr(s){return s;}function ev(s){queries++;return room;}function getPlayersAndObservers(){return [];}}')
  put('Fk/Backend.qml','pragma Singleton\nimport QtQuick\nQtObject {function readFileFromAssets(p){return "";}function writeFileToAssets(p,v){return true;}}')
  put('Fk/SkinBank.qml','pragma Singleton\nimport QtQuick\nQtObject {function getGeneralExtraPic(a,b){return "";}function getGeneralPicture(a){return "";}}')
  put('Fk/Mediator.qml','pragma Singleton\nimport QtQuick\nQtObject {signal commandGot(var sender,string command,var data)}')
@@ -40,7 +40,8 @@ Window {
  function confirm(){host.joinTarget(host.testJoin.targetRoom,true);}
  function close(){host.testJoin.close();Cpp.packets=[];host.socialClient.error="";}
  function oldChangeRoom(){Mediator.commandGot(null,"ChangeRoom",["room",4,15,{room_id:42,room_name:"改名房间"}]);}
- function recover(){Lua.room={roomId:99,roomName:"恢复的房间"};host.recoverRoomDetails();}
+ function recover(){host.roomId=0;host.roomName="";Lua.room={roomId:99,roomName:"恢复的房间"};host.recoverRoomDetails();}
+ function warmRecover(){const q=Lua.queries;for(let i=0;i<1000;i++)host.recoverRoomDetails();return Lua.queries-q;}
  function rename(){const api=host.socialClient;api.presenceDirty=false;api.bind(Object.assign({},api.context,{roomName:"仅修改名称"}));return api.presenceDirty;}
  function state(){return JSON.stringify({can:host.canFollowObserve(host.socialClient.friends[0]),status:host.friendStatus(host.socialClient.friends[0]),dialog:host.testJoin.visible,target:host.testJoin.targetRoom,packets:Cpp.packets,error:host.socialClient.error,roomId:host.roomId,roomName:host.roomName});}
 }''')
@@ -64,6 +65,7 @@ Window {
  call('close');call('offline');assert not state()['can'];call('follow');assert state()['packets']==[] and not state()['dialog'],state()
  call('oldChangeRoom');assert state()['roomId']==42 and state()['roomName']=='改名房间',state()
  call('recover');assert state()['roomId']==99 and state()['roomName']=='恢复的房间',state()
+ assert invoke('warmRecover')==0,'complete room metadata must not issue repeated Lua queries'
  assert invoke('rename') is True,'a room-name-only update must schedule presence sync'
  errors=[s for s in logs if any(x in s for x in ['TypeError','ReferenceError','SyntaxError','Cannot assign','Unable to assign','Binding loop'])]
  assert not errors,errors

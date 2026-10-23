@@ -319,7 +319,7 @@ Control {
     return {};
   }
   function recoverRoomDetails() {
-    if (!networkGame || gameState==="lobby" || gameState==="offline") return;
+    if (!networkGame || gameState==="lobby" || gameState==="offline" || (roomId>0 && roomName)) return;
     try {
       const settings=Lua.ev('(function() local s=ClientInstance and ClientInstance.settings or {}; return {roomId=tonumber(s.roomId or s.room_id) or 0, roomName=s.roomName or s.room_name or ""} end)()');
       const id=Number(settings && settings.roomId), name=settings && settings.roomName;
@@ -579,6 +579,7 @@ Control {
     if (gameState === "playing") { social.error = "当前对局尚未结束，无法切换房间"; return; }
     if (!socialUiAvailable) { social.error = "请返回大厅或等待房间后再加入好友房间"; return; }
     if (target.roomId === roomId && roomId > 0) { social.error = "已经在这个房间中"; return; }
+    social.error="";
     pendingJoin = Object.assign({}, target, {password: roomPassword.text, observe: observe});
     joinDeadline = Date.now() + 10000;
     joinDialog.close();
@@ -1260,6 +1261,7 @@ Control {
           ? "好友正在房间 #" + (joinDialog.targetRoom ? joinDialog.targetRoom.roomId : "") + " 对局或观战，将以旁观身份进入。"
           : "确认离开当前等待房间或旁观，前往房间 #" + (joinDialog.targetRoom ? joinDialog.targetRoom.roomId : "") + "？") +
           "房间密码和准入限制仍由游戏服务器检查。" }
+      Label {Layout.fillWidth:true;wrapMode:Text.Wrap;color:"#ed9d82";visible:!!social.error;text:social.error}
       SocialField {id:manualFollowRoom;objectName:"manualFollowRoom";Layout.fillWidth:true;visible:!!joinDialog.targetRoom && joinDialog.targetRoom.needsRoomId===true;maximumLength:10;inputMethodHints:Qt.ImhDigitsOnly;placeholderText:"好友当前房间号"}
       SocialField { id: roomPassword; Layout.fillWidth: true; echoMode: TextInput.Password; maximumLength: 64; placeholderText: "房间密码（如需）" }
       RowLayout {
