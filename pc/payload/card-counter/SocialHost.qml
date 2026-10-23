@@ -356,7 +356,7 @@ Control {
   function friendStatus(friend) {
     const p=presenceOf(friend);
     const room=p.roomId ? " · 房间 #"+p.roomId+(p.roomName ? " · "+p.roomName : "") :
-      (["waiting","playing","observing"].indexOf(p.state)>=0 ? " · 房间信息待同步" : "");
+      (["waiting","playing","observing"].indexOf(p.state)>=0 ? (p.roomName ? " · "+p.roomName : "")+" · 房间信息待同步" : "");
     return statusLabel(p.state)+room;
   }
   function updateContext() {

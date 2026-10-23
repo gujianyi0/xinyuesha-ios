@@ -30,7 +30,7 @@ Window {
  Counter.SocialHost {id:host}
  function setup(){host.profiles={"test:9527/1":{enabled:false}};host.profilesLoaded=true;Mediator.commandGot(null,"EnterLobby",[]);host.socialClient.busy=true;host.socialClient.enabled=true;host.socialClient.token="local-fixture";}
  function friend(p){host.socialClient.friends=[{id:"friend",name:"friend",code:"123456789012",presence:p}];}
- function missing(){friend({state:"playing",server:"test:9527",roomId:0});}
+ function missing(){friend({state:"playing",server:"test:9527",roomId:0,roomName:"已同步的名称"});}
  function legacy(){friend({state:"playing",server:" TEST:9527 ",room_id:"74",room_name:"旧版房间"});}
  function moved(){friend({state:"playing",server:"test:9527",roomId:75});}
  function offline(){friend({state:"offline",server:"test:9527",roomId:74});}
@@ -52,7 +52,7 @@ Window {
  def call(name):
   QMetaObject.invokeMethod(win,name);loop=QEventLoop();QTimer.singleShot(60,loop.quit);loop.exec()
  def state():return json.loads(invoke('state'))
- call('setup');call('missing');assert state()['can'] and '待同步' in state()['status'],state()
+ call('setup');call('missing');assert state()['can'] and '待同步' in state()['status'] and '已同步的名称' in state()['status'],state()
  call('follow');assert state()['dialog'] and state()['target']['needsRoomId'] and state()['packets']==[],state()
  call('invalidRoom');call('confirm');assert state()['packets']==[] and '实际房间号' in state()['error'],state()
  call('manualRoom');call('confirm');assert state()['packets']==[{'command':'ObserveRoom','data':[321,'']}],state()
