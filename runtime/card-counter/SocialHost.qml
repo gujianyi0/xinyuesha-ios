@@ -95,8 +95,14 @@ Control {
   property var inviteAnchor: null
   property bool launcherRightOfAnchor: false
   property bool roomLauncherReady: false
+  property var roomInlineLauncher: null
+  function releaseRoomLauncher() {
+    if (roomInlineLauncher) roomInlineLauncher.destroy();
+    roomInlineLauncher = null;
+  }
   readonly property var roomContent: bridgePage && "gameContent" in bridgePage ? bridgePage.gameContent : null
   onRoomContentChanged: {
+    releaseRoomLauncher();
     roomLauncherReady = false; inviteAnchor = null;
     gameContentItem = roomContent ? roomContent.parent : null;
     if (roomContent && "isOwner" in roomContent && "isAllReady" in roomContent)
@@ -644,6 +650,7 @@ Control {
   function refreshRoomBridge() {
     host.findNavigationStack();
     if (!host.socialUiAvailable) return;
+    if (host.gameState === "lobby") host.releaseRoomLauncher();
     if (host.gameState !== "lobby" && host.roomContent &&
         !("isAllReady" in host.roomContent || "roomInviteButton" in host.roomContent)) {
       roomLauncherReady = false; inviteAnchor = null; return;
@@ -705,6 +712,14 @@ Control {
     if (inviteNode && inviteNode.visible) { inviteAnchor = inviteNode; launcherRightOfAnchor = false; }
     else if (chatNode) { inviteAnchor = chatNode; launcherRightOfAnchor = true; }
     else { inviteAnchor = anchor; launcherRightOfAnchor = false; }
+    // Participate in the stock action layout. Mapping only the anchor's
+    // coordinates misses ancestor layout/visibility changes when taking a
+    // seat, and can place a floating button on top of Ready/Start Game.
+    const row = inviteAnchor ? inviteAnchor.parent : null;
+    const inlineRow = row && String(row).indexOf("RowLayout") >= 0 ? row : null;
+    if (roomInlineLauncher && roomInlineLauncher.parent !== inlineRow) releaseRoomLauncher();
+    if (inlineRow && !roomInlineLauncher)
+      roomInlineLauncher = roomLauncherFactory.createObject(inlineRow);
     gameContentItem = content;
     updateLauncherPosition();
   }
@@ -863,23 +878,39 @@ Control {
     } else host.finishJoin();
   }
 
-  Rectangle {
-    objectName: "friendsLauncher"
-    visible: host.socialUiAvailable && (host.gameState === "lobby" || host.roomLauncherReady)
-    x: host.gameState === "lobby" ? 6 : host.roomLauncher.x
-    y: host.gameState === "lobby" ? 112 : host.roomLauncher.y
-    width: host.gameState === "lobby" ? 60 : host.roomLauncher.width
-    height: host.gameState === "lobby" ? 38 : host.roomLauncher.height; radius: 7
+  component FriendLauncher: Rectangle {
+    radius: 7
     color: launchMouse.containsMouse ? "#304e50" : "#de182d30"
     border.color: "#b69c66"
     Text {
       anchors.centerIn: parent; width: parent.width - 8; horizontalAlignment: Text.AlignHCenter
       elide: Text.ElideRight; color: "#f4e6c8"; font.family: host.font.family
-      font.pixelSize: 16 * (host.gameContentItem ? host.gameContentItem.scale : 1)
+      font.pixelSize: 16
       text: "好友" + (host.socialInvitationCount + social.requests.length + social.reservations.filter(r => r.status === "ready" || (r.status === "pending" && r.direction === "incoming")).length > 0 ? " · " + (host.socialInvitationCount + social.requests.length + social.reservations.filter(r => r.status === "ready" || (r.status === "pending" && r.direction === "incoming")).length) : "")
     }
     MouseArea { id: launchMouse; anchors.fill: parent; hoverEnabled: true
       onClicked: { host.expanded = !host.expanded; host.refreshRoomBridge(); host.updateContext(); social.refresh(); } }
+  }
+  Component {
+    id: roomLauncherFactory
+    FriendLauncher {
+      objectName: "roomFriendsLauncher"
+      visible: host.socialUiAvailable && host.gameState !== "lobby" && host.roomContent !== null
+      Layout.preferredWidth: Layout.preferredHeight * 1.72
+      Layout.preferredHeight: host.inviteAnchor ? host.inviteAnchor.height : 35
+      Layout.minimumWidth: Layout.preferredWidth
+      Layout.maximumWidth: Layout.preferredWidth
+      Layout.minimumHeight: Layout.preferredHeight
+      Layout.maximumHeight: Layout.preferredHeight
+    }
+  }
+  FriendLauncher {
+    objectName: "friendsLauncher"
+    visible: host.socialUiAvailable && (host.gameState === "lobby" || (!host.roomInlineLauncher && host.roomLauncherReady))
+    x: host.gameState === "lobby" ? 6 : host.roomLauncher.x
+    y: host.gameState === "lobby" ? 112 : host.roomLauncher.y
+    width: host.gameState === "lobby" ? 60 : host.roomLauncher.width
+    height: host.gameState === "lobby" ? 38 : host.roomLauncher.height; radius: 7
   }
 
   Rectangle {
@@ -1087,7 +1118,7 @@ Control {
   }
   SocialDialog {
     id: serviceSettings; objectName: "socialServiceSettings"
-    title: "好友与显示设置 · 20261022.4"; anchors.centerIn: parent; modal: true; exit: Transition {}
+    title: "好友与显示设置 · 20261023.1"; anchors.centerIn: parent; modal: true; exit: Transition {}
     width: Math.min(host.width - 36, 650)
     contentItem: ColumnLayout {
       spacing: 14

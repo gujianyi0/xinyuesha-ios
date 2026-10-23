@@ -5,8 +5,9 @@ os.environ.setdefault('QT_QPA_PLATFORM','offscreen')
 os.environ.setdefault('QT_QUICK_BACKEND','software')
 os.environ.setdefault('QT_QUICK_CONTROLS_STYLE','Material')
 from PySide6.QtCore import QEvent, QEventLoop, QTimer, QUrl, QMetaObject, Q_RETURN_ARG, qInstallMessageHandler
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QInputMethodEvent, QTextCharFormat, QColor, QFontDatabase, QFont
 from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQuick import QQuickWindow
 
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--work-dir',type=Path,required=True)
@@ -17,6 +18,10 @@ parser.add_argument('--lua-library')
 args=parser.parse_args();args.work_dir.mkdir(parents=True,exist_ok=True)
 logs=[];qInstallMessageHandler(lambda kind,ctx,msg:logs.append(msg))
 app=QGuiApplication([])
+font=Path('C:/Windows/Fonts/msyh.ttc')
+if font.exists():
+    index=QFontDatabase.addApplicationFont(str(font))
+    app.setFont(QFont(QFontDatabase.applicationFontFamilies(index)[0]))
 
 def pump(seconds):
     loop=QEventLoop();QTimer.singleShot(round(seconds*1000),loop.quit);loop.exec()
@@ -69,6 +74,7 @@ Window {
  function focusSearch(){counter.testSearch.forceActiveFocus();counter.testSearch.text="测试输入";}
  function failRead(){counter.testSearch.text="";win.failSnapshot=true;counter.refresh();}
  function recoverRead(){win.failSnapshot=false;counter.refresh();}
+ function inputStyle(){const f=counter.testSearch;return JSON.stringify({preedit:f.preeditText,text:f.text,color:f.color.toString(),background:f.background.color.toString(),selected:f.selectedTextColor.toString()});}
  function inputGeometry(){const field=counter.testSearch;const cursor=field.cursorRectangle;return JSON.stringify({y:cursor.y,height:cursor.height,fieldHeight:field.height,topPadding:field.topPadding,bottomPadding:field.bottomPadding});}
  function state(){return JSON.stringify({reads:reads,creates:counter.testCreates,count:counter.rows.length,gridCount:counter.testGrid.count,moving:counter.testGrid.moving,y:counter.testGrid.contentY,topKey:counter.rows[Math.max(0,Math.floor((counter.testGrid.contentY-counter.testGrid.originY)/counter.testGrid.cellHeight))*5]?.key || "",selected:counter.selectedRow?counter.selectedRow.key:"",amount:counter.selectedRow?counter.selectedRow.unseen:-1});}
 }''')
@@ -97,13 +103,31 @@ Window {
     invoke('clearSearch');pump(.02);assert state()['count']==300,state()
     invoke('focusSearch');pump(.02);raw_geometry=invoke('inputGeometry');assert raw_geometry,logs
     input_geometry=json.loads(raw_geometry)
+    # Reproduce Qt 6.8 iOS's exact marked-text format, including its fixed
+    # light-blue background and absent foreground. No native keyboard needed.
+    field=app.focusObject();assert field is not None
+    fmt=QTextCharFormat();fmt.setBackground(QColor(206,221,238))
+    event=QInputMethodEvent('wuxie',[QInputMethodEvent.Attribute(QInputMethodEvent.TextFormat,0,5,fmt)])
+    app.sendEvent(field,event);pump(.03)
+    composing=json.loads(invoke('inputStyle'))
+    assert composing['preedit']=='wuxie' and composing['color']=='#182b30' and composing['background']=='#ceddee',composing
+    def luminance(value):
+        rgb=[int(value[i:i+2],16)/255 for i in (1,3,5)]
+        linear=[v/12.92 if v<=.04045 else ((v+.055)/1.055)**2.4 for v in rgb]
+        return sum(a*b for a,b in zip(linear,(.2126,.7152,.0722)))
+    assert (luminance('#ceddee')+.05)/(luminance(composing['color'])+.05)>7,composing
+    window.grabWindow().save(str(args.work_dir/'ios-preedit.png'))
+    commit=QInputMethodEvent();commit.setCommitString('无懈');app.sendEvent(field,commit);pump(.03)
+    committed=json.loads(invoke('inputStyle'))
+    assert committed['preedit']=='' and committed['color']=='#f0e2c6' and committed['background']=='#10191b',committed
+    assert '无懈' in committed['text'],committed
     if not args.measure_only:
         invoke('failRead');pump(.01);assert state()['count']==0,state()
         invoke('recoverRead');pump(.01);assert state()['count']==300,state()
     invoke('close');closed=state();pump(.6);assert state()['reads']==closed['reads'],'hidden counter must not poll'
     result={'generated_cards':generated,'removed_generated_cards':removed,'initial':initial,'after_live_counts':updated,'during_flick_start':start,'during_flick_end':moving,'after_flick':stopped,
       'delegates_created_by_count_updates':updated['creates']-initial['creates'],'snapshots_during_flick':moving['reads']-start['reads'],
-      'input_geometry':input_geometry,'qml_errors':[m for m in logs if any(e in m for e in ['TypeError','ReferenceError','SyntaxError','Cannot assign','is not a type'])]}
+      'input_geometry':input_geometry,'input_composing':composing,'input_committed':committed,'qml_errors':[m for m in logs if any(e in m for e in ['TypeError','ReferenceError','SyntaxError','Cannot assign','is not a type'])]}
     if not args.measure_only:
         assert not result['qml_errors'],result['qml_errors']
         assert result['delegates_created_by_count_updates']==0,result

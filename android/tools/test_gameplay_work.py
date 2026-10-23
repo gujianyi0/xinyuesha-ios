@@ -57,6 +57,7 @@ QtObject {signal commandGot(var sender,string command,var data)}''')
             source=source.replace(marker,'    host.testTraversals++;\n'+marker,1)
             copied.write_text(source,encoding='utf-8')
     put('Main.qml','''import QtQuick
+import QtQuick.Layouts
 import Fk
 import LunarLtk
 import "card-counter" as Counter
@@ -131,11 +132,13 @@ Window {
     Component {id:waitingFactory
      Item {property bool isOwner:true;property bool isAllReady:false
       property alias invite:inviteButton
-      Row {x:580;y:390;spacing:8
-       Rectangle {id:inviteButton;objectName:"waitingRoomInviteButton";width:0;height:35;property string text:"Invite Players";signal clicked()}
-       Rectangle {width:70;height:35;property string text:"Chat";signal clicked()}
+      RowLayout {id:actions;anchors.right:parent.right;anchors.rightMargin:35;y:390;spacing:8
+       Rectangle {id:inviteButton;objectName:"waitingRoomInviteButton";implicitWidth:0;implicitHeight:35;property string text:"Invite Players";signal clicked();visible:!Config.observing}
+       Rectangle {implicitWidth:70;implicitHeight:35;property string text:"Chat";signal clicked()}
+       Rectangle {implicitWidth:90;implicitHeight:35;property string text:"Take Seat";signal clicked();visible:Config.observing}
+       Rectangle {implicitWidth:100;implicitHeight:35;property string text:"Ready";signal clicked();visible:!Config.observing}
       }
-      Timer {interval:60;running:true;onTriggered:inviteButton.width=100}
+      Timer {interval:60;running:true;onTriggered:inviteButton.implicitWidth=100}
      }
     }
    }
@@ -157,7 +160,21 @@ Window {
  function earlyBack(){Mediator.commandGot(null,"BackToRoom",[]);}
  function resetWaiting(){testStack.room.loader.active=false;Mediator.commandGot(null,"RestartGame",[]);testStack.room.showWaiting();testStack.room.loader.active=true;return social.roomLauncherReady;}
  function moveWaiting(){testStack.room.loader.x=35;testStack.room.loader.y=9;testStack.room.loader.scale=0.72;}
- function positionState(){const a=social.inviteAnchor;const pos=a?a.mapToItem(social,0,0):({x:0,y:0});const end=a?a.mapToItem(social,0,a.height):({x:0,y:0});const h=Math.abs(end.y-pos.y);const launcher=Array.from(social.children).find(c=>c.objectName==="friendsLauncher");return JSON.stringify({ready:social.roomLauncherReady,match:social.matchViewActive,visible:social.visible,launcherVisible:launcher.visible,x:social.roomLauncher.x,y:social.roomLauncher.y,expectedX:Math.max(8,pos.x-h*1.72-6),expectedY:pos.y});}
+ function observerRoom(){Config.observing=true;}
+ function seatedRoom(){Config.observing=false;testStack.room.gameContent.y=25;testStack.room.gameContent.scale=0.85;}
+ function positionState(){
+  const a=social.inviteAnchor;const pos=a?a.mapToItem(social,0,0):({x:0,y:0});const end=a?a.mapToItem(social,0,a.height):({x:0,y:0});const h=Math.abs(end.y-pos.y);
+  const launcher=social.roomInlineLauncher || Array.from(social.children).find(c=>c.objectName==="friendsLauncher");
+  const p=launcher.mapToItem(social,0,0);const q=launcher.mapToItem(social,launcher.width,launcher.height);
+  let overlaps=0,duplicates=0;
+  for(const n of launcher.parent.children){
+   if(n.objectName==="roomFriendsLauncher")duplicates++;
+   if(n===launcher || !n.visible || !(n.width>0 && n.height>0))continue;
+   const b=n.mapToItem(social,0,0);const e=n.mapToItem(social,n.width,n.height);
+   if(Math.min(q.x,e.x)-Math.max(p.x,b.x)>0.1 && Math.min(q.y,e.y)-Math.max(p.y,b.y)>0.1)overlaps++;
+  }
+  return JSON.stringify({ready:social.roomLauncherReady,inline:!!social.roomInlineLauncher,duplicates:duplicates,overlaps:overlaps,match:social.matchViewActive,visible:social.visible,launcherVisible:launcher.visible,x:p.x,y:p.y,expectedX:Math.max(8,pos.x-h*1.72-6),expectedY:pos.y});
+ }
  function freshChoice(){stressScene.popupItem=stressScene.choice;}
  function leaveFreshScene(){Ltk.roomScene=null;stressScene.destroy();stressScene=null;Mediator.commandGot(null,"EnterLobby",[]);}
 }''')
@@ -232,17 +249,21 @@ Window {
             assert all(not sum(v['traversals'].values()) for v in overview.values()),overview
             assert result['overview_grid_delegate_scale']==1,'overview grid delegates must not be traversed/adapted'
         invoke('waitingRoom');pump(.2);initial_room=json.loads(invoke('positionState'))
+        invoke('observerRoom');pump(.05);observer_room=json.loads(invoke('positionState'))
+        invoke('seatedRoom');pump(.05);seated_room=json.loads(invoke('positionState'))
         invoke('resultPage');pump(.02);result_page=json.loads(invoke('positionState'))
         invoke('earlyBack');pump(.02);old_table=json.loads(invoke('positionState'))
         early_ready=invoke('resetWaiting');pump(.2);reset_room=json.loads(invoke('positionState'))
         invoke('moveWaiting');pump(.1);moved_room=json.loads(invoke('positionState'))
-        result['waiting_room_positions']={'initial':initial_room,'results':result_page,'old_table_after_back':old_table,'ready_before_layout':early_ready,'reset':reset_room,'moved':moved_room}
+        result['waiting_room_positions']={'initial':initial_room,'observer':observer_room,'seated':seated_room,'results':result_page,'old_table_after_back':old_table,'ready_before_layout':early_ready,'reset':reset_room,'moved':moved_room}
         if not args.measure_only:
             assert result_page['match'] and not result_page['visible'],'GameOver does not expose the friends launcher over results'
             assert not early_ready,'new waiting-room buttons must finish layout before the launcher is shown'
             assert not old_table['ready'] and not old_table['launcherVisible'],'do not anchor to the old game table Chat button before WaitingRoom exists'
-            for state in [initial_room,reset_room,moved_room]:
-                assert state['ready'] and state['visible'] and abs(state['x']-state['expectedX'])<.01 and abs(state['y']-state['expectedY'])<.01,state
+            for state in [initial_room,observer_room,seated_room,reset_room,moved_room]:
+                assert state['visible'] and state['launcherVisible'],state
+                assert state['duplicates']<=1 and state['overlaps']==0,state
+                assert abs(state['y']-state['expectedY'])<.01,state
     errors=[m for m in logs if 'ReferenceError' in m or 'TypeError' in m or 'is not a type' in m or 'Cannot assign' in m]
     result['qml_errors']=errors
     print(json.dumps(result,ensure_ascii=False,indent=2))

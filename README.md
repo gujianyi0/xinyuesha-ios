@@ -18,6 +18,12 @@ Android、Windows PC、iOS 三端客户端，基于 [FreeKill / 新月杀](https
 
 **2026-10-22 分发核对通过**：上表五个文件均为目前最新分发内容，三个现有 Release 的同名文件一致。文件名沿用 `20261019`，实际内容已更新至 2026-10-22；以 [SHA256 清单](downloads/SHA256SUMS.txt) 区分。当前角色资源源码为 `1c04405`，iOS 原生源码为 `a1ad5d5`。
 
+## 2026-10-23 更新
+
+- 修复 [FB-QBR5X0](https://preview.gujianyi-web-preview.pages.dev/feedback/FB-QBR5X0/)：房间好友按钮直接加入原版按钮行，旁观、入座和结算返回时随布局重排。
+- 修复 [FB-A76NFR](https://preview.gujianyi-web-preview.pages.dev/feedback/FB-A76NFR/)：记牌器搜索拼音组合输入使用深色文字，避免 iOS 浅蓝组合背景上文字发白；确认输入后恢复原配色。
+- 三端共用界面同步修正；保留角色语音筛选、性能优化和 iOS 系统联网通道。本轮为 Qt 输入法事件与布局回归，真实 iPhone 仍待覆盖复测。
+
 ## 功能
 
 - 记牌器：跟随实际房间牌池统计，通过牌堆入口查看。
