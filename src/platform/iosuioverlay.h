@@ -75,6 +75,14 @@ inline QString adapt(const QString &path, QString text) {
     else next.push({ skill: skill, time: time });
     limitSkills = next;
   })QML");
+  } else if (path == "LunarLtk/Models/CardModel.qml") {
+    const QRegularExpression tip("  function updateCardTip\\(\\) \\{.*?\\n  \\}", QRegularExpression::DotMatchesEverythingOption);
+    text.replace(tip, R"QML(  function updateCardTip() {
+    const dataList = Ltk.getCardTip(cardId);
+    cardTip = Array.from(dataList || [], function(data) {
+      return Object.assign({}, data, {content: Ltk.processPrompt(data.content)});
+    });
+  })QML");
   } else if (path == "LunarLtk/Components/Photo/LimitSkillItem.qml") {
     text.replace("source: SkinBank.limitSkillDir + skilltype", R"QML(source: SkinBank.limitSkillDir +
       (root.skilltype === 'switch' ? (root.usedtimes > 0 ? 'switch-yin' : 'switch') :

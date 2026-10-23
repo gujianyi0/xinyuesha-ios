@@ -47,6 +47,7 @@ QtObject {
  function getGeneralDetail(n){return {kingdom:"wei",hp:4,maxHp:4,mainMaxHp:0,deputyMaxHp:0,headnote:"",endnote:"",companions:[],skill:[{name:"test skill",description:"A visible skill description with wrapping text."}]};}
  function createCardModel(id, props){return {cardId:id};}
  function getTargetTip(pid){return TipProvider.tips();}
+ function getCardTip(cid){return TipProvider.tips();}
  function processPrompt(s){return ({draw1:"摸一张牌",liexiangbigger:"手牌数大于你"})[s] || s;}
 }
 ''')
@@ -62,6 +63,8 @@ shutil.copyfile(SOURCE / "card-counter/CounterHost.qml", base / "CounterHost.qml
 photo_source=(UI/"LunarLtk/Models/PhotoModel.qml").read_text(encoding="utf-8")
 skill_method=re.search(r"  function updateLimitSkill\(skill, time\) \{.*?\n  \}",photo_source,re.S).group(0)
 target_method=re.search(r"  function updateTargetTip\(\) \{.*?\n  \}",photo_source,re.S).group(0)
+card_source=(UI/"LunarLtk/Models/CardModel.qml").read_text(encoding="utf-8")
+card_method=re.search(r"  function updateCardTip\(\) \{.*?\n  \}",card_source,re.S).group(0)
 server_source=(UI/"Fk/Pages/Common/JoinServer.qml").read_text(encoding="utf-8")
 version_expression=re.search(r'text: (delay \+ " ms " \+ [^\n]+)',server_source).group(1)
 lobby_source=(UI/"Fk/Pages/Lobby/Lobby.qml").read_text(encoding="utf-8")
@@ -100,9 +103,10 @@ Window {
  }}
  QtObject {id:photo;property list<var> limitSkills:[]; SKILL_METHOD }
  QtObject {id:targetPhoto;property int playerid:1;property var targetTip:[]; TARGET_METHOD }
+ QtObject {id:tipCard;property int cardId:1;property var cardTip:[]; CARD_METHOD }
  LimitSkillArea {id:skillArea;skillModel:photo.limitSkills}
  LimitSkillItem {id:switchSkill;skillname:"switch_test";usedtimes:1}
- function setup(){host.refreshCompatibility();photo.updateLimitSkill("switch_test",0);targetPhoto.updateTargetTip();popup.setSourceComponent(Qt.createComponent("GeneralDetail.qml"),{generals:["test"]});popup.open();if (RUN_AUTH_TEST) worker.sendMessage({generation:1,server:"test:9527",username:"测试用户",password:"test-only-password"});}
+ function setup(){host.refreshCompatibility();photo.updateLimitSkill("switch_test",0);targetPhoto.updateTargetTip();tipCard.updateCardTip();popup.setSourceComponent(Qt.createComponent("GeneralDetail.qml"),{generals:["test"]});popup.open();if (RUN_AUTH_TEST) worker.sendMessage({generation:1,server:"test:9527",username:"测试用户",password:"test-only-password"});}
  function changeSkill(){photo.updateLimitSkill("switch_test",1);}
  function skillState(){const rep=Array.from(skillArea.children).find(c=>typeof c.itemAt==="function");return String(rep.itemAt(0).children[0].source);}
  function generalHeight(){return popup.item.contentHeight;}
@@ -118,10 +122,10 @@ Window {
    toggleIcon:String(toggle.icon.source),exitContentX:exitButton.contentItem.x,
    exitContentWidth:exitButton.contentItem.width,exitWidth:exitButton.width,
    exitHeight:exitButton.height,referenceHeight:referenceButton.height,exitY:exitButton.y,
-   targetTips:targetPhoto.targetTip
+   targetTips:targetPhoto.targetTip,cardTips:tipCard.cardTip
  });}
 }
-'''.replace("AUTH_SOURCE", (SOURCE / "card-counter/SocialAuth.js").as_uri()).replace("VERSION_EXPRESSION",version_expression).replace("SKILL_METHOD",skill_method).replace("TARGET_METHOD",target_method).replace("EXIT_CONTENT",exit_content).replace("RUN_AUTH_TEST",str(RUN_AUTH_TEST).lower()))
+'''.replace("AUTH_SOURCE", (SOURCE / "card-counter/SocialAuth.js").as_uri()).replace("VERSION_EXPRESSION",version_expression).replace("SKILL_METHOD",skill_method).replace("TARGET_METHOD",target_method).replace("CARD_METHOD",card_method).replace("EXIT_CONTENT",exit_content).replace("RUN_AUTH_TEST",str(RUN_AUTH_TEST).lower()))
 engine = QQmlApplicationEngine(); engine.addImportPath(str(base))
 engine.rootContext().setContextProperty("AppPath", QUrl.fromLocalFile(str(base)))
 engine.rootContext().setContextProperty("TipProvider",tip_provider)
@@ -162,6 +166,7 @@ assert result["switchSource"].endswith("/switch-yin"), "initial Yin value must r
 assert "white" in result["toggleIcon"] and "M16" in result["toggleIcon"], "chat toggle tracks collapsed/expanded state"
 assert result['exitHeight']==result['referenceHeight'] and result['exitY']==16 and result['exitWidth']>=120, 'exit button matches sibling Material height and top alignment'
 assert [entry['content'] for entry in result['targetTips']]==['摸一张牌','手牌数大于你'],'QVariantList target tips publish translated copies'
+assert [entry['content'] for entry in result['cardTips']]==['摸一张牌','手牌数大于你'],'QVariantList card tips publish translated copies'
 salt=json.dumps(["freekill-social-account-v1","test:9527","测试用户"],ensure_ascii=False,separators=(",",":")).encode()
 expected=hashlib.pbkdf2_hmac("sha256",b"test-only-password",salt,210000,32).hex()
 if RUN_AUTH_TEST: assert result["authResult"]["key"] == expected, "WorkerScript identity remains compatible"
