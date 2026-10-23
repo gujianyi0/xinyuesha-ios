@@ -59,7 +59,9 @@ set_source_files_properties(
 if (IOS)
   # Objective-C++ bridge: AVAudioSession category + idle timer.
   list(APPEND freekill_SRCS "platform/ioshelper.mm")
-  list(APPEND freekill_SRCS "platform/iosfriendtransport.mm")
+  list(APPEND freekill_SRCS "platform/iosfriendtransport.mm" "platform/iosbackgroundpicker.mm")
+  set_source_files_properties("platform/iosbackgroundpicker.mm" PROPERTIES
+    LANGUAGE OBJCXX SKIP_PRECOMPILE_HEADERS ON COMPILE_OPTIONS "-fobjc-arc")
   set_source_files_properties("platform/iosfriendtransport.mm" PROPERTIES
     LANGUAGE OBJCXX SKIP_PRECOMPILE_HEADERS ON COMPILE_OPTIONS "-fobjc-arc")
   set_source_files_properties("platform/ioshelper.mm" PROPERTIES
@@ -288,13 +290,15 @@ elseif (IOS)
   # avoids ambiguity around how "-framework X" tokens are passed through.
   find_library(FK_AVFOUNDATION AVFoundation REQUIRED)
   find_library(FK_UIKIT UIKit REQUIRED)
+  find_library(FK_PHOTOSUI PhotosUI REQUIRED)
+  find_library(FK_IMAGEIO ImageIO REQUIRED)
   find_library(FK_FOUNDATION Foundation REQUIRED)
   find_library(FK_AUDIOTOOLBOX AudioToolbox REQUIRED)
   find_library(FK_COREAUDIO CoreAudio REQUIRED)
   find_library(FK_COREFOUNDATION CoreFoundation REQUIRED)
   find_library(FK_SECURITY Security REQUIRED)
   set(IOS_FRAMEWORKS
-    "${FK_AVFOUNDATION}" "${FK_UIKIT}" "${FK_FOUNDATION}"
+    "${FK_AVFOUNDATION}" "${FK_UIKIT}" "${FK_FOUNDATION}" "${FK_PHOTOSUI}" "${FK_IMAGEIO}"
     "${FK_AUDIOTOOLBOX}" "${FK_COREAUDIO}" "${FK_COREFOUNDATION}"
     "${FK_SECURITY}")
   include_directories("${FK_IOS_DEPS}/include")

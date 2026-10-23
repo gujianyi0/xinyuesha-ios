@@ -55,6 +55,7 @@ public:
   Q_INVOKABLE qint64 startSocialRequest(const QString &method, const QString &url,
       const QString &bearer, const QString &body);
   Q_INVOKABLE void cancelSocialRequest(qint64 id);
+  Q_INVOKABLE void pickBackground(const QString &key);
 #endif
 
   Q_INVOKABLE QString getPublicServerList();
@@ -103,6 +104,7 @@ public:
 
 signals:
 #ifdef Q_OS_IOS
+  void backgroundPicked(const QString &key, const QString &url, const QString &error);
   void socialRequestFinished(qint64 id, int status, const QString &body,
                             int errorCode, const QString &failure);
 #endif
@@ -133,6 +135,7 @@ private:
   QString m_quickStartMode;
   QVariantMap m_quickStartConfig;
 #ifdef Q_OS_IOS
+  bool m_backgroundPicking = false;
   IosFriendTransport *m_socialTransport = nullptr;
   qint64 m_socialRequestId = 0;
 #endif

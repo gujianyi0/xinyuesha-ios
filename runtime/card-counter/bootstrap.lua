@@ -21,6 +21,21 @@ klass.prepareDrawPile = function(self, ids)
   end
 end
 
+
+local originalShuffle = klass.shuffleDrawPile
+if type(originalShuffle) == "function" then
+  klass.shuffleDrawPile = function(self, ...)
+    local result = originalShuffle(self, ...)
+    for _, player in ipairs(self.players or {}) do
+      if player.card_tracker then
+        player.card_tracker.draw_pile_order = {}
+        player.card_tracker.draw_pile = {known_cards={}, uncertain_cards={}}
+      end
+    end
+    return result
+  end
+end
+
 local originalDeserialize = klass.deserialize
 klass.deserialize = function(self, data)
   originalDeserialize(self, data)

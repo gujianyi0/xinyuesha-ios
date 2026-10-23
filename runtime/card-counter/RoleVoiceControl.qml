@@ -26,6 +26,20 @@ Item {
   property var availabilityCache: ({})
   property var voiceCache: ({})
   property string resourceKey: ""
+  // CounterHost outlives individual room/chat controls. Keep resource results
+  // there; always query the new host's allowed pool independently.
+  property var cacheStore: ({entries:{}})
+  function adoptAudioCache(force) {
+    const key = JSON.stringify([Cpp.path, Config.enabledResourcePacks || []]);
+    resourceKey = key;
+    let entry = cacheStore.entries[key];
+    if (force || !entry) {
+      entry = {audio:{}, directories:{}, metadata:{}, availability:{}, voices:{}};
+      cacheStore.entries[key] = entry;
+    }
+    audioCache=entry.audio; directoryCache=entry.directories;
+    metadataCache=entry.metadata; availabilityCache=entry.availability; voiceCache=entry.voices;
+  }
   readonly property bool pickerVisible: picker.visible
   implicitWidth: 56
   implicitHeight: 44
@@ -34,8 +48,8 @@ Item {
   visible: !chatBox.isLobby && !Config.replaying
 
   function clearAudioCache() {
-    audioCache = {}; directoryCache = {}; metadataCache = {};
-    availabilityCache = {}; voiceCache = {};
+    if (resourceKey) delete cacheStore.entries[resourceKey];
+    adoptAudioCache(true);
   }
   // Index each audio directory once. File probes and metadata are shared by
   // generals with the same skills; the animated table is never scanned.
@@ -107,8 +121,7 @@ Item {
   function refreshPool(force) {
     scanDelay.stop(); scanning = false;
     try {
-      const key = JSON.stringify(Config.enabledResourcePacks || []);
-      if (force || key !== resourceKey) { clearAudioCache(); resourceKey = key; }
+      adoptAudioCache(force);
       const data = Lua.ev('(function() local ret = {} if not (Fk and ClientInstance) then return ret end ' +
         'for _, g in ipairs(Fk:getAllGenerals()) do ' +
         'if not g.hidden and not g.total_hidden then table.insert(ret, {id=g.name, name=Fk:translate(g.name), pack=Fk:translate(g.package.name)}) end end ' +
@@ -120,9 +133,11 @@ Item {
       checkedCount = 0;
       filterPool();
       notice = "";
-      scanning = candidates.length > 0;
+      scanning = candidates.some(g => !(g.id in availabilityCache));
+      if (!scanning) checkedCount = candidates.length;
       if (scanning) scanDelay.restart();
-      else notice = "当前房间暂无可选武将，请进入房间后重试";
+      else if (!candidates.length) notice = "当前房间暂无可选武将，请进入房间后重试";
+      else if (!generals.length) notice = "房主当前将池中暂无已下载语音的武将";
     } catch (_) { generals = []; filtered = []; notice = "暂时无法读取房主将池，请稍后重试"; }
   }
   function scanBatch() {
@@ -238,7 +253,7 @@ Item {
     function onCommandGot(sender, command, data) {
       if (["EnterRoom","ChangeRoom","EnterLobby","BackToStart"].indexOf(command) >= 0) {
         scanDelay.stop(); root.scanning = false; root.checkedCount = 0; root.candidates = [];
-        root.clearAudioCache();
+        if (command === "BackToStart") root.clearAudioCache();
         root.selectedGeneral = ""; root.generals = []; root.filtered = []; catalogModel.clear(); picker.close();
       }
     }

@@ -36,6 +36,13 @@ int main(int argc, char **argv) {
   const auto server = fkIosRuntimePayload::read(output+"/Fk/Pages/Common/JoinServer.qml");
   require(server.contains("String(misMatchMsg).replace"), "HTML version size normalization");
   require(!server.contains("font.pixelSize: 26"), "bounded server count font");
+  const auto room = fkIosRuntimePayload::read(output+"/Fk/Pages/Common/RoomPage.qml");
+  require(room.contains("offlineQuitConfirmation"), "offline quit uses an in-scene confirmation");
+  require(!room.contains("MessageDialog {\n    id: quitDialog"), "native quit confirmation replaced");
+  const auto bg = fkIosRuntimePayload::read(output+"/Fk/Pages/Lobby/BGSetting.qml");
+  require(bg.contains("Backend.pickBackground(fdialog.configKey)"), "background image buttons use system photo picker");
+  const auto replay = fkIosRuntimePayload::read(output+"/Fk/Pages/Replay/ReplayRecordingFile.qml");
+  require(replay.contains("replayNoteField") && !replay.contains("placeholderText: Lua.tr(\"Note\")"), "replay note uses an inline placeholder");
   const auto key = fkSocialAccount::deriveKey("test:9527", QString::fromUtf8("测试用户"), "test-only-password");
   require(key == "d41c77099501cd4af9ba643cc6c3b42fb3f83718eed69248e0bdab3c3abe2a8c", "native social identity matches Python and shipped WorkerScript");
   qInfo() << "iOS UI overlay, unchanged source core and social identity compatibility passed";

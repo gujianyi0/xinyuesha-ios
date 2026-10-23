@@ -92,6 +92,41 @@ inline QString adapt(const QString &path, QString text) {
   Component.onCompleted: refreshSkill()
 })QML");
   }
+  if (path == "Fk/Pages/Common/RoomPage.qml") {
+    // UIKit alerts can be dismissed during an offline room/controller change;
+    // a Qt Quick confirmation stays with the game and can be opened repeatedly.
+    const QRegularExpression quitDialog("  MessageDialog \x7b\\s*id: quitDialog.*?\\n  \x7d", QRegularExpression::DotMatchesEverythingOption);
+    text.replace(quitDialog, R"QML(  Dialog {
+    id: quitDialog
+    objectName: "offlineQuitConfirmation"
+    anchors.centerIn: parent
+    title: Lua.tr("Quit")
+    modal: true
+    closePolicy: Popup.NoAutoClose
+    standardButtons: Dialog.Ok | Dialog.Cancel
+    contentItem: Label {text: Lua.tr("Are you sure to quit?"); wrapMode: Text.Wrap; padding: 16}
+    onAccepted: Cpp.notifyServer("QuitRoom", "[]")
+  })QML");
+  } else if (path == "Fk/Pages/Lobby/BGSetting.qml") {
+    text.replace("*.mp4\"", "*.mp4)\"");
+    text.replace("*.jpeg *.gif", "*.jpeg *.heic *.heif *.gif");
+    text.replace("        fdialog.open();", R"QML(        if (typeof Backend.pickBackground === "function" && ["lobbyBg","roomBg","ladyImg"].indexOf(fdialog.configKey)>=0)
+          Backend.pickBackground(fdialog.configKey);
+        else fdialog.open();)QML");
+  } else if (path == "Fk/Pages/Replay/ReplayRecordingFile.qml") {
+    text.replace("placeholderText: Lua.tr(\"Note\")", R"QML(placeholderText: ""
+          objectName: "replayNoteField"
+          Layout.minimumHeight: 48
+          topPadding: 0; bottomPadding: 0
+          verticalAlignment: TextInput.AlignVCenter
+          Text {
+            anchors.fill: parent; anchors.leftMargin: parent.leftPadding
+            anchors.rightMargin: parent.rightPadding
+            verticalAlignment: Text.AlignVCenter
+            text: Lua.tr("Note"); font: parent.font; color: "#687572"
+            visible: !parent.text && !parent.preeditText
+          })QML");
+  }
   return text;
 }
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Templates as T
 import QtQuick.Layouts
 import Fk
 
@@ -10,7 +11,33 @@ Item {
   anchors.fill: parent
   z: 800
   visible: expanded
+  component KnownButton: T.Button {
+    id:action
+    implicitWidth:Math.max(90,label.implicitWidth+24);implicitHeight:36
+    leftPadding:12;rightPadding:12;topPadding:6;bottomPadding:6
+    contentItem:Text {id:label;text:action.text;color:"#F0E2C6";font.pixelSize:14;verticalAlignment:Text.AlignVCenter;horizontalAlignment:Text.AlignHCenter}
+    background:Rectangle {radius:5;color:action.checked ? "#5C5036" : action.down ? "#48615E" : "#2C4449";border.color:action.checked ? "#D5B471" : "#708982"}
+  }
   property bool expanded: false
+  property bool knowledgeOpen: false
+  onKnowledgeOpenChanged: if(knowledgeOpen)syncKnowledge()
+  property string knowledgeScope: "hands"
+  onKnowledgeScopeChanged: syncKnowledge()
+  onSnapshotChanged: syncKnowledge()
+  ListModel { id: knownModel }
+  function syncKnowledge() {
+    if(!knowledgeOpen)return;
+    const rows = (snapshot.knowledge || {})[knowledgeScope] || [];
+    for (let i=0;i<rows.length;i++) {
+      const row=rows[i];
+      let index=-1;
+      for(let j=i;j<knownModel.count;j++) if(knownModel.get(j).token===row.token){index=j;break;}
+      if(index>=0 && index!==i) knownModel.move(index,i,1);
+      if(index<0) knownModel.insert(i,row);
+      else for(const key of Object.keys(row)) if(knownModel.get(i)[key]!==row[key]) knownModel.setProperty(i,key,row[key]);
+    }
+    if(knownModel.count>rows.length)knownModel.remove(rows.length,knownModel.count-rows.length);
+  }
   property var snapshot: ({ready:false,rows:[]})
   property var roomModel: null
   property string scope: "unseen"
@@ -75,7 +102,7 @@ Item {
   readonly property color gold: "#CCAD76"
   readonly property color pale: "#F0E2C6"
   function open() { expanded=true; forceActiveFocus(); }
-  function close() { expanded=false; }
+  function close() { expanded=false; knowledgeOpen=false; }
   function toggle() { if (expanded) close(); else open(); }
   function refresh() {
     try {
@@ -169,11 +196,13 @@ Item {
         }
       }
     }
-    Text {
-      anchors.right:parent.right; anchors.rightMargin:24; y:78
-      text:root.snapshot.ready ? "●  随本局自选牌池同步" : (root.snapshot.message || "等待牌局数据")
-      color:root.snapshot.ready ? "#93B99C" : "#C0A876"; font.pixelSize:11
+    KnownButton {
+      objectName:"counterKnownButton"
+      anchors.right:parent.right; anchors.rightMargin:24; y:66; height:36
+      text:"明牌记录"; font.pixelSize:14
+      onClicked:{root.syncKnowledge();root.knowledgeOpen=true;}
     }
+
     Item {
       id:body
       x:24; y:115; width:parent.width-48; height:parent.height-147
@@ -339,4 +368,48 @@ Item {
     Text { x:24; y:parent.height-19; text:"未见牌包含未知手牌，不等于牌堆内的精确分布。"; font.pixelSize:10; color:"#85977F" }
     Text { anchors.right:parent.right; anchors.rightMargin:24; y:parent.height-19; text:"点击外侧或 × 关闭"; font.pixelSize:10; color:"#85977F" }
   }
+  Rectangle {
+    objectName:"counterKnownPanel"
+    visible:root.knowledgeOpen && root.expanded
+    anchors.fill:parent; anchors.margins:32; z:10
+    radius:10; color:"#17272C"; border.color:root.gold
+    MouseArea {anchors.fill:parent}
+    ColumnLayout {
+      anchors.fill:parent;anchors.margins:16;spacing:10
+      RowLayout {
+        Text {text:"明牌记录";color:root.pale;font.pixelSize:21;font.bold:true}
+        Item {Layout.fillWidth:true}
+        KnownButton {text:"返回记牌器";onClicked:root.knowledgeOpen=false}
+      }
+      RowLayout {
+        Repeater {
+          model:[{key:"hands",name:"已知手牌"},{key:"top",name:"牌堆顶"},{key:"bottom",name:"牌堆底"}]
+          KnownButton {
+            required property var modelData
+            text:modelData.name;checkable:true;checked:root.knowledgeScope===modelData.key
+            onClicked:root.knowledgeScope=modelData.key
+          }
+        }
+      }
+      Text {
+        Layout.fillWidth:true;wrapMode:Text.Wrap;color:"#BAC9C7";font.pixelSize:12
+        text:root.knowledgeScope==="hands" ? "记录本视角技能实际展示过的牌；暗中移牌后会标为不确定。" : "按距离牌堆顶／底由近到远排列；遇到未知牌停止，洗牌或移动后随已知信息更新。"
+      }
+      ListView {
+        objectName:"counterKnownList"
+        Layout.fillWidth:true;Layout.fillHeight:true;clip:true;spacing:6
+        model:knownModel;reuseItems:true;cacheBuffer:160
+        ScrollBar.vertical:ScrollBar {}
+        delegate:Rectangle {
+          required property var model
+          width:ListView.view.width;height:76;radius:6;color:model.uncertain ? "#34352D" : "#243B40"
+          Image {x:8;y:5;width:44;height:66;source:root.cardPicture(model.key);sourceSize:Qt.size(88,132);asynchronous:true;fillMode:Image.PreserveAspectFit}
+          Text {x:64;y:10;width:parent.width-76;textFormat:Text.PlainText;color:root.pale;font.pixelSize:16;text:model.name+"  "+(["","♠","♣","♥","♦","无花色"][model.suit] || "")+" "+(["","A","2","3","4","5","6","7","8","9","10","J","Q","K"][model.number] || "")}
+          Text {x:64;y:40;width:parent.width-76;textFormat:Text.PlainText;color:model.uncertain ? "#D6BE88" : "#B4CCC6";font.pixelSize:13;text:root.knowledgeScope==="hands" ? model.owner+(model.uncertain ? " · 可能仍在手中" : " · 已知手牌") : "距离"+(root.knowledgeScope==="top" ? "牌堆顶" : "牌堆底")+"第 "+model.position+" 张"}
+        }
+        Text {anchors.centerIn:parent;visible:knownModel.count===0;color:"#AABCB7";font.pixelSize:16;text:"当前没有可确定的记录"}
+      }
+    }
+  }
+
 }

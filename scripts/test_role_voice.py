@@ -4,7 +4,7 @@ from pathlib import Path
 import argparse,json,os,shutil,tempfile,time
 os.environ.setdefault('QT_QPA_PLATFORM','offscreen');os.environ.setdefault('QT_QUICK_BACKEND','software')
 os.environ.setdefault('QT_QUICK_CONTROLS_STYLE','Material')
-from PySide6.QtCore import QObject,QUrl,QMetaObject,QPoint,Qt,Q_RETURN_ARG,qInstallMessageHandler
+from PySide6.QtCore import QObject,QUrl,QMetaObject,QPoint,Qt,Q_RETURN_ARG,qInstallMessageHandler,QEventLoop,QTimer,QEvent
 from PySide6.QtGui import QGuiApplication,QFontDatabase,QFont
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
@@ -77,6 +77,7 @@ QtObject {property var roomScene:null;property int metadataCalls:0;
 put('Fk/Widgets/qmldir','module Fk.Widgets\nTapHandler 1.0 TapHandler.qml\n')
 shutil.copy2(R/'Fk/Widgets/TapHandler.qml',B/'Fk/Widgets/TapHandler.qml')
 shutil.copy2(R/'Fk/Components/Common/AvatarChatBox.qml',B/'AvatarChatBox.qml')
+shutil.copy2(R/'Fk/Components/GameCommon/BasicItem.qml',B/'BasicItem.qml')
 put('Avatar.qml','import QtQuick\nItem {property string general;}')
 put('MetroButton.qml','import QtQuick.Controls\nButton {}')
 put('LogEdit.qml','import QtQuick\nListView {function append(a){}function clear(){}}')
@@ -88,6 +89,7 @@ import "card-counter" as Counter
 Window {
  id:win;width:1000;height:540;visible:true
  property var sent:[]
+ property int longPresses:0
  property int initialChecks:-1
  property alias endpoint:client
  property alias selfObject:selfFixture
@@ -95,6 +97,14 @@ Window {
  QtObject {id:client;function notifyServer(command,data){win.sent=win.sent.concat([{command:command,data:data}]);}}
  AvatarChatBox {id:chat;x:20;y:10;width:480;height:500}
  Counter.CounterHost {id:counter}
+ Item {id:interactionScene;function closeInfoPopup(){}}
+ BasicItem {id:targetPhoto;onRightClicked:win.longPresses++;x:800;y:200;width:100;height:130;selectable:false;property var dataModel:({playerid:2,screenName:"测试目标"})}
+ function actionsState(){return JSON.stringify({signals:longPresses,scene:!!counter.currentScene,visible:targetPhoto.visible,x:targetPhoto.x,y:targetPhoto.y});}
+ function prepareActions(){control().soundList.visible=false;control().children.find(b=>b.objectName==="roleVoiceButton");counter.currentScene=interactionScene;counter.attachPlayerActions(targetPhoto);}
+ function egg(){return counter.sendPresent("Egg");}
+ function flower(){return counter.sendPresent("Flower");}
+ function replayMode(){Config.replaying=true;}
+
  function voice(){return chat.children[0].children[0];}
  function control(){const q=[chat];while(q.length){const n=q.pop();if(n.objectName==="roleVoiceControl")return n;if(n.children)q.push(...Array.from(n.children));}return null;}
  function buttonGeometry(){const c=control(),b=c.children.find(x=>x.objectName==="roleVoiceButton"),p=b.mapToItem(null,b.width/2,b.height/2);return JSON.stringify({parent:String(c.parent),width:b.width,height:b.height,labelWidth:b.contentItem.width,fontSize:b.font.pixelSize,x:p.x,y:p.y});}
@@ -120,6 +130,8 @@ Window {
  function clearLarge(){Lua.large=false;control().refreshPool();}
  function catalogState(){const c=control();return JSON.stringify({pool:c.generals.map(g=>g.id),checked:c.checkedCount,total:c.candidates.length,scanning:c.scanning,initial:initialChecks,metadata:Ltk.metadataCalls,probes:SkinBank.probes,dirs:Backend.listings,selected:c.selectedGeneral});}
  function compactChat(){chat.scale=.6;}
+ function changeRoom(){Mediator.commandGot(null,"EnterRoom",[]);control().refreshPool();}
+ function rebuildControl(){const c=control(),row=c.parent;c.destroy();counter.adaptedControls=[];Qt.callLater(function(){counter.attachRoleVoices(chat);control().refreshPool();});}
  function silentCatalog(){Lua.large=false;Lua.emptyPool=true;control().refreshPool(true);}
  function snapshot(){const c=control();const rows=[];for(let i=0;i<c.soundList.model.count;i++)rows.push(c.soundList.model.get(i));return JSON.stringify({count:rows.length,rows:rows,selected:c.selectedGeneral,pool:c.generals,sent:sent,controls:counter.adaptedControls.filter(x=>x===chat).length});}
 }''')
@@ -130,8 +142,8 @@ engine.rootContext().setContextProperty('AppPath',QUrl.fromLocalFile(str(B)))
 engine.load(QUrl.fromLocalFile(str(B/'Main.qml')));assert engine.rootObjects(),logs;win=engine.rootObjects()[0]
 engine.rootContext().setContextProperty('ClientInstance',win.property('endpoint'));engine.rootContext().setContextProperty('Self',win.property('selfObject'))
 def pump(t=.12):
- end=time.monotonic()+t
- while time.monotonic()<end:app.processEvents();time.sleep(.003)
+ loop=QEventLoop();QTimer.singleShot(max(1,round(t*1000)),loop.quit);loop.exec()
+ app.sendPostedEvents(None,QEvent.DeferredDelete)
 def invoke(n):return QMetaObject.invokeMethod(win,n,Qt.DirectConnection,Q_RETURN_ARG('QVariant'))
 def call(n):QMetaObject.invokeMethod(win,n,Qt.DirectConnection);pump()
 call('setup')
@@ -174,6 +186,13 @@ assert not any(r['name']=='skill_b' and not r['specific'] for r in initial['rows
 before_cache=json.loads(invoke('catalogState'));call('reopenCatalog');pump(.3)
 after_cache=json.loads(invoke('catalogState'))
 assert before_cache['probes']==after_cache['probes'] and before_cache['dirs']==after_cache['dirs'],(before_cache,after_cache)
+call('changeRoom');room_cache=json.loads(invoke('catalogState'))
+assert not room_cache['scanning'] and room_cache['metadata']==after_cache['metadata'] and room_cache['dirs']==after_cache['dirs'],room_cache
+call('rebuildControl');new_control=json.loads(invoke('catalogState'))
+assert not new_control['scanning'] and new_control['metadata']==room_cache['metadata'] and new_control['probes']==room_cache['probes'],new_control
+assert new_control['pool']==room_cache['pool'],new_control
+geometry=json.loads(invoke('buttonGeometry'))
+
 call('resourcePack');pump(.3);call('reopenCatalog');pump(.3)
 assert 'pack' in json.loads(invoke('catalogState'))['pool'],(json.loads(invoke('catalogState')),logs)
 call('selectPack');pack=json.loads(invoke('snapshot'));assert any(r['name']=='pack_voice' for r in pack['rows']),pack
@@ -205,6 +224,18 @@ call('compactChat');win.setWidth(568);win.setHeight(320);pump(.15)
 assert picker.property('x')>=0 and picker.property('y')>=0
 assert picker.property('x')+picker.property('width')<=568 and picker.property('y')+picker.property('height')<=320
 call('silentCatalog');pump(.2);empty=json.loads(invoke('catalogState'));assert empty['pool']==[] and empty['scanning'] is False,empty
+
+QMetaObject.invokeMethod(picker,'close');win.setWidth(1000);win.setHeight(540);call('prepareActions')
+pump(.4)  # Let the prior modal picker's exit transition release pointer input.
+QTest.mousePress(win,Qt.LeftButton,Qt.NoModifier,QPoint(850,250));pump(.95);QTest.mouseRelease(win,Qt.LeftButton,Qt.NoModifier,QPoint(850,250));pump(.1)
+actions=win.findChild(QObject,'playerPresentActions');win.grabWindow().save(str(a.work_dir/'actions.png'));assert actions and actions.property('visible'),('long press opens interaction choices',invoke('actionsState'),logs)
+before_present=json.loads(invoke('snapshot'))['sent'];assert before_present==final['sent'],'opening interaction choices sends nothing'
+assert invoke('egg') is True
+assert invoke('flower') is False,'gift cooldown prevents duplicate sends'
+assert json.loads(invoke('snapshot'))['sent'][-1]=={'command':'Chat','data':{'type':2,'msg':'$@Egg:2'}}
+pump(1.55);assert invoke('flower') is True
+assert json.loads(invoke('snapshot'))['sent'][-1]['data']['msg']=='$@Flower:2'
+call('replayMode');assert invoke('egg') is False,'replays cannot send gifts'
 
 errors=[m for m in logs if any(x in m for x in ['TypeError','ReferenceError','SyntaxError','Unable to assign','Cannot assign','Binding loop','is not a type'])]
 print(json.dumps({'button_geometry':geometry,'initial':initial,'banned':banned,'final':final,'large':{'checked':large_done['checked'],'with_audio':len(large_done['pool']),'first_batch_checked':large_partial['checked'],'directories':large_done['dirs']},'errors':errors},ensure_ascii=False,indent=2));assert not errors,errors

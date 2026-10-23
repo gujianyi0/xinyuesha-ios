@@ -4,7 +4,7 @@ from pathlib import Path
 os.environ.setdefault('QT_QPA_PLATFORM','offscreen')
 os.environ.setdefault('QT_QUICK_BACKEND','software')
 os.environ.setdefault('QT_QUICK_CONTROLS_STYLE','Material')
-from PySide6.QtCore import QEvent, QEventLoop, QTimer, QUrl, QMetaObject, Q_RETURN_ARG, qInstallMessageHandler
+from PySide6.QtCore import QObject, QEvent, QEventLoop, QTimer, QUrl, QMetaObject, Q_RETURN_ARG, qInstallMessageHandler
 from PySide6.QtGui import QGuiApplication, QInputMethodEvent, QTextCharFormat, QColor, QFontDatabase, QFont
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
@@ -74,6 +74,9 @@ Window {
  function focusSearch(){counter.testSearch.forceActiveFocus();counter.testSearch.text="测试输入";}
  function failRead(){counter.testSearch.text="";win.failSnapshot=true;counter.refresh();}
  function recoverRead(){win.failSnapshot=false;counter.refresh();}
+ function openKnown(){counter.knowledgeOpen=true;counter.snapshot={knowledge:{hands:[{token:"2:27",id:27,key:"slash",name:"杀",suit:1,number:7,owner:"玩家",position:0,uncertain:false}],top:[{token:"28",id:28,key:"jink",name:"闪",suit:3,number:2,owner:"",position:1,uncertain:false}],bottom:[]}};}
+ function knownTop(){counter.knowledgeScope="top";}
+ function knownEmpty(){counter.snapshot={knowledge:{hands:[],top:[],bottom:[]}};}
  function inputStyle(){const f=counter.testSearch;return JSON.stringify({preedit:f.preeditText,text:f.text,color:f.color.toString(),background:f.background.color.toString(),selected:f.selectedTextColor.toString()});}
  function inputGeometry(){const field=counter.testSearch;const cursor=field.cursorRectangle;return JSON.stringify({y:cursor.y,height:cursor.height,fieldHeight:field.height,topPadding:field.topPadding,bottomPadding:field.bottomPadding});}
  function state(){return JSON.stringify({reads:reads,creates:counter.testCreates,count:counter.rows.length,gridCount:counter.testGrid.count,moving:counter.testGrid.moving,y:counter.testGrid.contentY,topKey:counter.rows[Math.max(0,Math.floor((counter.testGrid.contentY-counter.testGrid.originY)/counter.testGrid.cellHeight))*5]?.key || "",selected:counter.selectedRow?counter.selectedRow.key:"",amount:counter.selectedRow?counter.selectedRow.unseen:-1});}
@@ -124,6 +127,11 @@ Window {
     if not args.measure_only:
         invoke('failRead');pump(.01);assert state()['count']==0,state()
         invoke('recoverRead');pump(.01);assert state()['count']==300,state()
+    invoke('openKnown');pump(.03)
+    known=window.findChild(QObject,'counterKnownList');assert known and known.property('count')==1
+    invoke('knownTop');pump(.03);assert known.property('count')==1
+    window.grabWindow().save(str(args.work_dir/'known-cards.png'))
+    invoke('knownEmpty');pump(.03);assert known.property('count')==0
     invoke('close');closed=state();pump(.6);assert state()['reads']==closed['reads'],'hidden counter must not poll'
     result={'generated_cards':generated,'removed_generated_cards':removed,'initial':initial,'after_live_counts':updated,'during_flick_start':start,'during_flick_end':moving,'after_flick':stopped,
       'delegates_created_by_count_updates':updated['creates']-initial['creates'],'snapshots_during_flick':moving['reads']-start['reads'],
@@ -163,6 +171,21 @@ for i,row in ipairs(one.rows) do
  end
 end
 assert(detailRows==1,"only selected row needs suit/rank details")
+-- Only the viewer's known/uncertain tracker and public visible cards feed the
+-- record view. Poisoned hidden deck/hand access remains forbidden.
+local target={id=2,screenName="target",player_cards={[1]={27,28,29}}}
+room.players={viewer,target}
+viewer.card_tracker.player_cards={[2]={[1]={known_cards={27},uncertain_cards={28}}}}
+viewer.card_tracker.draw_pile_order={31,32,-1,-1,33}
+local k=M.snapshot(room,engine,viewer).knowledge
+assert(#k.hands==2 and k.hands[1].id==27 and not k.hands[1].uncertain and k.hands[2].uncertain)
+assert(#k.top==2 and k.top[1].id==31 and k.top[2].position==2)
+assert(#k.bottom==1 and k.bottom[1].id==33 and k.bottom[1].position==1)
+viewer.card_tracker.player_cards[2][1]={known_cards={},uncertain_cards={27}}
+viewer.card_tracker.draw_pile_order={}
+k=M.snapshot(room,engine,viewer).knowledge
+assert(#k.hands==1 and k.hands[1].uncertain and #k.top==0 and #k.bottom==0)
+
 return "counts, selected details and hidden-zone restrictions passed; detail rows 300 -> "..detailRows
 '''
         vm=lib.luaL_newstate()

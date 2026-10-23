@@ -47,11 +47,27 @@ Item {
     id: overlayAdapt; interval: 32
     onTriggered: if (host.settingsReady && host.Overlay.overlay) host.refreshCompatibility(host.Overlay.overlay)
   }
+  Connections {
+    target: Backend
+    ignoreUnknownSignals: true
+    function onBackgroundPicked(key, url, error) {
+      if (url && ["lobbyBg","roomBg","ladyImg"].indexOf(key)>=0) { Config[key]=url; backgroundSave.restart(); }
+      else if (error && typeof App!=="undefined" && App.showToast) App.showToast(error);
+    }
+  }
   property var photoLocations: []
   property bool hideTitles: false
   property bool preferencesLoaded: false
   property var titleBadges: []
   property var adaptedControls: []
+  property alias roleVoiceCache: roleVoiceCacheState
+  QtObject {id:roleVoiceCacheState;property var entries:({})}
+  Connections {
+    target: Mediator
+    function onCommandGot(sender, command, data) {
+      if (command === "BackToStart") host.roleVoiceCache.entries = {};
+    }
+  }
   property int deckSearchTicks: 0
   onSettingsReadyChanged: if (settingsReady && !preferencesLoaded) {
     try {
@@ -101,8 +117,49 @@ Item {
     if (!sound || !input) return;
     const component = Qt.createComponent("RoleVoiceControl.qml");
     if (component.status !== Component.Ready) { console.warn(component.errorString()); return; }
-    const control = component.createObject(input, {chatBox:chat, soundList:sound});
+    const control = component.createObject(input, {chatBox:chat, soundList:sound, cacheStore:host.roleVoiceCache});
     if (control) adaptedControls.push(chat);
+  }
+  function attachPlayerActions(photo) {
+    if (adaptedControls.indexOf(photo)>=0) return;
+    photo.rightClicked.connect(function() {
+      Qt.callLater(function() { if(photo && photo.parent) host.showPlayerActions(photo.dataModel); });
+    });
+    adaptedControls.push(photo);
+  }
+  function showPlayerActions(model) {
+    if (!model || model.playerid===0 || model.playerid===-1 || !currentScene || Config.replaying) return;
+    if(typeof currentScene.closeInfoPopup==="function")currentScene.closeInfoPopup();
+    playerActions.targetModel=model;
+    playerActions.open();
+  }
+  function sendPresent(kind) {
+    const model=playerActions.targetModel;
+    if(presentCooldown.running || Config.replaying || !currentScene || !model ||
+       !Number.isInteger(model.playerid) || model.playerid===0 || model.playerid===-1 ||
+       ["Egg","Flower"].indexOf(kind)<0 || !clientContext) return false;
+    clientContext.notifyServer("Chat",{type:2,msg:"$@"+kind+":"+model.playerid});
+    presentCooldown.start(); playerActions.close(); return true;
+  }
+  Timer {id:presentCooldown;interval:1500}
+  Dialog {
+    id:playerActions;objectName:"playerPresentActions"
+    property var targetModel:null
+    parent:Overlay.overlay;anchors.centerIn:parent
+    width:Math.min(360,parent ? parent.width-24 : 360)
+    modal:true;title:"武将互动"
+    contentItem:ColumnLayout {
+      Label {Layout.fillWidth:true;textFormat:Text.PlainText;text:playerActions.targetModel ? playerActions.targetModel.screenName || "该角色" : ""}
+      RowLayout {
+        Button {text:"砸蛋";Layout.fillWidth:true;enabled:!presentCooldown.running;onClicked:host.sendPresent("Egg")}
+        Button {text:"送花";Layout.fillWidth:true;enabled:!presentCooldown.running;onClicked:host.sendPresent("Flower")}
+      }
+      Button {text:"查看资料";Layout.fillWidth:true;onClicked:{
+        const model=playerActions.targetModel;playerActions.close();
+        if(host.currentScene && model)host.currentScene.showInfoPopup(Qt.createComponent("LunarLtk.Pages.InfoPopups","PlayerDetail"),{dataModel:model});
+      }}
+      Button {text:"取消";Layout.fillWidth:true;onClicked:playerActions.close()}
+    }
   }
   function refreshCompatibility(rootItem) {
     // Periodic whole-tree scans must never run during a match or spectating.
@@ -119,6 +176,8 @@ Item {
       if (!item || typeof item !== "object" || seen.has(item) || depth > 24 || ++visited > 12000) return;
       seen.add(item);
       const type = String(item);
+      if ("rightClicked" in item && "dataModel" in item && "playerid" in item && "general" in item && "goBackAnim" in item)
+        host.attachPlayerActions(item);
       if (type.indexOf("AvatarChatBox_QMLTYPE") === 0 && typeof item.loadSkills === "function")
         host.attachRoleVoices(item);
       if ((Cpp.os==="Android" || Cpp.os==="iOS") && type.indexOf("LogEdit_QMLTYPE")===0)
@@ -230,7 +289,23 @@ Item {
   Connections {
     target: host.currentScene
     ignoreUnknownSignals: true
-    function onPopupItemChanged() { Qt.callLater(host.adaptRoomPopup); }
+    function onPopupItemChanged() { Qt.callLater(host.adaptRoomPopup); visibleCardCapture.restart(); }
+  }
+  Timer {id:visibleCardCapture;interval:32;onTriggered:host.rememberPopupCards()}
+  function rememberPopupCards() {
+    const item=currentScene && currentScene.popupItem;
+    if(!item || !item.visible) return;
+    const ids=new Set(),pending=[item];
+    while(pending.length) {
+      const node=pending.pop();
+      if(!node || !node.visible)continue;
+      if(String(node).indexOf("CardItem_QMLTYPE")===0 && node.dataModel && node.known===true && node.dataModel.cardId>0)
+        ids.add(node.dataModel.cardId);
+      if(node.children)pending.push(...Array.from(node.children));
+    }
+    if(!ids.size)return;
+    try {Lua.ev('(function() FkCardCounterV2=FkCardCounterV2 or dofile("card-counter/counter.lua"); return FkCardCounterV2.remember({' + Array.from(ids).join(',') + '}) end)()');}
+    catch(_) { /* The transient client may have been replaced while closing. */ }
   }
   function adaptRoomPopup() {
     const item = currentScene && currentScene.popupItem;
@@ -257,6 +332,7 @@ Item {
   }
   Timer { id: backgroundSave; interval: 250; onTriggered: Config.saveConf(); }
   function releaseScene() {
+    playerActions.close(); playerActions.targetModel=null;
     if (deckHit) deckHit.destroy();
     if (fallbackButton) fallbackButton.destroy();
     if (popup) popup.destroy();

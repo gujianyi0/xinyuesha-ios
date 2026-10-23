@@ -13,6 +13,7 @@
 #include "platform/localfileurl.h"
 #ifdef Q_OS_IOS
 #include "platform/iosfriendtransport.h"
+#include "platform/iosbackgroundpicker.h"
 #include <QPointer>
 #endif
 
@@ -378,6 +379,23 @@ QString QmlBackend::deriveSocialAccountKey(const QString &server,
 }
 
 #ifdef Q_OS_IOS
+void QmlBackend::pickBackground(const QString &key) {
+  if (m_backgroundPicking || !QStringList{"lobbyBg", "roomBg", "ladyImg"}.contains(key)) return;
+  m_backgroundPicking = true;
+  const QPointer<QmlBackend> guard(this);
+  fkPickIosBackground(key == "roomBg", [guard,key](QUrl file, QString error) {
+    if (!guard) return;
+    guard->m_backgroundPicking = false;
+    QString result;
+    if (!file.isEmpty()) {
+      result = guard->importBackground(file.toString());
+      QFile::remove(file.toLocalFile());
+      if (result.isEmpty()) error = QStringLiteral("图片保存失败，请重试");
+    }
+    emit guard->backgroundPicked(key, result, error);
+  });
+}
+
 qint64 QmlBackend::startSocialRequest(const QString &method, const QString &url,
     const QString &bearer, const QString &body) {
   if (!m_socialTransport) m_socialTransport = new IosFriendTransport(this);

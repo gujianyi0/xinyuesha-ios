@@ -1,14 +1,14 @@
 {
   "Fk/main.qml": "ec93295f176397057eff7f8dc69234fa5098023226b59d82ad2fb2ae11981c33",
-  "card-counter/CardCounter.qml": "58e54ab26b562dd668e87ad537e124765c1402494853e50866078004faaf96f0",
-  "card-counter/CounterHost.qml": "cbb812ddb03c881c2390e5129ee7fecc61589c20a88af013079f350716ff31e8",
+  "card-counter/CardCounter.qml": "0046c4d5fa056f001bb72f3916e0e526b37631c46142fe94ac023cbd1f72f650",
+  "card-counter/CounterHost.qml": "9d6b760c9d070aadc965e364b8724e9ef36b19cd6c515ce4fdf6ed5f5b03d4f5",
   "card-counter/CounterViewport.qml": "86e30b8f7e308375daaca23b4ee6bae6b5debd501a5e1ae84ecda912580c2e6d",
-  "card-counter/RoleVoiceControl.qml": "ed5b85970c7b5fbfbff5fbc1cba35c281cef5e03100a5ffc811799a767b3c147",
+  "card-counter/RoleVoiceControl.qml": "cbe4aee73835de7179836bf6bee089793d68bac7b81e53f482f4c0c0778cb0ce",
   "card-counter/SocialAuth.js": "47a55593ea42a333fc80529213ad4194771d639be051524b119a3d332004c861",
   "card-counter/SocialClient.qml": "16f7ea7849b71a7b1d308cb1353bf1128fd9ac1457bc225f133a3443ce590468",
   "card-counter/SocialHost.qml": "4759dd4a35f0aa9e090c9c83ab80dcbd8d6764b6249b864f364e8fbc68975716",
   "card-counter/SuitIcon.qml": "d53f8443eb194cc02853f4ec5189b1b6d35e67884f2c7598ddec4bf7e7ced14c",
-  "card-counter/bootstrap.lua": "a5c0048afdf58c45972e9034e6d15edfb2aafe5632ccdc62aaf60ec02e56ce7b",
+  "card-counter/bootstrap.lua": "c33e7366b037bf4d18e59edf48fc8d6fa817a2ebb81e83ec91a28e0e6c734906",
   "card-counter/client-shell/main.qml": "82e9aa9437be6c7992a674a9fa468f997b1a2be1d6d0d7742f27f8f9a1c74f55",
-  "card-counter/counter.lua": "24cab521a0124e0ee37523ede6626537a3ba489f6fdd677c9742bbec57e3d790"
+  "card-counter/counter.lua": "643e7aca84f3f72635e314001e9e1532b9fe973ef2033a6347ba96ce9ae70f0c"
 }

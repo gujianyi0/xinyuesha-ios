@@ -74,6 +74,46 @@ function M.snapshot(room, engine, viewer, detailKey)
       for _, known in pairs(zones) do addKnown(known) end
     end
   end
+  -- Detail records come exclusively from this viewer's visibility/tracker.
+  -- Never recover identities/order by inspecting the actual hidden draw pile.
+  local knowledge = {hands = {}, top = {}, bottom = {}}
+  local function record(id, owner, position, uncertain)
+    if type(id) ~= "number" or id < 1 then return nil end
+    local c = card(id)
+    if not c then return nil end
+    return {id = id, key = c.name, name = engine:translate(c.name),
+      suit = c.suit or 5, number = c.number or 0,
+      owner = owner or "", position = position or 0, uncertain = uncertain == true}
+  end
+  for _, player in ipairs(room.players or {}) do
+    if player ~= viewer then
+      local seen = {}
+      local label = player.screenName or player.screen_name or tostring(player.id)
+      local zones = tracker and tracker.player_cards and tracker.player_cards[player.id]
+      local knownHand = zones and zones[1] or {}
+      local function append(id, uncertain)
+        if seen[id] then return end
+        local row = record(id, label, 0, uncertain)
+        if row then row.token = tostring(player.id) .. ":" .. tostring(id); knowledge.hands[#knowledge.hands+1] = row; seen[id] = true end
+      end
+      for _, id in ipairs(knownHand.known_cards or {}) do append(id, false) end
+      for _, id in ipairs((player.player_cards or {})[1] or {}) do
+        if viewer:cardVisible(id) then append(id, false) end
+      end
+      for _, id in ipairs(knownHand.uncertain_cards or {}) do append(id, true) end
+    end
+  end
+  local order = tracker and tracker.draw_pile_order or {}
+  for i = 1, #order do
+    local row = record(order[i], nil, i)
+    if not row then break end
+    row.token = tostring(row.id); knowledge.top[#knowledge.top+1] = row
+  end
+  for i = #order, 1, -1 do
+    local row = record(order[i], nil, #order-i+1)
+    if not row then break end
+    row.token = tostring(row.id); knowledge.bottom[#knowledge.bottom+1] = row
+  end
   -- No access to room.draw_pile IDs, hidden card locations, or other trackers.
   for id in pairs(pool) do
     local c = card(id)
@@ -114,8 +154,27 @@ function M.snapshot(room, engine, viewer, detailKey)
     discarded = discarded + row.discard; inHand = inHand + row.hand
   end
   return { ready = total > 0, rows = rows, total = total, unseen = unseen,
-    known = known, discard = discarded, hand = inHand, viewer = viewer.id,
+    known = known, discard = discarded, hand = inHand, viewer = viewer.id, knowledge = knowledge,
     message = "未见含牌堆及未知手牌；数字按实体原始牌面统计" }
+end
+
+-- Called only with face-up CardItem IDs from an actually visible skill popup.
+-- Updating the existing viewer tracker lets its move rules handle uncertainty.
+function M.remember(ids)
+  local room, viewer = ClientInstance, Self
+  if not room or not viewer or not viewer.card_tracker then return false end
+  for _, id in ipairs(ids or {}) do
+    if type(id) == "number" and id > 0 then
+      local area = room:getCardArea(id)
+      local owner = room:getCardOwner(id)
+      if area == Card.PlayerHand and owner then
+        viewer.card_tracker:setCardKnown(id, owner, Card.PlayerHand)
+      elseif area == Card.Processing or area == Card.DrawPile then
+        viewer.card_tracker:setCardKnown(id, nil, area)
+      end
+    end
+  end
+  return true
 end
 
 function M.current(detailKey)
