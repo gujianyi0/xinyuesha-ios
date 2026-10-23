@@ -24,12 +24,13 @@ put('Fk/Config.qml','pragma Singleton\nimport QtQuick\nQtObject {property var en
 put('Fk/Lua.qml','''pragma Singleton
 import QtQuick
 QtObject {
+ property var captures:[]
  property var selfPlayer:({id:1,general:"self",deputyGeneral:""})
  property bool banned:false
  property bool large:false
  property bool emptyPool:false
  function tr(s){return s;}
- function ev(s){if(s.indexOf("Fk:canUseGeneral")===0)return !(banned && s.indexOf('"b"')>=0);
+ function ev(s){if(s.indexOf("FkCardCounterV2.remember")>=0){captures=captures.concat([s]);return true;}if(s.indexOf("Fk:canUseGeneral")===0)return !(banned && s.indexOf('"b"')>=0);
   if(s.indexOf("Fk:getAllGenerals")>=0){
    if(emptyPool)return ["silent","gap"].map(g=>({id:g,name:g,pack:"无语音包"}));
    if(large){const a=[];for(let i=0;i<1024;i++)a.push({id:"bulk"+i,name:"武将"+i,pack:"大将池"});return a;}
@@ -81,6 +82,7 @@ shutil.copy2(R/'Fk/Components/GameCommon/BasicItem.qml',B/'BasicItem.qml')
 put('Avatar.qml','import QtQuick\nItem {property string general;}')
 put('MetroButton.qml','import QtQuick.Controls\nButton {}')
 put('LogEdit.qml','import QtQuick\nListView {function append(a){}function clear(){}}')
+put('CardItem.qml','import QtQuick\nItem {property bool known:false;property var dataModel;}')
 shutil.copytree(a.payload/'card-counter',B/'card-counter')
 put('Main.qml','''import QtQuick
 import Fk
@@ -97,7 +99,16 @@ Window {
  QtObject {id:client;function notifyServer(command,data){win.sent=win.sent.concat([{command:command,data:data}]);}}
  AvatarChatBox {id:chat;x:20;y:10;width:480;height:500}
  Counter.CounterHost {id:counter}
- Item {id:interactionScene;function closeInfoPopup(){}}
+ Item {id:interactionScene;property var popupItem:null;function closeInfoPopup(){}}
+ Item {id:reveal;visible:false
+  CardItem {known:true;dataModel:({cardId:27})}
+  CardItem {known:false;dataModel:({cardId:28})}
+  Item {visible:false;CardItem {known:true;dataModel:({cardId:29})}}
+  CardItem {known:true;dataModel:({cardId:-2})}
+ }
+ function revealCards(){reveal.visible=true;interactionScene.popupItem=reveal;}
+ function capturedCards(){return JSON.stringify(Lua.captures);}
+ function hideReveal(){reveal.visible=false;counter.rememberPopupCards();}
  BasicItem {id:targetPhoto;onRightClicked:win.longPresses++;x:800;y:200;width:100;height:130;selectable:false;property var dataModel:({playerid:2,screenName:"测试目标"})}
  function actionsState(){return JSON.stringify({signals:longPresses,scene:!!counter.currentScene,visible:targetPhoto.visible,x:targetPhoto.x,y:targetPhoto.y});}
  function prepareActions(){control().soundList.visible=false;control().children.find(b=>b.objectName==="roleVoiceButton");counter.currentScene=interactionScene;counter.attachPlayerActions(targetPhoto);}
@@ -233,9 +244,20 @@ before_present=json.loads(invoke('snapshot'))['sent'];assert before_present==fin
 assert invoke('egg') is True
 assert invoke('flower') is False,'gift cooldown prevents duplicate sends'
 assert json.loads(invoke('snapshot'))['sent'][-1]=={'command':'Chat','data':{'type':2,'msg':'$@Egg:2'}}
-pump(1.55);assert invoke('flower') is True
+host=win.findChild(QObject,'fkCounterHost')
+cooldowns=[obj for obj in host.findChildren(QObject) if obj.property('interval')==1500]
+assert len(cooldowns)==1,'the present rate limit must have one timer'
+cooldown=cooldowns[0];assert cooldown.property('running') is True
+cooldown_deadline=time.monotonic()+3
+while cooldown.property('running') and time.monotonic()<cooldown_deadline:pump(.02)
+assert cooldown.property('running') is False,'present rate limit did not expire'
+assert invoke('flower') is True
 assert json.loads(invoke('snapshot'))['sent'][-1]['data']['msg']=='$@Flower:2'
 call('replayMode');assert invoke('egg') is False,'replays cannot send gifts'
+call('revealCards');captured=json.loads(invoke('capturedCards'))
+assert len(captured)==1 and 'remember({27})' in captured[0],captured
+pump(.2);assert json.loads(invoke('capturedCards'))==captured,'reveals are captured once, without polling'
+call('hideReveal');assert json.loads(invoke('capturedCards'))==captured,'hidden popups are not captured'
 
 errors=[m for m in logs if any(x in m for x in ['TypeError','ReferenceError','SyntaxError','Unable to assign','Cannot assign','Binding loop','is not a type'])]
 print(json.dumps({'button_geometry':geometry,'initial':initial,'banned':banned,'final':final,'large':{'checked':large_done['checked'],'with_audio':len(large_done['pool']),'first_batch_checked':large_partial['checked'],'directories':large_done['dirs']},'errors':errors},ensure_ascii=False,indent=2));assert not errors,errors

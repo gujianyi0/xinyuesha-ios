@@ -185,8 +185,35 @@ viewer.card_tracker.player_cards[2][1]={known_cards={},uncertain_cards={27}}
 viewer.card_tracker.draw_pile_order={}
 k=M.snapshot(room,engine,viewer).knowledge
 assert(#k.hands==1 and k.hands[1].uncertain and #k.top==0 and #k.bottom==0)
+-- Private reveal capture accepts actual visible IDs and writes only the
+-- viewer's tracker; the normal move tracker owns subsequent uncertainty.
+Card={PlayerHand=1,Processing=5,DrawPile=6}
+Self=viewer;ClientInstance=room
+local remembered={}
+function room:getCardArea(id) return ({[27]=1,[31]=5,[32]=6,[33]=4})[id] end
+function room:getCardOwner(id) return id==27 and target or nil end
+function viewer.card_tracker:setCardKnown(id,owner,area)
+ remembered[#remembered+1]={id=id,owner=owner,area=area}
+end
+assert(M.remember({27,31,32,33,-1}))
+assert(#remembered==3 and remembered[1].owner==target and remembered[3].area==6)
 
 return "counts, selected details and hidden-zone restrictions passed; detail rows 300 -> "..detailRows
+'''
+        bootstrap=(args.payload/'card-counter/bootstrap.lua').read_text(encoding='utf8')
+        script=script.replace('return "counts, selected details', 'local snapshotResult="counts, selected details')
+        script+='\nlocal install=assert(load('+json.dumps(bootstrap,ensure_ascii=False)+',"bootstrap.lua"))\n'+r'''
+Client={prepareDrawPile=function() end,deserialize=function() end,
+ shuffleDrawPile=function(self,ids) self.shuffles=(self.shuffles or 0)+1;self.draw_pile=ids;return "shuffled" end}
+Fk={boardgames={}}
+install();install()
+local hand={known_cards={27},uncertain_cards={28}}
+local tracker={draw_pile_order={31,-1,32},draw_pile={known_cards={31,32}},player_cards={[2]={[1]=hand}}}
+local room=setmetatable({players={{card_tracker=tracker}}},{__index=Client})
+assert(room:shuffleDrawPile({32,31})=="shuffled" and room.shuffles==1)
+assert(#tracker.draw_pile_order==0 and #tracker.draw_pile.known_cards==0)
+assert(tracker.player_cards[2][1]==hand and hand.known_cards[1]==27)
+return snapshotResult.."; visible reveal and shuffle invalidation passed"
 '''
         vm=lib.luaL_newstate()
         try:

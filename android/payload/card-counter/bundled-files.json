@@ -1,6 +1,6 @@
 {
   "Fk/main.qml": "ec93295f176397057eff7f8dc69234fa5098023226b59d82ad2fb2ae11981c33",
-  "card-counter/CardCounter.qml": "0046c4d5fa056f001bb72f3916e0e526b37631c46142fe94ac023cbd1f72f650",
+  "card-counter/CardCounter.qml": "01903e33a17a6340407181c9dffca67198db496dd02ea3b769bc8de73f27d6b5",
   "card-counter/CounterHost.qml": "9d6b760c9d070aadc965e364b8724e9ef36b19cd6c515ce4fdf6ed5f5b03d4f5",
   "card-counter/CounterViewport.qml": "86e30b8f7e308375daaca23b4ee6bae6b5debd501a5e1ae84ecda912580c2e6d",
   "card-counter/RoleVoiceControl.qml": "cbe4aee73835de7179836bf6bee089793d68bac7b81e53f482f4c0c0778cb0ce",

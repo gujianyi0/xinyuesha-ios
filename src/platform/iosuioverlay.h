@@ -100,6 +100,7 @@ inline QString adapt(const QString &path, QString text) {
     id: quitDialog
     objectName: "offlineQuitConfirmation"
     anchors.centerIn: parent
+    width: Math.min(parent.width - 32, 460)
     title: Lua.tr("Quit")
     modal: true
     closePolicy: Popup.NoAutoClose

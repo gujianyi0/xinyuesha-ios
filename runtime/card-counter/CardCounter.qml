@@ -404,7 +404,7 @@ Item {
           required property var model
           width:ListView.view.width;height:76;radius:6;color:model.uncertain ? "#34352D" : "#243B40"
           Image {x:8;y:5;width:44;height:66;source:root.cardPicture(model.key);sourceSize:Qt.size(88,132);asynchronous:true;fillMode:Image.PreserveAspectFit}
-          Text {x:64;y:10;width:parent.width-76;textFormat:Text.PlainText;color:root.pale;font.pixelSize:16;text:model.name+"  "+(["","♠","♣","♥","♦","无花色"][model.suit] || "")+" "+(["","A","2","3","4","5","6","7","8","9","10","J","Q","K"][model.number] || "")}
+          Text {x:64;y:10;width:parent.width-76;textFormat:Text.PlainText;color:root.pale;font.pixelSize:16;text:model.name+"  "+(["","黑桃","梅花","红桃","方块","无花色"][model.suit] || "")+" "+(["","A","2","3","4","5","6","7","8","9","10","J","Q","K"][model.number] || "")}
           Text {x:64;y:40;width:parent.width-76;textFormat:Text.PlainText;color:model.uncertain ? "#D6BE88" : "#B4CCC6";font.pixelSize:13;text:root.knowledgeScope==="hands" ? model.owner+(model.uncertain ? " · 可能仍在手中" : " · 已知手牌") : "距离"+(root.knowledgeScope==="top" ? "牌堆顶" : "牌堆底")+"第 "+model.position+" 张"}
         }
         Text {anchors.centerIn:parent;visible:knownModel.count===0;color:"#AABCB7";font.pixelSize:16;text:"当前没有可确定的记录"}
