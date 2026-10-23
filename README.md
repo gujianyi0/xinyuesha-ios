@@ -16,7 +16,7 @@ Android、Windows PC、iOS 三端客户端，基于 [FreeKill / 新月杀](https
 
 安装游戏请下载上表对应文件。GitHub 的 **Code → Download ZIP** 是工程源码，不是完整的安装包。
 
-**2026-10-22 分发核对通过**：上表五个文件均为目前最新分发内容，三个现有 Release 的同名文件一致。文件名沿用 `20261019`，实际内容已更新至 2026-10-22；以 [SHA256 清单](downloads/SHA256SUMS.txt) 区分。当前角色资源源码为 `1c04405`，iOS 原生源码为 `a1ad5d5`。
+**2026-10-23 分发已更新**：上表五个文件包含本次两条反馈修正，三个现有 Release 的同名文件同步。文件名沿用 `20261019`，实际内容更新至 2026-10-23；以 [SHA256 清单](downloads/SHA256SUMS.txt) 区分。界面源码为 `26d9cd7`，iOS 原生源码保留 `a1ad5d5`，三端回归 [39890572785](https://github.com/gujianyi0/xinyuesha-ios/actions/runs/39890572785) 通过。
 
 ## 2026-10-23 更新
 
