@@ -16,7 +16,14 @@ Android、Windows PC、iOS 三端客户端，基于 [FreeKill / 新月杀](https
 
 安装游戏请下载上表对应文件。GitHub 的 **Code → Download ZIP** 是工程源码，不是完整的安装包。
 
-**2026-10-24 分发已更新 · 20261024.4**：五个文件同步持续送花／砸蛋、观看牌顶底记录及 iOS 确认框／天候提示修正，文件名沿用 `20261019`，按 [SHA256 清单](downloads/SHA256SUMS.txt) 区分。源码 `d215dcb`，[三端回归 40099031166](https://github.com/gujianyi0/xinyuesha-ios/actions/runs/40099031166) 和 [iOS 原生构建 40099032358](https://github.com/gujianyi0/xinyuesha-ios/actions/runs/40099032358) 均成功。见 [使用与验证记录](docs/持续互动与观看牌记录-20261024.md)。
+**2026-10-25 更新：iOS 20261025.1；Android / PC 20261024.4。** 本轮仅更新独立 IPA 和 iOS 安装整合包，Android / PC 包保持原校验值。文件名沿用 `20261019`，按 [SHA256 清单](downloads/SHA256SUMS.txt) 区分。iOS 源码 `b6149e3`，[原生构建及两套核心界面测试 40115014964](https://github.com/gujianyi0/xinyuesha-ios/actions/runs/40115014964) 与 [共同功能回归 40114577221](https://github.com/gujianyi0/xinyuesha-ios/actions/runs/40114577221) 均成功。
+
+## 2026-10-25 iOS 更新
+
+- 修正桓范腹谋等移动场上装备时弹窗没有卡牌；保留服务端给出的候选装备、所属位置及双方玩家，不改游戏规则。
+- iOS 恢复焦点时不再重复重设 Qt 全屏，照片选择增加取消、交互式关闭、展示失败及异常释放时的状态清理，避免相册关闭后无法重开。
+- 旧弹窗空列表已在 Qt 6.8.3 复现，修正后通过显示、实际点击选择及确认返回位置测试；30 次 iOS 激活循环无窗口重设。相册及完整技能流程仍需 iPhone 真机复测，未宣称全部真机问题已解决。
+- Android / PC 本轮不重打包，保留 20261024.4 的共同功能。详见 [本轮记录](docs/iOS装备移动与相册修正-20261025.md)。
 
 ## 2026-10-24 追加更新 · 20261024.4
 
