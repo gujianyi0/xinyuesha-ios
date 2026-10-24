@@ -32,6 +32,12 @@ inline QString adapt(const QString &path, QString text) {
     // height creates a zero-height cycle, so skill text exists but is invisible.
     text.replace("height: parent.height\n      contentHeight: skillDesc.height",
       "Layout.fillWidth: true\n      Layout.preferredHeight: skillDesc.implicitHeight\n      contentHeight: skillDesc.height");
+  } else if (path == "LunarLtk/Models/Popups/MoveCardInBoardModel.qml") {
+    // A property map cannot initialize these primitive lists on Qt 6.8 iOS.
+    // Keep the server-provided candidates/positions intact as JS arrays.
+    text.replace("property list<int> cardIds", "property var cardIds: []");
+    text.replace("property list<int> cardsPosition", "property var cardsPosition: []");
+    text.replace("property list<int> playerIds", "property var playerIds: []");
   } else if (path == "LunarLtk/Pages/InfoPopups/ViewPile.qml" || path == "LunarLtk/Pages/InfoPopups/ViewGeneralPile.qml") {
     // Qt 6.8 does not consistently initialize/consume primitive QML list
     // properties as models when created with a JavaScript property map.

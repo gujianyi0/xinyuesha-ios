@@ -25,7 +25,9 @@ Window {
   onYChanged: if (!skinDebuggerMode && !androidMode) Config.winY = y;
   onWidthChanged: if (!skinDebuggerMode) Config.winWidth = width;
   onHeightChanged: if (!skinDebuggerMode) Config.winHeight = height;
-  onActiveChanged: if (active && androidMode && !skinDebuggerMode) Qt.callLater(root.showFullScreen)
+  // iOS owns UIKit modal presentation. Re-showing the Qt window on focus can
+  // dismiss the system photo picker; only Android needs the focus restoration.
+  onActiveChanged: if (active && Cpp.os === "Android" && !skinDebuggerMode) Qt.callLater(root.showFullScreen)
 
   Counter.CounterViewport {
     id: viewport

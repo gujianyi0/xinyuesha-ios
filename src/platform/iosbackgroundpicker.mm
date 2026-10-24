@@ -2,22 +2,39 @@
 #include "iosbackgroundpicker.h"
 #include <QStandardPaths>
 #include <QUuid>
+#include <utility>
 #import <UIKit/UIKit.h>
 #import <PhotosUI/PhotosUI.h>
 #import <ImageIO/ImageIO.h>
 #import <objc/runtime.h>
 #import <dispatch/dispatch.h>
 
-@interface FKBackgroundPickerDelegate : NSObject <PHPickerViewControllerDelegate> {
+@interface FKBackgroundPickerDelegate : NSObject <PHPickerViewControllerDelegate, UIAdaptivePresentationControllerDelegate> {
 @public
   std::function<void(QUrl, QString)> completion;
   QString outputPath;
 }
+- (void)cancelPending;
 @end
 
 @implementation FKBackgroundPickerDelegate
+- (void)cancelPending {
+  auto done = std::exchange(completion, {});
+  if (done) done({}, {});
+}
+- (void)presentationControllerDidDismiss:(UIPresentationController *)controller {
+  [self cancelPending];
+}
+- (void)dealloc {
+  // Programmatic/system dismissal need not invoke the picker delegate. Release
+  // the backend's busy flag even on that path, without retaining the controller.
+  auto done = std::exchange(completion, {});
+  if (done) dispatch_async(dispatch_get_main_queue(), ^{
+    done({}, QStringLiteral("相册已关闭，请重新选择"));
+  });
+}
 - (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results {
-  auto done = std::move(completion);
+  auto done = std::exchange(completion, {});
   if (!done) return;
   [picker dismissViewControllerAnimated:YES completion:nil];
   if (results.count == 0) { done({}, {}); return; }
@@ -87,4 +104,13 @@ void fkPickIosBackground(bool allowVideo, std::function<void(QUrl, QString)> com
   static const char ownerKey = 0;
   objc_setAssociatedObject(picker, &ownerKey, delegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   [presenter presentViewController:picker animated:YES completion:nil];
+  picker.presentationController.delegate = delegate;
+  // A rejected presentation may not call a completion/delegate method at all.
+  // A weak reference keeps this check from prolonging a dismissed picker.
+  __weak PHPickerViewController *weakPicker = picker;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    PHPickerViewController *livePicker = weakPicker;
+    if (livePicker && !livePicker.presentingViewController && !livePicker.isBeingPresented)
+      [delegate cancelPending];
+  });
 }
