@@ -3,6 +3,19 @@
 local M = {}
 local catalogs = setmetatable({}, { __mode = "k" })
 
+local function playerLabel(player)
+  -- ClientPlayer stores the account nickname on its native player object,
+  -- not on the Lua wrapper (which only has the numeric id in stock clients).
+  local ok, name = pcall(function() return player.player:getScreenName() end)
+  if ok and type(name) == "string" and name ~= "" then return name end
+  for _, field in ipairs({"screenName", "screen_name"}) do
+    name = player[field]
+    if type(name) == "string" and name ~= "" then return name end
+  end
+  local seat = tonumber(player.seat)
+  return seat and seat > 0 and ("第 " .. tostring(seat) .. " 位玩家") or "玩家"
+end
+
 function M.snapshot(room, engine, viewer, detailKey)
   if not room or not viewer or not viewer.player_cards then
     return { ready = false, rows = {}, message = "等待牌局数据" }
@@ -88,7 +101,7 @@ function M.snapshot(room, engine, viewer, detailKey)
   for _, player in ipairs(room.players or {}) do
     if player ~= viewer then
       local seen = {}
-      local label = player.screenName or player.screen_name or tostring(player.id)
+      local label = playerLabel(player)
       local zones = tracker and tracker.player_cards and tracker.player_cards[player.id]
       local knownHand = zones and zones[1] or {}
       local function append(id, uncertain)

@@ -201,6 +201,19 @@ viewer.card_tracker.player_cards={[2]={[1]={known_cards={27},uncertain_cards={28
 viewer.card_tracker.draw_pile_order={31,32,-1,-1,33}
 local k=M.snapshot(room,engine,viewer).knowledge
 assert(#k.hands==2 and k.hands[1].id==27 and not k.hands[1].uncertain and k.hands[2].uncertain)
+assert(k.hands[1].owner=="target")
+-- Production Lua players expose nicknames through player:getScreenName().
+target.screenName=nil;target.player={getScreenName=function() return "故剑遗" end}
+assert(M.snapshot(room,engine,viewer).knowledge.hands[1].owner=="故剑遗")
+target.player.getScreenName=function() return "新昵称" end
+assert(M.snapshot(room,engine,viewer).knowledge.hands[1].owner=="新昵称")
+target.player.getScreenName=function() error("native player unavailable") end
+target.screenName="";target.screen_name="兼容昵称"
+assert(M.snapshot(room,engine,viewer).knowledge.hands[1].owner=="兼容昵称")
+target.screen_name=nil;target.seat=3
+assert(M.snapshot(room,engine,viewer).knowledge.hands[1].owner=="第 3 位玩家")
+target.seat=nil
+assert(M.snapshot(room,engine,viewer).knowledge.hands[1].owner=="玩家")
 assert(#k.top==2 and k.top[1].id==31 and k.top[2].position==2)
 assert(#k.bottom==1 and k.bottom[1].id==33 and k.bottom[1].position==1)
 viewer.card_tracker.player_cards[2][1]={known_cards={},uncertain_cards={27}}

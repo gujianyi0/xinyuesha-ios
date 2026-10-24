@@ -84,14 +84,78 @@ Item {
     return "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">'+shapes[kind]+'</svg>');
   }
   function adaptTouchLog(view) {
+    // Newer cores wrap the actual vertical list in RoomGameLogEdit.
+    if (!("movementStarted" in view)) {
+      const pending = Array.from(view.children || []);
+      while (pending.length) {
+        const child = pending.pop();
+        if ("movementStarted" in child && "currentIndex" in child && child.orientation === ListView.Vertical)
+          host.adaptTouchLog(child);
+        else if (child.children) pending.push(...Array.from(child.children));
+      }
+      return;
+    }
     if (adaptedControls.indexOf(view)>=0) return;
     adaptedControls.push(view);
+    touchLogGuard.createObject(view, {view:view});
     // LogEdit follows the last selected index, rather than the viewport. A
     // manual drag must leave that index before the next live log is appended.
     view.movementStarted.connect(function() { view.currentIndex=-1; });
     view.movementEnded.connect(function() {
       if (view.atYEnd && view.count>0) view.currentIndex=view.count-1;
     });
+  }
+  Component {
+    id: touchLogGuard
+    Item {
+      id: guard
+      objectName: "touchLogGuard"
+      required property var view
+      property var adaptedRows: []
+      // Only inspect this ListView's live delegates when they are created.
+      // Its delegate and avatar layout stay intact; no whole-page polling.
+      function adaptRows() {
+        adaptedRows = adaptedRows.filter(row => row && row.parent === view.contentItem);
+        for (const row of Array.from(view.contentItem.children || [])) {
+          if (adaptedRows.indexOf(row) >= 0) continue;
+          const pending = [row], seen = new Set();
+          let ready = false;
+          while (pending.length) {
+            const item = pending.pop();
+            if (!item || seen.has(item)) continue;
+            seen.add(item);
+            if ("gesturePolicy" in item && "tapped" in item) {
+              item.gesturePolicy = TapHandler.DragThreshold;
+              item.grabPermissions = PointerHandler.ApprovesTakeOverByAnything;
+              ready = true;
+            }
+            if ("readOnly" in item && item.readOnly && "selectByKeyboard" in item) {
+              // Rich log text must not start selection/focus gestures above
+              // the list. Its original text, links and avatar layout remain.
+              item.enabled = false;
+            }
+            if (item.children) pending.push(...Array.from(item.children));
+            if (item.data) pending.push(...Array.from(item.data));
+          }
+          if (ready) adaptedRows.push(row);
+        }
+      }
+      // Delegates can be incubated: their visual item arrives before its
+      // non-visual TapHandler. Defer until the next frame and also observe
+      // content-size changes as those delayed text rows finish construction.
+      Timer { id: rowAdapt; interval: 16; onTriggered: guard.adaptRows() }
+      Connections {
+        target: guard.view.contentItem
+        function onChildrenChanged() { if (!rowAdapt.running) rowAdapt.start(); }
+      }
+      Connections {
+        target: guard.view
+        function onContentHeightChanged() { if (!rowAdapt.running) rowAdapt.start(); }
+        function onMovementStarted() { guard.adaptRows(); }
+        function onMovementEnded() { guard.adaptRows(); }
+      }
+      Component.onCompleted: adaptRows()
+    }
   }
   function attachRoleVoices(chat) {
     if (adaptedControls.indexOf(chat) >= 0 || chat.isLobby) return;
@@ -171,7 +235,8 @@ Item {
         host.attachPlayerActions(item);
       if (type.indexOf("AvatarChatBox_QMLTYPE") === 0 && typeof item.loadSkills === "function")
         host.attachRoleVoices(item);
-      if ((Cpp.os==="Android" || Cpp.os==="iOS") && type.indexOf("LogEdit_QMLTYPE")===0)
+      if ((Cpp.os==="Android" || Cpp.os==="iOS") &&
+          (type.indexOf("LogEdit_QMLTYPE")===0 || type.indexOf("RoomGameLogEdit_QMLTYPE")===0))
         host.adaptTouchLog(item);
       serverPage = serverPage || ("selectedServer" in item && "serverListUrl" in item);
       lobbyPage = lobbyPage || ("roomModel" in item && "serverPlayerNum" in item);

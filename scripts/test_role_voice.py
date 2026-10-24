@@ -141,6 +141,7 @@ Window {
  function selectPack(){control().choose("pack");}
  function selectGap(){control().choose("gap");}
  function resourcePack(){Config.enabledResourcePacks=["alt"];}
+ function sameResourcePack(){Config.enabledResourcePacks=Array.from(Config.enabledResourcePacks);}
  function largeCatalog(){Lua.large=true;control().refreshPool(true);initialChecks=control().checkedCount;}
  function clearLarge(){Lua.large=false;control().refreshPool();}
  function catalogState(){const c=control();return JSON.stringify({pool:c.generals.map(g=>g.id),checked:c.checkedCount,total:c.candidates.length,scanning:c.scanning,initial:initialChecks,metadata:Ltk.metadataCalls,probes:SkinBank.probes,dirs:Backend.listings,selected:c.selectedGeneral});}
@@ -213,6 +214,10 @@ assert not room_cache['scanning'] and room_cache['metadata']==after_cache['metad
 call('rebuildControl');new_control=json.loads(invoke('catalogState'))
 assert not new_control['scanning'] and new_control['metadata']==room_cache['metadata'] and new_control['probes']==room_cache['probes'],new_control
 assert new_control['pool']==room_cache['pool'],new_control
+# loadConf/room transitions can emit this signal for an identical pack list.
+# It must not discard both positive and negative availability results.
+call('sameResourcePack');pump(.3);call('reopenCatalog');same_pack=json.loads(invoke('catalogState'))
+assert not same_pack['scanning'] and same_pack['metadata']==new_control['metadata'] and same_pack['probes']==new_control['probes'] and same_pack['dirs']==new_control['dirs'],('identical resource settings must retain the cache',new_control,same_pack)
 geometry=json.loads(invoke('buttonGeometry'))
 
 call('resourcePack');pump(.3);call('reopenCatalog');pump(.3)

@@ -29,8 +29,11 @@ Item {
   // CounterHost outlives individual room/chat controls. Keep resource results
   // there; always query the new host's allowed pool independently.
   property var cacheStore: ({entries:{}})
+  function audioResourceKey() {
+    return JSON.stringify([Cpp.path, Array.from(Config.enabledResourcePacks || [])]);
+  }
   function adoptAudioCache(force) {
-    const key = JSON.stringify([Cpp.path, Config.enabledResourcePacks || []]);
+    const key = audioResourceKey();
     resourceKey = key;
     let entry = cacheStore.entries[key];
     if (force || !entry) {
@@ -245,7 +248,10 @@ Item {
     target: Config
     ignoreUnknownSignals: true
     function onEnabledResourcePacksChanged() {
-      root.clearAudioCache();
+      // Room/config reloads assign a new array even when the enabled packs
+      // are unchanged. Such notifications must not throw away the warm index.
+      if (root.resourceKey === root.audioResourceKey()) return;
+      root.adoptAudioCache(false);
       if (picker.visible) root.refreshPool();
     }
   }
