@@ -87,7 +87,7 @@ inline QString adapt(const QString &path, QString text) {
     // Lua-created/expanded cards can supply tip maps directly. Translate at
     // rendering as well, without depending on mutation of a QVariantMap.
     text.replace("text: parent.modelData.content",
-      "text: Ltk.processPrompt(String(parent.modelData.content || ''))");
+      "text: Lua.tr(String(parent.modelData.content || ''))");
   } else if (path == "LunarLtk/Components/Photo/LimitSkillItem.qml") {
     text.replace("source: SkinBank.limitSkillDir + skilltype", R"QML(source: SkinBank.limitSkillDir +
       (root.skilltype === 'switch' ? (root.usedtimes > 0 ? 'switch-yin' : 'switch') :

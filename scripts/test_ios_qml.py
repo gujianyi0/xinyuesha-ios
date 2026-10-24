@@ -32,7 +32,7 @@ put("Fk/qmldir", "module Fk\nsingleton Config 1.0 Config.qml\nsingleton Lua 1.0 
 put("Fk/Config.qml", 'pragma Singleton\nimport QtQuick\nQtObject {property real winScale:0.7;property string li2Name:"sans-serif";property string libianName:"sans-serif";property string roomBg:"default";property string lobbyBg:"default";function saveConf(){}}')
 put("Fk/Mediator.qml", 'pragma Singleton\nimport QtQuick\nQtObject {signal commandGot(var sender,string command,var data)}')
 put("Fk/Cpp.qml", 'pragma Singleton\nimport QtQuick\nQtObject {property string os:"iOS";}')
-put("Fk/Lua.qml", 'pragma Singleton\nimport QtQuick\nQtObject {function ev(t){return true;}function tr(t){return t;}}')
+put("Fk/Lua.qml", 'pragma Singleton\nimport QtQuick\nQtObject {function ev(t){return true;}function tr(t){return ({tianhou_frost:"严霜",tianhou_hot:"烈暑",tianhou_rain:"骤雨"})[t] || t;}}')
 put("Fk/Backend.qml", 'pragma Singleton\nimport QtQuick\nQtObject {function readFileFromAssets(p){return "{}";}function writeFileToAssets(p,t){return true;}}')
 put("Fk/SkinBank.qml", 'pragma Singleton\nimport QtQuick\nQtObject {property string limitSkillDir:"' + base.as_uri() + '/icons/";}')
 for name in ("switch", "switch-yin", "limit", "limit-used"):
@@ -71,7 +71,7 @@ lobby_source=(UI/"Fk/Pages/Lobby/Lobby.qml").read_text(encoding="utf-8")
 exit_content=re.search(r"contentItem: Text \{\n      text: parent.text;.*?\n    \}",lobby_source,re.S)
 exit_content=exit_content.group(0) if exit_content else ""
 card_item=(UI/"LunarLtk/Components/CardItem.qml").read_text(encoding="utf8")
-render_tips=re.findall(r'text: (Ltk\.processPrompt\(String\(parent\.modelData\.content[^\n]+)',card_item)
+render_tips=re.findall(r'text: (Lua\.tr\(String\(parent\.modelData\.content[^\n]+)',card_item)
 assert len(render_tips)==2, 'both normal and warning card-tip renderers translate direct maps'
 put("Main.qml", '''import QtQuick
 import QtQuick.Controls
@@ -106,6 +106,7 @@ Window {
    Text {id:label;text:"Skill details and visible teammate cards";font.pixelSize:18;color:"black"}
  }}
  Item {property var modelData:({content:"tianhou_frost"});Text {id:directTip;text:RENDER_TIP}}
+ Item {property var modelData:({content:"已译:说明 <font color=red>中文</font>"});Text {id:preservedTip;text:RENDER_TIP}}
  QtObject {id:photo;property list<var> limitSkills:[]; SKILL_METHOD }
  QtObject {id:targetPhoto;property int playerid:1;property var targetTip:[]; TARGET_METHOD }
  QtObject {id:tipCard;property int cardId:1;property var cardTip:[]; CARD_METHOD }
@@ -127,7 +128,7 @@ Window {
    toggleIcon:String(toggle.icon.source),exitContentX:exitButton.contentItem.x,
    exitContentWidth:exitButton.contentItem.width,exitWidth:exitButton.width,
    exitHeight:exitButton.height,referenceHeight:referenceButton.height,exitY:exitButton.y,
-   directTip:directTip.text,targetTips:targetPhoto.targetTip,cardTips:tipCard.cardTip
+   preservedTip:preservedTip.text,directTip:directTip.text,targetTips:targetPhoto.targetTip,cardTips:tipCard.cardTip
  });}
 }
 '''.replace("AUTH_SOURCE", (SOURCE / "card-counter/SocialAuth.js").as_uri()).replace("VERSION_EXPRESSION",version_expression).replace("SKILL_METHOD",skill_method).replace("TARGET_METHOD",target_method).replace("CARD_METHOD",card_method).replace("EXIT_CONTENT",exit_content).replace("RUN_AUTH_TEST",str(RUN_AUTH_TEST).lower()).replace("RENDER_TIP",render_tips[0]))
@@ -161,6 +162,7 @@ assert raw, logs
 result=json.loads(raw)
 result.update(yang=yang,yin=yin,generalHeight=general_height,cardCount=card_count)
 print(json.dumps({"result":result,"logs":logs},ensure_ascii=False,indent=2))
+assert result["preservedTip"] == "已译:说明 <font color=red>中文</font>", "translated text is not parsed as protocol a second time"
 assert result["directTip"] == "严霜", "direct Lua-created card-tip rendering translates the reported skill key"
 assert result["descriptionLines"] > 1, "server description must wrap"
 assert result["versionHeight"] <= 22, "rich text version must respect compact size"
