@@ -19,15 +19,41 @@ Item {
     background:Rectangle {radius:5;color:action.checked ? "#5C5036" : action.down ? "#48615E" : "#2C4449";border.color:action.checked ? "#D5B471" : "#708982"}
   }
   property bool expanded: false
-  property bool knowledgeOpen: false
-  onKnowledgeOpenChanged: if(knowledgeOpen)syncKnowledge()
-  property string knowledgeScope: "hands"
-  onKnowledgeScopeChanged: syncKnowledge()
-  onSnapshotChanged: syncKnowledge()
+  readonly property bool knowledgeOpen: ["hands","top","bottom"].indexOf(scope)>=0
+  readonly property string knowledgeScope: scope
+  readonly property var knowledgeRows: ((snapshot.knowledge || {})[scope] || [])
+  readonly property var knowledgeDetails: summarizeKnowledge()
+  property string selectedKnownToken: ""
+  function summarizeKnowledge() {
+    const points=Array(70).fill(0), suits=Array(5).fill(0);
+    let count=0, uncertain=0;
+    for(const row of knowledgeRows) {
+      if(row.key!==selectedKey)continue;
+      if(row.uncertain){uncertain++;continue;}
+      count++;
+      const suit=row.suit>=1 && row.suit<=5 ? row.suit : 5;
+      const rank=row.number>=1 && row.number<=13 ? row.number : 0;
+      suits[suit-1]++;points[(suit-1)*14+rank]++;
+    }
+    return {count:count,uncertain:uncertain,suits:suits,points:points};
+  }
+  function scopeCount(key) {
+    return ["hands","top","bottom"].indexOf(key)>=0
+      ? ((snapshot.knowledge || {})[key] || []).length : snapshot[key] || 0;
+  }
+  function chooseKnown(row) {selectedKnownToken=row.token;selectedKey=row.key;}
+  function syncKnownSelection() {
+    if(!knowledgeOpen)return;
+    const selected=knowledgeRows.find(r=>r.token===selectedKnownToken)
+      || knowledgeRows.find(r=>r.key===selectedKey) || knowledgeRows[0];
+    if(selected)chooseKnown(selected);
+  }
+  onKnowledgeRowsChanged: {syncKnowledge();syncKnownSelection();}
+  onKnowledgeOpenChanged: if(knowledgeOpen){syncKnowledge();syncKnownSelection();}
   ListModel { id: knownModel }
   function syncKnowledge() {
     if(!knowledgeOpen)return;
-    const rows = (snapshot.knowledge || {})[knowledgeScope] || [];
+    const rows = knowledgeRows;
     for (let i=0;i<rows.length;i++) {
       const row=rows[i];
       let index=-1;
@@ -60,8 +86,9 @@ Item {
     return Lua.ev('(function() if not FkCardCounterV2 then FkCardCounterV2 = dofile("card-counter/counter.lua") end return FkCardCounterV2.current('+JSON.stringify(root.selectedKey)+') end)()');
   }
   property var cardPicture: function(name) { return SkinBank.getCardPicture(name); }
-  readonly property string scopeTitle: ({unseen:"未见牌",discard:"弃牌堆",hand:"我的手牌"})[scope]
-  readonly property var selectedRow: rowLookup[selectedKey] || null
+  readonly property string scopeTitle: ({unseen:"未见牌",discard:"弃牌堆",hand:"我的手牌",hands:"已知手牌",top:"牌堆顶",bottom:"牌堆底"})[scope]
+  readonly property var selectedRow: rowLookup[selectedKey] || knowledgeRows.find(r=>r.key===selectedKey) || null
+  readonly property var selectedDetails: knowledgeOpen ? knowledgeDetails : (selectedRow && selectedRow.details && selectedRow.details[scope])
   // Keep GridView's catalogue model stable when only live counts change.
   // Replacing a JS array model tears down visible delegates and interrupts flicks.
   function updateRows(preservePosition) {
@@ -96,13 +123,13 @@ Item {
   }
   onCategoryChanged: updateRows()
   onHideZeroChanged: updateRows()
-  onScopeChanged: updateRows()
+  onScopeChanged: {if(!knowledgeOpen){updateRows();if(expanded)refresh();}syncKnowledge();syncKnownSelection();}
   onFilterTextChanged: updateRows()
-  onSelectedKeyChanged: if (expanded) refresh()
+  onSelectedKeyChanged: if (expanded && !knowledgeOpen) refresh()
   readonly property color gold: "#CCAD76"
   readonly property color pale: "#F0E2C6"
   function open() { expanded=true; forceActiveFocus(); }
-  function close() { expanded=false; knowledgeOpen=false; }
+  function close() { expanded=false; }
   function toggle() { if (expanded) close(); else open(); }
   function refresh() {
     try {
@@ -129,15 +156,15 @@ Item {
     }
   }
   function suitCount(suit) {
-    const d=selectedRow && selectedRow.details && selectedRow.details[scope];
+    const d=selectedDetails;
     return d ? (d.suits[suit-1] || 0) : 0;
   }
   function pointCount(suit, rank) {
-    const d=selectedRow && selectedRow.details && selectedRow.details[scope];
+    const d=selectedDetails;
     return d ? (d.points[(suit-1)*14+rank] || 0) : 0;
   }
   function specialCount() {
-    const d=selectedRow && selectedRow.details && selectedRow.details[scope];
+    const d=selectedDetails;
     if (!d) return 0;
     let n=0;
     for (let s=0;s<5;s++) for (let rank=0;rank<14;rank++)
@@ -148,7 +175,7 @@ Item {
   Keys.onEscapePressed: close()
   // Do not marshal a large Lua snapshot onto the UI thread during a gesture.
   // Counts catch up immediately after dragging/flicking stops.
-  Timer { interval:500; running:root.expanded && !cards.moving; repeat:true; onTriggered:root.refresh() }
+  Timer { interval:500; running:root.expanded && !(root.knowledgeOpen ? knownCards.moving : cards.moving); repeat:true; onTriggered:root.refresh() }
   Rectangle { anchors.fill:parent; color:"#9900090D" }
   MouseArea { anchors.fill:parent; onClicked:root.close() }
 
@@ -182,25 +209,25 @@ Item {
       MouseArea { id:closeMouse; anchors.fill:parent; hoverEnabled:true; cursorShape:Qt.PointingHandCursor; onClicked:root.close() }
     }
     Row {
-      x:24; y:66; spacing:8
+      id:scopeTabs
+      x:24; y:66; width:catalogue.width; spacing:6
       Repeater {
-        model:[{key:"unseen",name:"未见牌"},{key:"discard",name:"弃牌堆"},{key:"hand",name:"我的手牌"}]
+        model:[{key:"unseen",name:"未见牌"},{key:"discard",name:"弃牌堆"},{key:"hand",name:"我的手牌"},
+          {key:"hands",name:"已知手牌"},{key:"top",name:"牌堆顶"},{key:"bottom",name:"牌堆底"}]
         Rectangle {
           required property var modelData
           objectName:"scope-"+modelData.key
-          width:133; height:36; radius:5
+          width:(scopeTabs.width-5*scopeTabs.spacing)/6; height:36; radius:5
           color:root.scope===modelData.key ? "#544A34" : "#202A2C"
           border.color:root.scope===modelData.key ? "#C8A96D" : "#384440"
-          Text { anchors.centerIn:parent; text:modelData.name+"   "+(root.snapshot[modelData.key] || 0); color:root.scope===modelData.key ? "#F4DFAE" : "#AAB6AF"; font.pixelSize:14; font.bold:root.scope===modelData.key }
+          Text { anchors.centerIn:parent; text:modelData.name+"  "+root.scopeCount(modelData.key); color:root.scope===modelData.key ? "#F4DFAE" : "#AAB6AF"; font.pixelSize:12; font.bold:root.scope===modelData.key }
           MouseArea { anchors.fill:parent; cursorShape:Qt.PointingHandCursor; onClicked:root.scope=modelData.key }
         }
       }
     }
-    KnownButton {
-      objectName:"counterKnownButton"
-      anchors.right:parent.right; anchors.rightMargin:24; y:66; height:36
-      text:"明牌记录"; font.pixelSize:14
-      onClicked:{root.syncKnowledge();root.knowledgeOpen=true;}
+    Text {
+      anchors.right:parent.right; anchors.rightMargin:24; y:77
+      text:"●  随本局自选牌池同步";color:"#88B69F";font.pixelSize:11
     }
 
     Item {
@@ -210,7 +237,7 @@ Item {
         id:catalogue
         width:parent.width-298; height:parent.height
         Row {
-          id:categories; spacing:4
+          id:categories; spacing:4; visible:!root.knowledgeOpen
           Repeater {
             model:["全部","基本","锦囊","装备"]
             Rectangle {
@@ -225,6 +252,7 @@ Item {
         TextField {
           id:search
           objectName:"counterSearch"
+          visible:!root.knowledgeOpen
           anchors.right:parent.right; width:Math.min(176,parent.width-categories.width-12); height:28
           // This compact field uses its own placeholder instead of Material's
           // floating label, which sits above a 28 px field when the IME opens.
@@ -248,6 +276,7 @@ Item {
         GridView {
           id:cards
           objectName:"counterGrid"
+          visible:!root.knowledgeOpen
           y:39; width:parent.width; height:parent.height-66
           clip:true; cellWidth:width/5; cellHeight:82; model:root.rows
           boundsBehavior:Flickable.StopAtBounds
@@ -282,7 +311,33 @@ Item {
           }
           Text { anchors.centerIn:parent; visible:cards.count===0; text:root.snapshot.ready ? "没有符合条件的牌" : "等待牌局数据"; color:"#A6AF9E"; font.pixelSize:15 }
         }
+        Text {
+          visible:root.knowledgeOpen; width:parent.width; height:28; wrapMode:Text.Wrap
+          color:"#AABCB7";font.pixelSize:11
+          text:root.scope==="hands" ? "只记录实际展示的手牌；不确定记忆另行标示，不计入右侧确定数量。"
+            : "从对应牌堆边缘由近到远排列，遇到未知位置停止。"
+        }
+        ListView {
+          id:knownCards; objectName:"counterKnownList"
+          visible:root.knowledgeOpen; y:39; width:parent.width; height:parent.height-66
+          clip:true;spacing:6;model:knownModel;reuseItems:true;cacheBuffer:160
+          boundsBehavior:Flickable.StopAtBounds
+          onMovingChanged:if(!moving && root.expanded)Qt.callLater(root.refresh)
+          ScrollBar.vertical:ScrollBar {policy:ScrollBar.AsNeeded}
+          delegate:Rectangle {
+            required property var model
+            width:ListView.view.width;height:76;radius:6
+            color:model.uncertain ? "#34352D" : "#243B40"
+            border.color:root.selectedKnownToken===model.token ? root.gold : "#3D514E"
+            Image {x:8;y:5;width:44;height:66;source:root.cardPicture(model.key);sourceSize:Qt.size(88,132);asynchronous:true;fillMode:Image.PreserveAspectFit}
+            Text {x:64;y:10;width:parent.width-76;textFormat:Text.PlainText;elide:Text.ElideRight;color:root.pale;font.pixelSize:16;text:model.name+"  "+(["","黑桃","梅花","红桃","方块","无花色"][model.suit] || "")+" "+(["","A","2","3","4","5","6","7","8","9","10","J","Q","K"][model.number] || "")}
+            Text {x:64;y:40;width:parent.width-76;textFormat:Text.PlainText;elide:Text.ElideRight;color:model.uncertain ? "#D6BE88" : "#B4CCC6";font.pixelSize:13;text:root.scope==="hands" ? model.owner+(model.uncertain ? " · 可能仍在手中" : " · 已知手牌") : "距离"+(root.scope==="top" ? "牌堆顶" : "牌堆底")+"第 "+model.position+" 张"}
+            MouseArea {anchors.fill:parent;onClicked:root.chooseKnown(model)}
+          }
+          Text {anchors.centerIn:parent;visible:knownModel.count===0;color:"#AABCB7";font.pixelSize:15;text:"当前没有可确定的记录"}
+        }
         Row {
+          visible:!root.knowledgeOpen
           y:parent.height-21; spacing:8
           Rectangle {
             objectName:"counterHideZero"
@@ -297,6 +352,7 @@ Item {
       Rectangle { x:catalogue.width+12; width:1; height:parent.height; color:"#4E5546" }
       Item {
         id:details
+        objectName:"counterDetails"
         anchors.right:parent.right; width:270; height:parent.height
         Row {
           x:2; spacing:14
@@ -307,10 +363,10 @@ Item {
           Column {
             spacing:6; y:3
             Text { text:root.selectedRow ? root.selectedRow.name : "请选择卡牌"; color:root.pale; font.family:root.titleFont; font.pixelSize:21; font.bold:true }
-            Text { text:root.selectedRow ? ["其他","基本牌","锦囊牌","装备牌"][root.selectedRow.kind] : ""; color:"#9BAA95"; font.pixelSize:11 }
+            Text { text:root.selectedRow && root.selectedRow.kind ? ["其他","基本牌","锦囊牌","装备牌"][root.selectedRow.kind] : ""; color:"#9BAA95"; font.pixelSize:11 }
             Row {
               spacing:5
-              Text { text:root.selectedRow ? root.selectedRow[root.scope] : "—"; color:"#E9CC83"; font.pixelSize:30; font.bold:true }
+              Text { text:root.knowledgeOpen ? root.knowledgeDetails.count : root.selectedRow ? root.selectedRow[root.scope] : "—"; color:"#E9CC83"; font.pixelSize:30; font.bold:true }
               Text { y:16; text:root.scopeTitle; color:"#A7B19D"; font.pixelSize:11 }
             }
           }
@@ -361,55 +417,12 @@ Item {
             }
           }
         }
-        Text { y:parent.height-14; text:root.specialCount() ? "另有无花色／无点数牌："+root.specialCount() : "按实体原始牌面计数"; color:"#718970"; font.pixelSize:10 }
+        Text { y:parent.height-14; text:root.knowledgeOpen && root.knowledgeDetails.uncertain ? "另有 "+root.knowledgeDetails.uncertain+" 张不确定记忆，不计入确定数量" : root.specialCount() ? "另有无花色／无点数牌："+root.specialCount() : "按实体原始牌面计数"; color:"#718970"; font.pixelSize:10 }
       }
     }
     Rectangle { x:24; y:parent.height-26; width:parent.width-48; height:1; color:"#3E493E" }
     Text { x:24; y:parent.height-19; text:"未见牌包含未知手牌，不等于牌堆内的精确分布。"; font.pixelSize:10; color:"#85977F" }
     Text { anchors.right:parent.right; anchors.rightMargin:24; y:parent.height-19; text:"点击外侧或 × 关闭"; font.pixelSize:10; color:"#85977F" }
-  }
-  Rectangle {
-    objectName:"counterKnownPanel"
-    visible:root.knowledgeOpen && root.expanded
-    anchors.fill:parent; anchors.margins:32; z:10
-    radius:10; color:"#17272C"; border.color:root.gold
-    MouseArea {anchors.fill:parent}
-    ColumnLayout {
-      anchors.fill:parent;anchors.margins:16;spacing:10
-      RowLayout {
-        Text {text:"明牌记录";color:root.pale;font.pixelSize:21;font.bold:true}
-        Item {Layout.fillWidth:true}
-        KnownButton {text:"返回记牌器";onClicked:root.knowledgeOpen=false}
-      }
-      RowLayout {
-        Repeater {
-          model:[{key:"hands",name:"已知手牌"},{key:"top",name:"牌堆顶"},{key:"bottom",name:"牌堆底"}]
-          KnownButton {
-            required property var modelData
-            text:modelData.name;checkable:true;checked:root.knowledgeScope===modelData.key
-            onClicked:root.knowledgeScope=modelData.key
-          }
-        }
-      }
-      Text {
-        Layout.fillWidth:true;wrapMode:Text.Wrap;color:"#BAC9C7";font.pixelSize:12
-        text:root.knowledgeScope==="hands" ? "记录本视角技能实际展示过的牌；暗中移牌后会标为不确定。" : "按距离牌堆顶／底由近到远排列；遇到未知牌停止，洗牌或移动后随已知信息更新。"
-      }
-      ListView {
-        objectName:"counterKnownList"
-        Layout.fillWidth:true;Layout.fillHeight:true;clip:true;spacing:6
-        model:knownModel;reuseItems:true;cacheBuffer:160
-        ScrollBar.vertical:ScrollBar {}
-        delegate:Rectangle {
-          required property var model
-          width:ListView.view.width;height:76;radius:6;color:model.uncertain ? "#34352D" : "#243B40"
-          Image {x:8;y:5;width:44;height:66;source:root.cardPicture(model.key);sourceSize:Qt.size(88,132);asynchronous:true;fillMode:Image.PreserveAspectFit}
-          Text {x:64;y:10;width:parent.width-76;textFormat:Text.PlainText;color:root.pale;font.pixelSize:16;text:model.name+"  "+(["","黑桃","梅花","红桃","方块","无花色"][model.suit] || "")+" "+(["","A","2","3","4","5","6","7","8","9","10","J","Q","K"][model.number] || "")}
-          Text {x:64;y:40;width:parent.width-76;textFormat:Text.PlainText;color:model.uncertain ? "#D6BE88" : "#B4CCC6";font.pixelSize:13;text:root.knowledgeScope==="hands" ? model.owner+(model.uncertain ? " · 可能仍在手中" : " · 已知手牌") : "距离"+(root.knowledgeScope==="top" ? "牌堆顶" : "牌堆底")+"第 "+model.position+" 张"}
-        }
-        Text {anchors.centerIn:parent;visible:knownModel.count===0;color:"#AABCB7";font.pixelSize:16;text:"当前没有可确定的记录"}
-      }
-    }
   }
 
 }

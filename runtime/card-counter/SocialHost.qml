@@ -307,40 +307,89 @@ Control {
     }
     social.persist();
   }
-  function roomDetails(data) {
-    if (typeof data === "string") { try {data=JSON.parse(data);} catch(_){return {};} }
-    if (!data || typeof data!=="object") return {};
-    const candidates=[data.settings,data.roomSettings,data[2],data[3],data];
-    for (let item of candidates) {
-      if(typeof item==="string") {try {item=JSON.parse(item);}catch(_){continue;}}
-      if(item && typeof item==="object" && ["roomId","room_id","roomName","room_name","gameMode"].some(k=>k in item)) return item;
+  function positiveRoomId(values) {
+    for(const value of values) {
+      if(typeof value!=="number" && typeof value!=="string")continue;
+      const n=Number(value);
+      if(Number.isInteger(n) && n>0 && n<=2147483647)return n;
     }
-    return {};
+    return 0;
+  }
+  function roomDetails(data) {
+    function object(value) {
+      if(typeof value==="string"){try{value=JSON.parse(value);}catch(_){return {};}}
+      return value && typeof value==="object" ? value : {};
+    }
+    data=object(data);
+    // Older settings can contain gameMode and roomId=0 while the actual id
+    // lives in a sibling/nested legacy field. Merge metadata, never capacity.
+    const candidates=[data.settings,data.roomSettings,data.room,data[2],data[3],data].map(object);
+    let id=0,name="";
+    for(const item of candidates) {
+      if(!id)id=positiveRoomId([item.roomId,item.room_id,item.roomid,item.roomID,item.room && item.room.id,typeof item.room==="number" || typeof item.room==="string" ? item.room : 0,
+        item===data.room ? item.id : 0]);
+      if(!name)name=String(item.roomName || item.room_name || item.roomname || (item.room && item.room.name) || (item===data.room ? item.name : "") || "");
+    }
+    return {roomId:id,roomName:name};
   }
   function recoverRoomDetails() {
     if (!networkGame || gameState==="lobby" || gameState==="offline" || (roomId>0 && roomName)) return;
     try {
-      const settings=Lua.ev('(function() local s=ClientInstance and ClientInstance.settings or {}; return {roomId=tonumber(s.roomId or s.room_id) or 0, roomName=s.roomName or s.room_name or ""} end)()');
-      const id=Number(settings && settings.roomId), name=settings && settings.roomName;
+      const value=Lua.ev('(function() local r=ClientInstance; if not r then return {} end; local s=r.settings or {}; local function id(...) for i=1,select("#",...) do local n=tonumber((select(i,...))); if n and n>0 and n%1==0 then return n end end return 0 end; local room=s.room or {}; return {roomId=id(s.roomId,s.room_id,s.roomid,s.roomID,room.id,r.roomId,r.room_id), roomName=s.roomName or s.room_name or s.roomname or room.name or r.roomName or ""} end)()');
+      const settings=roomDetails(value), content=roomContent;
+      const localSettings=roomDetails(content && "roomSettings" in content ? content.roomSettings : {});
+      const id=positiveRoomId([settings.roomId,localSettings.roomId]),name=settings.roomName || localSettings.roomName;
       let changed=false;
-      if(Number.isInteger(id) && id>0 && roomId!==id){roomId=id;roomIdProvided=true;changed=true;}
-      if(typeof name==="string" && name && roomName!==name){roomName=name;changed=true;}
+      if(id>0 && roomId!==id){roomId=id;roomIdProvided=true;changed=true;}
+      if(name && roomName!==name){roomName=name;changed=true;}
       if(changed)updateContext();
-    } catch(_) { /* Old cores can omit room metadata; allow explicit entry. */ }
+    } catch(_) { /* Keep the last confirmed room; never ask players for ids. */ }
+  }
+  function rememberRoomIntent(id,name) {
+    if(!networkGame || gameState!=="lobby")return;
+    selectedRoomId=positiveRoomId([id]);selectedRoomName=String(name || "");
+    selectedRoomDeadline=Date.now()+60000;
+  }
+  property var publicRoomNames: ({})
+  property double publicRoomsDeadline: 0
+  property string publicRoomsServer: ""
+  property string publicRoomsProfile: ""
+  function receivePublicRoomList(data) {
+    if(!networkGame || gameState!=="lobby" || !data || typeof data.length!=="number")return;
+    const names=Object.create(null);
+    for(const row of Array.from(data)) {
+      if(!row || typeof row!=="object")continue;
+      const tuple=typeof row.length==="number";
+      const id=positiveRoomId([tuple ? row[0] : row.roomId,row.room_id]);
+      const name=String(tuple ? row[1] || "" : row.roomName || row.room_name || "");
+      if(!id || !name)continue;
+      // Duplicate names are deliberately unusable, never choose the first.
+      names[name]=name in names ? 0 : id;
+    }
+    publicRoomNames=names;publicRoomsDeadline=Date.now()+10000;
+    publicRoomsServer=gameServer;publicRoomsProfile=social.profileKey;
+    host.refreshFollowTarget();
+  }
+  function publicRoomId(name) {
+    return name && Date.now()<publicRoomsDeadline && publicRoomsServer===gameServer && publicRoomsProfile===social.profileKey
+      ? positiveRoomId([publicRoomNames[name]]) : 0;
   }
   function presenceOf(friend) {
-    const p=(friend && friend.presence) || {}, room=p.room || {};
-    const id=Number(p.roomId ?? p.room_id ?? room.id ?? 0);
-    return Object.assign({},p,{server:String(p.server || "").trim().toLowerCase(),
-      roomId:Number.isInteger(id) && id>0 ? id : 0,
-      roomName:String(p.roomName || p.room_name || room.name || "")});
+    const p=(friend && friend.presence) || {}, room=roomDetails(p);
+    if(!room.roomId && String(p.server || "").trim().toLowerCase()===gameServer)
+      room.roomId=publicRoomId(room.roomName);
+    let state=String(p.state || p.status || "").toLowerCase();
+    state=({in_game:"playing",ingame:"playing",in_room:"waiting",spectating:"observing",observe:"observing"})[state] || state;
+    // Legacy "online" says nothing about seats. A real room id permits only
+    // observation until the peer supplies an explicit waiting-room state.
+    if(state==="online" && room.roomId>0)state="playing";
+    return Object.assign({},p,room,{state:state,server:String(p.server || "").trim().toLowerCase()});
   }
   function followPresenceMatches(target, observe) {
     const friend=social.friends.find(f=>f.id===target.friendId);
     if(!friend)return false;
     const p=presenceOf(friend);
     if(p.server!==target.server || !p.state || ["offline","invisible"].indexOf(p.state)>=0)return false;
-    if(target.manualRoom && p.roomId<=0)return observe;
     return p.roomId===target.roomId && ["waiting","playing","observing"].indexOf(p.state)>=0 && (observe || p.state==="waiting");
   }
   function refreshFollowTarget() {
@@ -350,6 +399,7 @@ Control {
     if(p.server===target.server && p.roomId>0 && ["waiting","playing","observing"].indexOf(p.state)>=0) {
       joinDialog.targetRoom=Object.assign({},target,{roomId:p.roomId,roomName:p.roomName,needsRoomId:false,observe:p.state!=="waiting"});
       joinDialog.observeOnly=p.state!=="waiting";
+      social.error="";
     }
   }
   function friendStatus(friend) {
@@ -561,13 +611,8 @@ Control {
     if (!target || target.profileKey !== social.profileKey || target.server !== gameServer || !networkGame) {
       social.error = "账号或服务器已改变，请重新接收邀请"; return;
     }
-    if (target.needsRoomId) {
-      const id=Number(manualFollowRoom.text);
-      if(!/^\d+$/.test(manualFollowRoom.text) || !Number.isInteger(id) || id<=0 || id>2147483647) {
-        social.error="请填写好友当前的实际房间号";manualFollowRoom.forceActiveFocus();return;
-      }
-      target=Object.assign({},target,{roomId:id,manualRoom:true});
-      observe=true;
+    if(target.needsRoomId || positiveRoomId([target.roomId])===0) {
+      social.error="正在自动同步好友房间信息，请稍后重试";return;
     }
     // Recheck the latest received presence; never follow a known stale room.
     if (target.friendId) {
@@ -587,7 +632,7 @@ Control {
   }
   function canFollowObserve(friend) {
     const p=presenceOf(friend);
-    return networkGame && p.server===gameServer && !!p.state && ["offline","invisible"].indexOf(p.state)<0;
+    return networkGame && p.server===gameServer && !!p.state && ["offline","invisible","lobby"].indexOf(p.state)<0;
   }
   function followObserve(friend) {
     updateContext();
@@ -603,9 +648,10 @@ Control {
     joinDialog.targetRoom = {roomId:targetRoom,roomName:presence.roomName,
       server:gameServer,profileKey:social.profileKey,friendId:friend.id,observe:missing || presence.state!=="waiting",needsRoomId:missing};
     joinDialog.observeOnly=missing || presence.state!=="waiting";
-    roomPassword.text="";manualFollowRoom.text="";social.error="";
+    roomPassword.text="";social.error="";
     joinDialog.open();
     if(!social.busy)social.refresh();
+    if(missing && presence.roomName && gameState==="lobby")Cpp.notifyServer("RefreshRoomList", "");
   }
   function finishJoin() {
     const target = pendingJoin;
@@ -663,8 +709,9 @@ Control {
       social.error = ""; host.notice = "正在通过游戏服务器发送邀请…";
       Cpp.notifyServer("InviteRoomPlayer", id);
     } else {
-      host.notice = "此服务器未返回当前房间号，也未提供原版邀请接口，请先补充实际房间号。";
-      manualRoom.forceActiveFocus();
+      host.recoverRoomDetails();
+      if(host.roomId>0)social.invite(friend.id);
+      else host.notice="正在自动恢复当前房间信息，暂时无法发送邀请，请稍后重试。";
     }
   }
   function scheduleLauncherUpdate() {
@@ -723,9 +770,7 @@ Control {
         const roomChoice = choice;
         const clicked = function() {
           if (host.gameState !== "lobby") return;
-          host.selectedRoomId = Math.floor(roomChoice.roomId || 0);
-          host.selectedRoomName = roomChoice.roomName || "";
-          host.selectedRoomDeadline = Date.now() + 10000;
+          host.rememberRoomIntent(roomChoice.roomId,roomChoice.roomName);
         };
         node.clicked.connect(clicked);
         hookedButtons.push(node);
@@ -806,6 +851,7 @@ Control {
     function onCommandGot(sender, command, data) {
       // Card moves, skill animations and button updates do not change social
       // identity/presence. Do not rebind hidden social UI for each game packet.
+      if(command==="UpdateRoomList"){host.receivePublicRoomList(data);return;}
       if (["Setup", "SetServerSettings", "EnterLobby", "EnterRoom", "ChangeRoom",
            "StartGame", "ChangeRoomPage", "GameOver", "BackToRoom", "RestartGame", "BackToStart",
            "RoomInviteSettings", "RoomInvitePlayers", "RoomInviteResult", "ErrorMsg",
@@ -838,10 +884,10 @@ Control {
         if (command === "EnterRoom") { host.utilityPageDepth = 0; host.findNavigationStack(); }
         if (command === "EnterRoom") { host.roomLauncherReady = false; host.inviteAnchor = null; host.matchViewActive = false; host.nativeFailureNeedsRoomId = false; }
         const settings = host.roomDetails(data);
-        host.roomId = Math.floor(settings.roomId || settings.room_id || (command === "EnterRoom" ?
+        host.roomId = Math.floor(settings.roomId || host.publicRoomId(settings.roomName) || (command === "EnterRoom" ?
           (Date.now() < host.selectedRoomDeadline ? host.selectedRoomId : 0) : host.roomId) || 0);
         host.roomIdProvided = host.roomId > 0;
-        host.roomName = settings.roomName || settings.room_name || (command === "EnterRoom" ?
+        host.roomName = settings.roomName || (command === "EnterRoom" ?
           (Date.now() < host.selectedRoomDeadline ? host.selectedRoomName : "") : host.roomName) || "";
         if (command === "EnterRoom") { host.selectedRoomId = 0; host.selectedRoomName = ""; }
         host.gameState = Config.observing ? "observing" : "waiting";
@@ -857,6 +903,7 @@ Control {
         host.gameState = Config.observing ? "observing" : "waiting";
       } else if (command === "BackToStart" && !(data && data.preserveSession)) {
         host.utilityPageDepth = 0;
+        host.publicRoomNames=({});host.publicRoomsDeadline=0;
         host.resetInvitationPolicyBridge(); host.observerMarkHookInstalled = false;
         host.gameOnline = false; host.gameState = "offline"; host.pendingJoin = null;
         host.gameAccount = 0; host.expanded = false; joinDialog.close();
@@ -1002,16 +1049,7 @@ Control {
           SocialButton { text: "添加"; enabled: social.enabled && !!social.token && !social.busy; onClicked: social.addFriend(friendCode.text) }
           SocialButton { text: "恢复已有好友"; enabled: !social.busy; onClicked: linkDialog.open() }
         }
-        RowLayout {
-          visible: !host.roomIdProvided && host.gameState !== "lobby" && host.gameState !== "offline"
-          Text { text: "当前房间号"; color: "#adbec0"; font.family: host.font.family; font.pixelSize: 13 }
-          SocialField { id: manualRoom; Layout.preferredWidth: 90; placeholderText: "如 123"; maximumLength: 10
-            validator: IntValidator { bottom: 1; top: 2147483647 } }
-          SocialButton { text: "确认"; enabled: manualRoom.acceptableInput
-                    onClicked: { host.roomId = parseInt(manualRoom.text); host.roomIdProvided = true; host.updateContext(); social.refresh(); } }
-          Text { Layout.fillWidth: true; wrapMode: Text.Wrap; color: "#bdcdd0"; font.family: host.font.family; font.pixelSize: 13
-            text: host.nativeFailureNeedsRoomId ? "原版邀请未成功，可填写当前房间号，改用好友服务跨房间邀请。" : "服务器未提供房间号，请按实际房间填写，好友才能直接跟随或接收邀请。" }
-        }
+
         Text { Layout.fillWidth: true; visible: text !== ""; text: host.profileStorageError || social.error || host.notice
           wrapMode: Text.Wrap; color: social.error ? "#f0a795" : "#b6dacb"; font.family: host.font.family; font.pixelSize: 13; textFormat: Text.PlainText }
         ScrollView {
@@ -1083,7 +1121,7 @@ Control {
                   SocialButton {
                     objectName: "followObserveFriend_" + modelData.id
                     visible: host.canFollowObserve(modelData)
-                    text: host.presenceOf(modelData).roomId<=0 ? "跟随／补充房间" : host.presenceOf(modelData).state === "waiting" ? "跟随入房" : "跟随观战"
+                    text: host.presenceOf(modelData).state === "waiting" ? "跟随入房" : "跟随观战"
                     enabled: !social.busy
                     onClicked: host.followObserve(modelData)
                   }
@@ -1167,7 +1205,7 @@ Control {
   }
   SocialDialog {
     id: serviceSettings; objectName: "socialServiceSettings"
-    title: "好友与显示设置 · 20261023.2"; anchors.centerIn: parent; modal: true; exit: Transition {}
+    title: "好友与显示设置 · 20261024.1"; anchors.centerIn: parent; modal: true; exit: Transition {}
     width: Math.min(host.width - 36, 650)
     contentItem: ColumnLayout {
       spacing: 14
@@ -1258,20 +1296,25 @@ Control {
     contentItem: ColumnLayout {
       Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: "#e4edeb"; font.family: host.font.family; font.pixelSize: 15
         text: joinDialog.targetRoom && joinDialog.targetRoom.needsRoomId
-          ? "好友未同步房间号，可能在大厅或使用旧版。请向好友确认实际房间号后填写，仅以旁观身份进入。对方更新并同步房间信息后可直接跟随；密码和准入限制由游戏服务器检查。"
+          ? "正在自动同步好友的房间信息，完成后可直接跟随，无需填写房间号。若一直没有结果，说明对方版本尚未上报可用的房间信息；不会猜测房号或进入其他房间。"
           : (joinDialog.observeOnly
           ? "好友正在房间 #" + (joinDialog.targetRoom ? joinDialog.targetRoom.roomId : "") + " 对局或观战，将以旁观身份进入。"
           : "确认离开当前等待房间或旁观，前往房间 #" + (joinDialog.targetRoom ? joinDialog.targetRoom.roomId : "") + "？") +
           "房间密码和准入限制仍由游戏服务器检查。" }
       Label {Layout.fillWidth:true;wrapMode:Text.Wrap;color:"#ed9d82";visible:!!social.error;text:social.error}
-      SocialField {id:manualFollowRoom;objectName:"manualFollowRoom";Layout.fillWidth:true;visible:!!joinDialog.targetRoom && joinDialog.targetRoom.needsRoomId===true;maximumLength:10;inputMethodHints:Qt.ImhDigitsOnly;placeholderText:"好友当前房间号"}
       SocialField { id: roomPassword; Layout.fillWidth: true; echoMode: TextInput.Password; maximumLength: 64; placeholderText: "房间密码（如需）" }
       RowLayout {
         SocialButton { text: "取消"; onClicked: joinDialog.close() }
-        SocialButton { text: "旁观"; onClicked: host.joinTarget(joinDialog.targetRoom, true) }
-        SocialButton { text: "加入"; visible: !joinDialog.observeOnly; onClicked: host.joinTarget(joinDialog.targetRoom, false) }
+        SocialButton {text:"重新同步";visible:!!joinDialog.targetRoom && joinDialog.targetRoom.needsRoomId;enabled:!social.busy;onClicked:{social.error="";social.refresh();}}
+        SocialButton { text: "旁观"; enabled:!!joinDialog.targetRoom && !joinDialog.targetRoom.needsRoomId; onClicked: host.joinTarget(joinDialog.targetRoom, true) }
+        SocialButton { text: "加入"; visible: !joinDialog.observeOnly; enabled:!!joinDialog.targetRoom && !joinDialog.targetRoom.needsRoomId; onClicked: host.joinTarget(joinDialog.targetRoom, false) }
       }
     }
+  }
+  Timer {
+    interval:10000;repeat:false
+    running:joinDialog.visible && !!joinDialog.targetRoom && joinDialog.targetRoom.needsRoomId
+    onTriggered:social.error="未收到好友的可用房间信息，请稍后重新同步；不会要求手填或猜测房号。"
   }
   SocialDialog {
     id: linkDialog; anchors.centerIn: parent; modal: true; title: "恢复已有好友"

@@ -74,8 +74,11 @@ Window {
  function focusSearch(){counter.testSearch.forceActiveFocus();counter.testSearch.text="测试输入";}
  function failRead(){counter.testSearch.text="";win.failSnapshot=true;counter.refresh();}
  function recoverRead(){win.failSnapshot=false;counter.refresh();}
- function openKnown(){counter.knowledgeOpen=true;counter.snapshot={knowledge:{hands:[{token:"2:27",id:27,key:"slash",name:"杀",suit:1,number:7,owner:"玩家",position:0,uncertain:false}],top:[{token:"28",id:28,key:"jink",name:"闪",suit:3,number:2,owner:"",position:1,uncertain:false}],bottom:[]}};}
- function knownTop(){counter.knowledgeScope="top";}
+ function openKnown(){counter.scope="hands";counter.snapshot={knowledge:{hands:[{token:"2:27",id:27,key:"slash",name:"杀",suit:1,number:7,owner:"玩家",position:0,uncertain:false},{token:"2:29",id:29,key:"slash",name:"杀",suit:3,number:2,owner:"玩家",position:0,uncertain:true}],top:[{token:"28",id:28,key:"jink",name:"闪",suit:3,number:2,owner:"",position:1,uncertain:false}],bottom:[]}};}
+ function knownTop(){counter.scope="top";}
+ function knownBottom(){counter.scope="bottom";}
+ function normalTab(){counter.scope="unseen";}
+ function knownDetails(){return JSON.stringify({count:counter.knowledgeDetails.count,uncertain:counter.knowledgeDetails.uncertain,spade7:counter.pointCount(1,7),heart2:counter.pointCount(3,2),selected:counter.selectedKey,scope:counter.scope});}
  function knownEmpty(){counter.snapshot={knowledge:{hands:[],top:[],bottom:[]}};}
  function inputStyle(){const f=counter.testSearch;return JSON.stringify({preedit:f.preeditText,text:f.text,color:f.color.toString(),background:f.background.color.toString(),selected:f.selectedTextColor.toString()});}
  function inputGeometry(){const field=counter.testSearch;const cursor=field.cursorRectangle;return JSON.stringify({y:cursor.y,height:cursor.height,fieldHeight:field.height,topPadding:field.topPadding,bottomPadding:field.bottomPadding});}
@@ -128,13 +131,32 @@ Window {
         invoke('failRead');pump(.01);assert state()['count']==0,state()
         invoke('recoverRead');pump(.01);assert state()['count']==300,state()
     invoke('openKnown');pump(.03)
-    known=window.findChild(QObject,'counterKnownList');assert known and known.property('count')==1
+    known=window.findChild(QObject,'counterKnownList');assert known and known.property('count')==2,(known.property('count') if known else None,invoke('knownDetails'),logs)
+    hands_details=json.loads(invoke('knownDetails'))
+    assert hands_details['count']==1 and hands_details['uncertain']==1 and hands_details['spade7']==1 and hands_details['heart2']==0,hands_details
+    details=window.findChild(QObject,'counterDetails');assert details and details.property('visible')
+    panel=window.findChild(QObject,'counterPanel')
+    def visual_item(item,name):
+        if item.objectName()==name:return item
+        for child in item.childItems():
+            found=visual_item(child,name)
+            if found is not None:return found
+    tabs=[visual_item(window.contentItem(),'scope-'+key) for key in ['unseen','discard','hand','hands','top','bottom']]
+    assert all(tabs) and all(tab.property('visible') for tab in tabs)
+    assert tabs[-1].property('x')+tabs[-1].property('width')<=panel.property('width')-24
+    assert window.findChild(QObject,'counterKnownPanel') is None,'known cards must share the normal panel'
     invoke('knownTop');pump(.03);assert known.property('count')==1
+    top_details=json.loads(invoke('knownDetails'))
+    assert top_details['selected']=='jink' and top_details['heart2']==1 and top_details['count']==1,top_details
     window.grabWindow().save(str(args.work_dir/'known-cards.png'))
+    invoke('knownBottom');pump(.03);assert known.property('count')==0 and details.property('visible')
     invoke('knownEmpty');pump(.03);assert known.property('count')==0
+    invoke('normalTab');pump(.03);assert state()['gridCount']==300 and details.property('visible')
+    window.grabWindow().save(str(args.work_dir/'normal-cards.png'))
     invoke('close');closed=state();pump(.6);assert state()['reads']==closed['reads'],'hidden counter must not poll'
     result={'generated_cards':generated,'removed_generated_cards':removed,'initial':initial,'after_live_counts':updated,'during_flick_start':start,'during_flick_end':moving,'after_flick':stopped,
       'delegates_created_by_count_updates':updated['creates']-initial['creates'],'snapshots_during_flick':moving['reads']-start['reads'],
+      'six_inline_tabs':True,'knowledge_details':{'hands':hands_details,'top':top_details},'details_preserved':True,
       'input_geometry':input_geometry,'input_composing':composing,'input_committed':committed,'qml_errors':[m for m in logs if any(e in m for e in ['TypeError','ReferenceError','SyntaxError','Cannot assign','is not a type'])]}
     if not args.measure_only:
         assert not result['qml_errors'],result['qml_errors']
