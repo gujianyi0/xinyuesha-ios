@@ -41,6 +41,9 @@ int main(int argc, char **argv) {
   const auto room = fkIosRuntimePayload::read(output+"/Fk/Pages/Common/RoomPage.qml");
   require(room.contains("offlineQuitConfirmation"), "offline quit uses an in-scene confirmation");
   require(!room.contains("MessageDialog {\n    id: quitDialog"), "native quit confirmation replaced");
+  require(room.contains("surrenderDialogConfirmation"), "surrender uses the game overlay");
+  require(room.contains("Lua.checkSurrenderAvailable()"), "surrender eligibility remains enforced");
+  require(room.contains("parent: Overlay.overlay"), "confirmations have a stable game overlay parent");
   const auto bg = fkIosRuntimePayload::read(output+"/Fk/Pages/Lobby/BGSetting.qml");
   require(bg.contains("Backend.pickBackground(fdialog.configKey)"), "background image buttons use system photo picker");
   const auto replay = fkIosRuntimePayload::read(output+"/Fk/Pages/Replay/ReplayRecordingFile.qml");

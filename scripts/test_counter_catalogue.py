@@ -232,6 +232,21 @@ function viewer.card_tracker:setCardKnown(id,owner,area)
 end
 assert(M.remember({27,31,32,33,-1}))
 assert(#remembered==3 and remembered[1].owner==target and remembered[3].area==6)
+-- Read-only top/bottom dialogs do not move cards. Seed their shown order
+-- using only a public count; the poisoned hidden deck must never be read.
+function room:getCardArea(id) return id>=31 and id<=34 and 6 or 1 end
+viewer.card_tracker.draw_pile_order={}
+assert(M.remember({31,32},"top",8))
+assert(viewer.card_tracker.draw_pile_order[1]==31 and viewer.card_tracker.draw_pile_order[2]==32 and viewer.card_tracker.draw_pile_order[3]==-1)
+assert(M.remember({33,34},"bottom",8))
+k=M.snapshot(room,engine,viewer).knowledge
+assert(#k.top==2 and k.top[1].id==31 and k.top[2].id==32)
+assert(#k.bottom==2 and k.bottom[1].id==34 and k.bottom[2].id==33,"rightmost viewed card is nearest the bottom")
+local preserved=viewer.card_tracker.draw_pile_order
+assert(M.remember({31,31},"top",8) and viewer.card_tracker.draw_pile_order==preserved,"duplicates cannot establish an order")
+assert(M.remember({31,32},"top",1) and viewer.card_tracker.draw_pile_order==preserved,"invalid count cannot establish an order")
+assert(M.remember({27,31},"top",8) and viewer.card_tracker.draw_pile_order==preserved,"hand cards cannot establish deck order")
+assert(M.remember({31,32},nil,8) and viewer.card_tracker.draw_pile_order==preserved,"a generic view has no implied order")
 
 return "counts, selected details and hidden-zone restrictions passed; detail rows 300 -> "..detailRows
 '''

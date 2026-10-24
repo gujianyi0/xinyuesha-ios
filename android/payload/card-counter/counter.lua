@@ -173,19 +173,37 @@ end
 
 -- Called only with face-up CardItem IDs from an actually visible skill popup.
 -- Updating the existing viewer tracker lets its move rules handle uncertainty.
-function M.remember(ids)
+function M.remember(ids, edge, deckCount)
   local room, viewer = ClientInstance, Self
   if not room or not viewer or not viewer.card_tracker then return false end
+  local ordered, seen, validEdge = {}, {}, (edge == "top" or edge == "bottom")
   for _, id in ipairs(ids or {}) do
     if type(id) == "number" and id > 0 then
       local area = room:getCardArea(id)
+      if area ~= Card.DrawPile or seen[id] then validEdge = false end
+      seen[id] = true
+      ordered[#ordered+1] = id
       local owner = room:getCardOwner(id)
       if area == Card.PlayerHand and owner then
         viewer.card_tracker:setCardKnown(id, owner, Card.PlayerHand)
       elseif area == Card.Processing or area == Card.DrawPile then
         viewer.card_tracker:setCardKnown(id, nil, area)
       end
+    else validEdge = false end
+  end
+  -- A read-only view does not move cards, so the stock move tracker never
+  -- creates order entries. Seed only the explicitly shown edge and public
+  -- deck length; never inspect the actual hidden deck IDs/order.
+  if validEdge and type(deckCount) == "number" and deckCount % 1 == 0 and
+      deckCount >= #ordered and deckCount <= 10000 and #ordered > 0 then
+    local old = viewer.card_tracker.draw_pile_order or {}
+    local order = {}
+    for i = 1, deckCount do order[i] = #old == deckCount and old[i] or -1 end
+    for i, id in ipairs(ordered) do
+      local index = edge == "top" and i or deckCount - #ordered + i
+      order[index] = id
     end
+    viewer.card_tracker.draw_pile_order = order
   end
   return true
 end

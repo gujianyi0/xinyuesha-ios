@@ -99,7 +99,17 @@ Window {
  QtObject {id:client;function notifyServer(command,data){win.sent=win.sent.concat([{command:command,data:data}]);}}
  AvatarChatBox {id:chat;x:20;y:10;width:480;height:500}
  Counter.CounterHost {id:counter}
- Item {id:interactionScene;property var popupItem:null;function closeInfoPopup(){}}
+ Item {id:interactionScene;property var popupItem:null;property var dataModel:({players:[],drawPileNum:12});function closeInfoPopup(){}}
+ QtObject {id:deckModel;property var cards:[31,32];property string prompt:"$ViewCards";property string promptText:"请观看卡牌";property int minNum:0;property int maxNum:0}
+ Item {id:deckReveal;visible:false;property var dataModel:deckModel
+  CardItem {known:true;dataModel:({cardId:31})}
+  CardItem {known:true;dataModel:({cardId:32})}
+ }
+ function revealTop(){Mediator.commandGot(null,"MoveFocus",[[1],"xunxiang",10000]);deckReveal.visible=true;interactionScene.popupItem=deckReveal;}
+ function revealBottom(){deckModel.promptText="正在观看牌堆底的牌（右边是最牌堆底）";counter.rememberPopupCards();}
+ function revealGeneric(){Mediator.commandGot(null,"MoveFocus",[[1],"unrelated",10000]);deckModel.promptText="请观看卡牌";counter.rememberPopupCards();}
+ function revealOtherFocus(){Mediator.commandGot(null,"MoveFocus",[[2],"xunxiang",10000]);counter.rememberPopupCards();}
+ function revealPartial(){deckModel.cards=[31,32,34];deckModel.promptText="正在观看牌堆顶的牌";counter.rememberPopupCards();}
  Item {id:reveal;visible:false
   CardItem {known:true;dataModel:({cardId:27})}
   CardItem {known:false;dataModel:({cardId:28})}
@@ -114,6 +124,7 @@ Window {
  function prepareActions(){control().soundList.visible=false;control().children.find(b=>b.objectName==="roleVoiceButton");counter.currentScene=interactionScene;counter.attachPlayerActions(targetPhoto);}
  function egg(){return counter.sendPresent("Egg");}
  function flower(){return counter.sendPresent("Flower");}
+ function reopenActions(){counter.showPlayerActions(targetPhoto.dataModel);}
  function replayMode(){Config.replaying=true;}
 
  function voice(){return chat.children[0].children[0];}
@@ -267,6 +278,7 @@ cooldown=cooldowns[0];assert cooldown.property('running') is True
 cooldown_deadline=time.monotonic()+3
 while cooldown.property('running') and time.monotonic()<cooldown_deadline:pump(.02)
 assert cooldown.property('running') is False,'present rate limit did not expire'
+call('reopenActions')
 assert invoke('flower') is True
 assert json.loads(invoke('snapshot'))['sent'][-1]['data']['msg']=='$@Flower:2'
 call('replayMode');assert invoke('egg') is False,'replays cannot send gifts'
@@ -274,6 +286,14 @@ call('revealCards');captured=json.loads(invoke('capturedCards'))
 assert len(captured)==1 and 'remember({27})' in captured[0],captured
 pump(.2);assert json.loads(invoke('capturedCards'))==captured,'reveals are captured once, without polling'
 call('hideReveal');assert json.loads(invoke('capturedCards'))==captured,'hidden popups are not captured'
+call('revealTop');deck_captures=json.loads(invoke('capturedCards'))
+assert 'remember({31,32},"top",12)' in deck_captures[-1],deck_captures
+call('revealBottom');deck_captures=json.loads(invoke('capturedCards'))
+assert 'remember({31,32},"bottom",12)' in deck_captures[-1],deck_captures
+call('revealGeneric');deck_captures=json.loads(invoke('capturedCards'))
+assert ',"top",' not in deck_captures[-1] and ',"bottom",' not in deck_captures[-1],deck_captures
+call('revealOtherFocus');assert ',"top",' not in json.loads(invoke('capturedCards'))[-1],'another player focus cannot supply private order'
+call('revealPartial');assert ',"top",' not in json.loads(invoke('capturedCards'))[-1],'unseen faces cannot enter an ordered record'
 
 errors=[m for m in logs if any(x in m for x in ['TypeError','ReferenceError','SyntaxError','Unable to assign','Cannot assign','Binding loop','is not a type'])]
 print(json.dumps({'button_geometry':geometry,'initial':initial,'banned':banned,'final':final,'large':{'checked':large_done['checked'],'with_audio':len(large_done['pool']),'first_batch_checked':large_partial['checked'],'directories':large_done['dirs']},'errors':errors},ensure_ascii=False,indent=2));assert not errors,errors

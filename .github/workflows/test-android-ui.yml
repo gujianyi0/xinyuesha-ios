@@ -14,6 +14,7 @@ on:
       - 'scripts/test_social_native_bridge.py'
       - 'scripts/test_touch_log.py'
       - 'scripts/test_role_voice.py'
+      - 'scripts/test_interactions.py'
       - '.github/workflows/test-android-ui.yml'
 permissions:
   contents: read
@@ -52,6 +53,7 @@ jobs:
         run: python3 scripts/test_social_native_bridge.py --work-dir "$RUNNER_TEMP/social-native-bridge"
       - run: python3 scripts/test_touch_log.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/touch-log"
       - run: python3 scripts/test_role_voice.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/role-voice"
+      - run: python3 scripts/test_interactions.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/interactions"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -62,3 +64,8 @@ jobs:
         with:
           name: counter-catalogue-${{ matrix.platform }}
           path: ${{ runner.temp }}/counter-catalogue/result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: interactions-${{ matrix.platform }}
+          path: ${{ runner.temp }}/interactions/result.json

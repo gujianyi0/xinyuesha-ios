@@ -18,7 +18,7 @@ app = QGuiApplication([])
 class TipProvider(QObject):
     @Slot(result='QVariantList')
     def tips(self):
-        return [{'content':'draw1','type':'normal'},{'content':'liexiangbigger','type':'normal'}]
+        return [{'content':'draw1','type':'normal'},{'content':'liexiangbigger','type':'normal'},{'content':'tianhou_frost','type':'normal'},{'content':'tianhou_hot','type':'normal'},{'content':'tianhou_rain','type':'normal'}]
 tip_provider=TipProvider()
 if os.environ.get("FK_TEST_FONT"):
     font_id=QFontDatabase.addApplicationFont(os.environ["FK_TEST_FONT"])
@@ -48,7 +48,7 @@ QtObject {
  function createCardModel(id, props){return {cardId:id};}
  function getTargetTip(pid){return TipProvider.tips();}
  function getCardTip(cid){return TipProvider.tips();}
- function processPrompt(s){return ({draw1:"摸一张牌",liexiangbigger:"手牌数大于你"})[s] || s;}
+ function processPrompt(s){return ({draw1:"摸一张牌",liexiangbigger:"手牌数大于你",tianhou_frost:"严霜",tianhou_hot:"烈暑",tianhou_rain:"骤雨"})[s] || s;}
 }
 ''')
 put("LunarLtk/Components/qmldir", "module LunarLtk.Components\nDescriptionText 1.0 DescriptionText.qml\nCardItem 1.0 CardItem.qml\nBigGlowText 1.0 BigGlowText.qml\n")
@@ -70,11 +70,15 @@ version_expression=re.search(r'text: (delay \+ " ms " \+ [^\n]+)',server_source)
 lobby_source=(UI/"Fk/Pages/Lobby/Lobby.qml").read_text(encoding="utf-8")
 exit_content=re.search(r"contentItem: Text \{\n      text: parent.text;.*?\n    \}",lobby_source,re.S)
 exit_content=exit_content.group(0) if exit_content else ""
+card_item=(UI/"LunarLtk/Components/CardItem.qml").read_text(encoding="utf8")
+render_tips=re.findall(r'text: (Ltk\.processPrompt\(String\(parent\.modelData\.content[^\n]+)',card_item)
+assert len(render_tips)==2, 'both normal and warning card-tip renderers translate direct maps'
 put("Main.qml", '''import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQml.WorkerScript
 import Fk
+import LunarLtk
 Window {
  width:1000;height:500;visible:true
  property var authResult: null
@@ -101,6 +105,7 @@ Window {
  Component {id:content;Item {anchors.fill:parent;property alias label:label
    Text {id:label;text:"Skill details and visible teammate cards";font.pixelSize:18;color:"black"}
  }}
+ Item {property var modelData:({content:"tianhou_frost"});Text {id:directTip;text:RENDER_TIP}}
  QtObject {id:photo;property list<var> limitSkills:[]; SKILL_METHOD }
  QtObject {id:targetPhoto;property int playerid:1;property var targetTip:[]; TARGET_METHOD }
  QtObject {id:tipCard;property int cardId:1;property var cardTip:[]; CARD_METHOD }
@@ -122,10 +127,10 @@ Window {
    toggleIcon:String(toggle.icon.source),exitContentX:exitButton.contentItem.x,
    exitContentWidth:exitButton.contentItem.width,exitWidth:exitButton.width,
    exitHeight:exitButton.height,referenceHeight:referenceButton.height,exitY:exitButton.y,
-   targetTips:targetPhoto.targetTip,cardTips:tipCard.cardTip
+   directTip:directTip.text,targetTips:targetPhoto.targetTip,cardTips:tipCard.cardTip
  });}
 }
-'''.replace("AUTH_SOURCE", (SOURCE / "card-counter/SocialAuth.js").as_uri()).replace("VERSION_EXPRESSION",version_expression).replace("SKILL_METHOD",skill_method).replace("TARGET_METHOD",target_method).replace("CARD_METHOD",card_method).replace("EXIT_CONTENT",exit_content).replace("RUN_AUTH_TEST",str(RUN_AUTH_TEST).lower()))
+'''.replace("AUTH_SOURCE", (SOURCE / "card-counter/SocialAuth.js").as_uri()).replace("VERSION_EXPRESSION",version_expression).replace("SKILL_METHOD",skill_method).replace("TARGET_METHOD",target_method).replace("CARD_METHOD",card_method).replace("EXIT_CONTENT",exit_content).replace("RUN_AUTH_TEST",str(RUN_AUTH_TEST).lower()).replace("RENDER_TIP",render_tips[0]))
 engine = QQmlApplicationEngine(); engine.addImportPath(str(base))
 engine.rootContext().setContextProperty("AppPath", QUrl.fromLocalFile(str(base)))
 engine.rootContext().setContextProperty("TipProvider",tip_provider)
@@ -156,6 +161,7 @@ assert raw, logs
 result=json.loads(raw)
 result.update(yang=yang,yin=yin,generalHeight=general_height,cardCount=card_count)
 print(json.dumps({"result":result,"logs":logs},ensure_ascii=False,indent=2))
+assert result["directTip"] == "严霜", "direct Lua-created card-tip rendering translates the reported skill key"
 assert result["descriptionLines"] > 1, "server description must wrap"
 assert result["versionHeight"] <= 22, "rich text version must respect compact size"
 assert result["popupWidth"] > 100 and result["popupHeight"] > 100, "popup content size"
@@ -165,8 +171,8 @@ assert str(yang).endswith("/switch") and str(yin).endswith("/switch-yin"), "swit
 assert result["switchSource"].endswith("/switch-yin"), "initial Yin value must render regardless of property initialization order"
 assert "white" in result["toggleIcon"] and "M16" in result["toggleIcon"], "chat toggle tracks collapsed/expanded state"
 assert result['exitHeight']==result['referenceHeight'] and result['exitY']==16 and result['exitWidth']>=120, 'exit button matches sibling Material height and top alignment'
-assert [entry['content'] for entry in result['targetTips']]==['摸一张牌','手牌数大于你'],'QVariantList target tips publish translated copies'
-assert [entry['content'] for entry in result['cardTips']]==['摸一张牌','手牌数大于你'],'QVariantList card tips publish translated copies'
+assert [entry['content'] for entry in result['targetTips']]==['摸一张牌','手牌数大于你','严霜','烈暑','骤雨'],'QVariantList target tips publish translated copies'
+assert [entry['content'] for entry in result['cardTips']]==['摸一张牌','手牌数大于你','严霜','烈暑','骤雨'],'QVariantList card tips publish translated copies'
 salt=json.dumps(["freekill-social-account-v1","test:9527","测试用户"],ensure_ascii=False,separators=(",",":")).encode()
 expected=hashlib.pbkdf2_hmac("sha256",b"test-only-password",salt,210000,32).hex()
 if RUN_AUTH_TEST: assert result["authResult"]["key"] == expected, "WorkerScript identity remains compatible"

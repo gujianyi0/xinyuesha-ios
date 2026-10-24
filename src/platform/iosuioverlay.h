@@ -83,6 +83,11 @@ inline QString adapt(const QString &path, QString text) {
       return Object.assign({}, data, {content: Ltk.processPrompt(data.content)});
     });
   })QML");
+  } else if (path == "LunarLtk/Components/CardItem.qml") {
+    // Lua-created/expanded cards can supply tip maps directly. Translate at
+    // rendering as well, without depending on mutation of a QVariantMap.
+    text.replace("text: parent.modelData.content",
+      "text: Ltk.processPrompt(String(parent.modelData.content || ''))");
   } else if (path == "LunarLtk/Components/Photo/LimitSkillItem.qml") {
     text.replace("source: SkinBank.limitSkillDir + skilltype", R"QML(source: SkinBank.limitSkillDir +
       (root.skilltype === 'switch' ? (root.usedtimes > 0 ? 'switch-yin' : 'switch') :
@@ -101,21 +106,36 @@ inline QString adapt(const QString &path, QString text) {
 })QML");
   }
   if (path == "Fk/Pages/Common/RoomPage.qml") {
-    // UIKit alerts can be dismissed during an offline room/controller change;
-    // a Qt Quick confirmation stays with the game and can be opened repeatedly.
-    const QRegularExpression quitDialog("  MessageDialog \x7b\\s*id: quitDialog.*?\\n  \x7d", QRegularExpression::DotMatchesEverythingOption);
-    text.replace(quitDialog, R"QML(  Dialog {
-    id: quitDialog
-    objectName: "offlineQuitConfirmation"
-    anchors.centerIn: parent
-    width: Math.min(parent.width - 32, 460)
-    title: Lua.tr("Quit")
-    modal: true
-    closePolicy: Popup.NoAutoClose
-    standardButtons: Dialog.Ok | Dialog.Cancel
-    contentItem: Label {text: Lua.tr("Are you sure to quit?"); wrapMode: Text.Wrap; padding: 16}
-    onAccepted: Cpp.notifyServer("QuitRoom", "[]")
-  })QML");
+    // Keep confirmations on the same Qt Quick overlay as the game. Preserve
+    // each core's callbacks, including surrender eligibility and reply IDs.
+    const QRegularExpression dialogs(
+      R"RX(^([ ]*)MessageDialog \{\s*id: (quitDialog|surrenderDialog|surrenderNegotiationDialog|surrenderNegotiationRequestDialog)\b.*?^\1\})RX",
+      QRegularExpression::MultilineOption | QRegularExpression::DotMatchesEverythingOption);
+    auto matches = dialogs.globalMatch(text);
+    QList<QRegularExpressionMatch> replacements;
+    while (matches.hasNext()) replacements.append(matches.next());
+    for (auto it = replacements.crbegin(); it != replacements.crend(); ++it) {
+      const QString indent = it->captured(1), id = it->captured(2);
+      QString block = it->captured();
+      block.replace("MessageDialog", "Dialog");
+      block.replace("buttons:", "standardButtons:");
+      block.replace("informativeText:", "property string informativeText:");
+      const QString setup = "\n" + indent + "  objectName: \"" +
+        (id == "quitDialog" ? QString("offlineQuitConfirmation") : id + "Confirmation") + "\"\n" +
+        indent + "  parent: Overlay.overlay\n" +
+        indent + "  anchors.centerIn: parent\n" +
+        indent + "  width: Math.min(parent.width - 32, 460)\n" +
+        indent + "  modal: true\n" +
+        indent + "  closePolicy: Popup.NoAutoClose\n" +
+        indent + "  exit: Transition {}\n" +
+        indent + "  signal buttonClicked(var button, var role)\n" +
+        indent + "  onAccepted: buttonClicked(Dialog.Ok, DialogButtonBox.AcceptRole)\n" +
+        indent + "  onRejected: buttonClicked(Dialog.Cancel, DialogButtonBox.RejectRole)\n" +
+        indent + "  contentItem: Label {text: " + id + ".informativeText; textFormat: Text.RichText; wrapMode: Text.Wrap; padding: 16}\n";
+      const qsizetype position = block.indexOf('\n', block.indexOf("id: " + id));
+      block.insert(position, setup);
+      text.replace(it->capturedStart(), it->capturedLength(), block);
+    }
   } else if (path == "Fk/Pages/Lobby/BGSetting.qml") {
     text.replace("*.mp4\"", "*.mp4)\"");
     text.replace("*.jpeg *.gif", "*.jpeg *.heic *.heif *.gif");

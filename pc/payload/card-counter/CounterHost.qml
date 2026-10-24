@@ -10,6 +10,31 @@ Item {
   id: host
   objectName: "fkCounterHost"
   property var currentScene: null
+  property string revealFocusSkill: ""
+  onCurrentSceneChanged: { revealFocusSkill=""; playerActions.close(); syncPlayerActions(); }
+  property var playerActionWatchers: []
+  readonly property var actionRoomModel: currentScene && currentScene.dataModel &&
+    ("playersChanged" in currentScene.dataModel || "playerAdded" in currentScene.dataModel) ? currentScene.dataModel : null
+  Connections {
+    target: host.actionRoomModel
+    ignoreUnknownSignals: true
+    function onPlayersChanged() { host.syncPlayerActions(); }
+    function onPlayerAdded() { host.syncPlayerActions(); }
+  }
+  Connections {
+    target: host.currentScene
+    ignoreUnknownSignals: true
+    function onVisibleChanged() { if (!host.currentScene.visible) playerActions.close(); }
+  }
+  Connections {
+    target: host.Window.window
+    function onActiveChanged() { if (!host.Window.window.active) playerActions.close(); }
+  }
+  Connections {
+    target: Config
+    ignoreUnknownSignals: true
+    function onReplayingChanged() { if (Config.replaying) playerActions.close(); }
+  }
   readonly property var activeRoomScene: Ltk.roomScene || null
   onActiveRoomSceneChanged: Qt.callLater(host.syncScene)
   property var popup: null
@@ -59,6 +84,11 @@ Item {
     target: Mediator
     function onCommandGot(sender, command, data) {
       if (command === "BackToStart") host.roleVoiceCache.entries = {};
+      if (["EnterRoom","EnterLobby","BackToStart"].indexOf(command)>=0) host.revealFocusSkill="";
+      if (command === "MoveFocus") {
+        const self=Lua.selfPlayer;
+        host.revealFocusSkill=self && data && Array.from(data[0] || []).indexOf(self.id)>=0 ? String(data[1] || "") : "";
+      }
     }
   }
   property int deckSearchTicks: 0
@@ -173,9 +203,57 @@ Item {
     const component = Qt.createComponent("RoleVoiceControl.qml");
     if (component.status !== Component.Ready) { console.warn(component.errorString()); return; }
     const control = component.createObject(input, {chatBox:chat, soundList:sound, cacheStore:host.roleVoiceCache});
-    if (control) adaptedControls.push(chat);
+    if (control) {
+      interactionEntry.createObject(input);
+      adaptedControls.push(chat);
+    }
+  }
+  Component {
+    id: interactionEntry
+    Button {
+      objectName: "playerInteractionButton"
+      text: "互动"; font.pixelSize: 14; leftPadding: 4; rightPadding: 4
+      Layout.preferredWidth: 56; Layout.preferredHeight: 44
+      visible: !Config.replaying
+      ToolTip.visible: hovered
+      ToolTip.text: "选择玩家，按住送花或砸蛋可连续发送"
+      onClicked: host.showPlayerActions(null)
+    }
+  }
+  function actionTargets() {
+    const room = currentScene && currentScene.dataModel;
+    return Array.from(room && room.players || []).filter(model => model &&
+      Number.isInteger(model.playerid) && model.playerid !== 0 && model.playerid !== -1);
+  }
+  function syncPlayerActions() {
+    const models = actionTargets();
+    playerActionWatchers = playerActionWatchers.filter(watcher => {
+      if (watcher && watcher.scene === currentScene && models.indexOf(watcher.playerModel) >= 0) return true;
+      if (watcher) watcher.destroy();
+      return false;
+    });
+    for (const model of models) {
+      if (model.photoItem) attachPlayerActions(model.photoItem);
+      if (!("photoItemChanged" in model) || playerActionWatchers.some(w => w.playerModel === model)) continue;
+      const watcher = playerActionWatcher.createObject(host, {playerModel:model, scene:currentScene});
+      if (watcher) playerActionWatchers.push(watcher);
+    }
+    if (playerActions.visible && models.indexOf(playerActions.targetModel) < 0) playerActions.close();
+  }
+  Component {
+    id: playerActionWatcher
+    Connections {
+      objectName: "playerActionWatcher"
+      required property var playerModel
+      required property var scene
+      target: playerModel
+      function onPhotoItemChanged() {
+        if (scene === host.currentScene && playerModel.photoItem) host.attachPlayerActions(playerModel.photoItem);
+      }
+    }
   }
   function attachPlayerActions(photo) {
+    if (!photo || !("rightClicked" in photo) || !("dataModel" in photo)) return;
     if (adaptedControls.indexOf(photo)>=0) return;
     photo.rightClicked.connect(function() {
       Qt.callLater(function() { if(photo && photo.parent) host.showPlayerActions(photo.dataModel); });
@@ -183,31 +261,46 @@ Item {
     adaptedControls.push(photo);
   }
   function showPlayerActions(model) {
-    if (!model || model.playerid===0 || model.playerid===-1 || !currentScene || Config.replaying) return;
+    if (!currentScene || Config.replaying) return;
+    let targets = actionTargets();
+    if (model && targets.indexOf(model) < 0) targets.push(model);
+    if (!model) model = targets.find(p => p.playerid !== (typeof Self !== "undefined" && Self ? Self.id : 0)) || targets[0];
+    if (!model || !Number.isInteger(model.playerid) || model.playerid===0 || model.playerid===-1) return;
     if(typeof currentScene.closeInfoPopup==="function")currentScene.closeInfoPopup();
+    playerActions.close();
+    playerActions.targets=targets;
     playerActions.targetModel=model;
     playerActions.open();
   }
-  function sendPresent(kind) {
+  function sendPresent(kind, keepOpen) {
     const model=playerActions.targetModel;
     if(presentCooldown.running || Config.replaying || !currentScene || !model ||
        !Number.isInteger(model.playerid) || model.playerid===0 || model.playerid===-1 ||
        ["Egg","Flower"].indexOf(kind)<0 || !clientContext) return false;
     clientContext.notifyServer("Chat",{type:2,msg:"$@"+kind+":"+model.playerid});
-    presentCooldown.start(); playerActions.close(); return true;
+    presentCooldown.start(); if (!keepOpen) playerActions.close(); return true;
   }
   Timer {id:presentCooldown;interval:1500}
   Dialog {
     id:playerActions;objectName:"playerPresentActions"
     property var targetModel:null
+    property var targets:[]
     parent:Overlay.overlay;anchors.centerIn:parent
     width:Math.min(360,parent ? parent.width-24 : 360)
-    modal:true;title:"武将互动"
+    modal:true;title:"武将互动";exit:Transition {}
+    onClosed: {targetModel=null;targets=[];}
     contentItem:ColumnLayout {
-      Label {Layout.fillWidth:true;textFormat:Text.PlainText;text:playerActions.targetModel ? playerActions.targetModel.screenName || "该角色" : ""}
+      ComboBox {
+        objectName: "presentTargetSelector"
+        Layout.fillWidth:true
+        model: playerActions.targets.map(p => p.screenName || (p.seatNumber ? "第 " + p.seatNumber + " 位玩家" : "玩家"))
+        currentIndex: playerActions.targets.indexOf(playerActions.targetModel)
+        onActivated: playerActions.targetModel=playerActions.targets[currentIndex]
+      }
+      Label {Layout.fillWidth:true;wrapMode:Text.Wrap;text:"点击发送一次，按住连续发送；松手或移出按钮即停止"}
       RowLayout {
-        Button {text:"砸蛋";Layout.fillWidth:true;enabled:!presentCooldown.running;onClicked:host.sendPresent("Egg")}
-        Button {text:"送花";Layout.fillWidth:true;enabled:!presentCooldown.running;onClicked:host.sendPresent("Flower")}
+        PresentButton {objectName:"presentEggButton";text:"砸蛋";presentKind:"Egg"}
+        PresentButton {objectName:"presentFlowerButton";text:"送花";presentKind:"Flower"}
       }
       Button {text:"查看资料";Layout.fillWidth:true;onClicked:{
         const model=playerActions.targetModel;playerActions.close();
@@ -215,6 +308,33 @@ Item {
       }}
       Button {text:"取消";Layout.fillWidth:true;onClicked:playerActions.close()}
     }
+  }
+  component PresentButton: Button {
+    property string presentKind
+    property int pressedTargetId: 0
+    property var pressedScene: null
+    Layout.fillWidth:true
+    enabled: playerActions.opened && !!host.currentScene && !Config.replaying && !!host.clientContext
+    autoRepeat: playerActions.opened
+    autoRepeatDelay: 0
+    autoRepeatInterval: 1600
+    onPressed: {
+      // AbstractButton repeats pressed/released as well as clicked. Keep the
+      // original target frozen until the physical press actually finishes.
+      if (!pressedScene) {
+        pressedTargetId=playerActions.targetModel ? playerActions.targetModel.playerid : 0;
+        pressedScene=host.currentScene;
+      }
+      if (pressedScene===host.currentScene && playerActions.targetModel &&
+          pressedTargetId===playerActions.targetModel.playerid) host.sendPresent(presentKind,true);
+    }
+    onClicked: {
+      if (pressed && pressedScene===host.currentScene && playerActions.targetModel &&
+          pressedTargetId===playerActions.targetModel.playerid) host.sendPresent(presentKind,true);
+    }
+    onReleased: Qt.callLater(function() { if (!pressed) pressedScene=null; })
+    onCanceled: pressedScene=null
+    onVisibleChanged: if (!visible) pressedScene=null
   }
   function refreshCompatibility(rootItem) {
     // Periodic whole-tree scans must never run during a match or spectating.
@@ -328,6 +448,27 @@ Item {
     function onPopupItemChanged() { Qt.callLater(host.adaptRoomPopup); visibleCardCapture.restart(); }
   }
   Timer {id:visibleCardCapture;interval:32;onTriggered:host.rememberPopupCards()}
+  function popupDeckEvidence(item, visibleIds) {
+    const model=item.dataModel;
+    if (!model || model.minNum!==0 || model.maxNum!==0 || !model.cards) return null;
+    let ordered=Array.from(model.cards);
+    // Only the face-up cards that the actual view dialog exposes are eligible.
+    if (!ordered.length || ordered.some(id => !visibleIds.has(id))) return null;
+    const prompt=String(model.promptText || ""), raw=String(model.prompt || "");
+    let edge="";
+    const bottom=/牌堆底|bottom.*(?:draw|deck)|(?:draw|deck).*bottom/i.test(prompt);
+    const top=/牌堆顶|top.*(?:draw|deck)|(?:draw|deck).*top/i.test(prompt);
+    if (bottom && !top) edge="bottom";
+    else if (top && !bottom) edge="top";
+    // Xunxiang uses the generic view-cards prompt, but its current request is
+    // explicitly focused on that skill. Other generic views have no order.
+    else if (raw==="$ViewCards" && /(^|[#_])xunxiang$/.test(revealFocusSkill)) edge="top";
+    if ((edge==="bottom" && /左[^，。]*最[^，。]*底/.test(prompt)) ||
+        (edge==="top" && /右[^，。]*最[^，。]*顶/.test(prompt))) ordered.reverse();
+    const count=Number(currentScene.dataModel && currentScene.dataModel.drawPileNum);
+    return edge && Number.isInteger(count) && count>=ordered.length && count<=10000
+      ? {ids:ordered,edge:edge,count:count} : null;
+  }
   function rememberPopupCards() {
     const item=currentScene && currentScene.popupItem;
     if(!item || !item.visible) return;
@@ -340,7 +481,9 @@ Item {
       if(node.children)pending.push(...Array.from(node.children));
     }
     if(!ids.size)return;
-    try {Lua.ev('(function() FkCardCounterV2=FkCardCounterV2 or dofile("card-counter/counter.lua"); return FkCardCounterV2.remember({' + Array.from(ids).join(',') + '}) end)()');}
+    const evidence=popupDeckEvidence(item,ids);
+    const args=evidence ? evidence.ids.join(',')+'},'+JSON.stringify(evidence.edge)+','+evidence.count : Array.from(ids).join(',')+'}';
+    try {Lua.ev('(function() FkCardCounterV2=FkCardCounterV2 or dofile("card-counter/counter.lua"); return FkCardCounterV2.remember({' + args + ') end)()');}
     catch(_) { /* The transient client may have been replaced while closing. */ }
   }
   function adaptRoomPopup() {
@@ -369,6 +512,8 @@ Item {
   Timer { id: backgroundSave; interval: 250; onTriggered: Config.saveConf(); }
   function releaseScene() {
     playerActions.close(); playerActions.targetModel=null;
+    for (const watcher of playerActionWatchers) if (watcher) watcher.destroy();
+    playerActionWatchers=[];
     if (deckHit) deckHit.destroy();
     if (fallbackButton) fallbackButton.destroy();
     if (popup) popup.destroy();
