@@ -59,7 +59,7 @@ public final class CounterBackgroundImages {
                 if (root == null) root = activity.getFilesDir();
                 File image = importImage(activity.getContentResolver(), uri, root);
                 Intent converted = new Intent(original);
-                converted.setDataAndType(Uri.fromFile(image), "image/png");
+                converted.setDataAndType(Uri.fromFile(image), image.getName().endsWith(".jpg") ? "image/jpeg" : "image/png");
                 activity.runOnUiThread(() -> {
                     if (!activity.isFinishing() && !activity.isDestroyed()) callback.deliver(Activity.RESULT_OK, converted);
                 });

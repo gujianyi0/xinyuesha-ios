@@ -121,7 +121,7 @@ Window {
  function hideReveal(){reveal.visible=false;counter.rememberPopupCards();}
  BasicItem {id:targetPhoto;onRightClicked:win.longPresses++;x:800;y:200;width:100;height:130;selectable:false;property var dataModel:({playerid:2,screenName:"测试目标"})}
  function actionsState(){return JSON.stringify({signals:longPresses,scene:!!counter.currentScene,visible:targetPhoto.visible,x:targetPhoto.x,y:targetPhoto.y});}
- function prepareActions(){control().soundList.visible=false;control().children.find(b=>b.objectName==="roleVoiceButton");counter.currentScene=interactionScene;counter.attachPlayerActions(targetPhoto);}
+ function prepareActions(){control().soundList.visible=false;control().children.find(b=>b.objectName==="roleVoiceButton");interactionScene.dataModel={players:[targetPhoto.dataModel],drawPileNum:12};counter.currentScene=interactionScene;counter.attachPlayerActions(targetPhoto);}
  function egg(){return counter.sendPresent("Egg");}
  function flower(){return counter.sendPresent("Flower");}
  function reopenActions(){counter.showPlayerActions(targetPhoto.dataModel);}
@@ -272,12 +272,10 @@ assert invoke('egg') is True
 assert invoke('flower') is False,'gift cooldown prevents duplicate sends'
 assert json.loads(invoke('snapshot'))['sent'][-1]=={'command':'Chat','data':{'type':2,'msg':'$@Egg:2'}}
 host=win.findChild(QObject,'fkCounterHost')
-cooldowns=[obj for obj in host.findChildren(QObject) if obj.property('interval')==1500]
-assert len(cooldowns)==1,'the present rate limit must have one timer'
-cooldown=cooldowns[0];assert cooldown.property('running') is True
-cooldown_deadline=time.monotonic()+3
-while cooldown.property('running') and time.monotonic()<cooldown_deadline:pump(.02)
-assert cooldown.property('running') is False,'present rate limit did not expire'
+assert host.property('presentRestSeconds') == 10, 'completed click starts shared cooldown'
+cooldown_deadline=time.monotonic()+12
+while host.property('presentRestSeconds') > 0 and time.monotonic()<cooldown_deadline:pump(.02)
+assert host.property('presentRestSeconds') == 0,'shared cooldown did not expire'
 call('reopenActions')
 assert invoke('flower') is True
 assert json.loads(invoke('snapshot'))['sent'][-1]['data']['msg']=='$@Flower:2'

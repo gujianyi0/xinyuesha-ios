@@ -91,7 +91,7 @@
 static FKBackgroundPickerSession *fkActiveBackgroundSession;
 static inline void fkOpenBackgroundPicker(UIWindow *window, bool allowVideo,
     void (^finished)(NSURL *, NSString *)) {
-  NSAssert(NSThread.isMainThread, @"PhotosUI session must start on main thread");
+  NSCAssert(NSThread.isMainThread, @"PhotosUI session must start on main thread");
   if (!window || !window.rootViewController || window.rootViewController.isBeingDismissed || fkActiveBackgroundSession) {
     finished(nil, @"界面正在切换，请稍后再选图片"); return;
   }

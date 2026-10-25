@@ -46,7 +46,7 @@ public final class BackgroundTestActivity extends Activity {
                 BackgroundImagesTest.main(new String[]{new File(getFilesDir(),"outputs").getAbsolutePath(),large.getAbsolutePath()});
                 Intent selected = select(Uri.parse("content://" + getPackageName() + ".images/document/42"), RESULT_OK);
                 BackgroundImagesTest.require("file".equals(selected.getData().getScheme()), "Qt receives persistent file URI");
-                BackgroundImagesTest.require("image/png".equals(selected.getType()), "Qt receives standard PNG MIME type");
+                BackgroundImagesTest.require("image/jpeg".equals(selected.getType()), "Qt receives matching JPEG MIME type");
                 File saved = new File(selected.getData().getPath());
                 BackgroundImagesTest.require(saved.isFile() && saved.getCanonicalPath().contains("/assets/backgrounds/"), "image saved in app background directory");
                 Bitmap reopened = BitmapFactory.decodeFile(saved.getAbsolutePath());

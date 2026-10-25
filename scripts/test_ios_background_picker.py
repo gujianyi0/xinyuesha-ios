@@ -35,7 +35,7 @@ Window {width:900;height:500;visible:true
  def pump():
   loop=QEventLoop();QTimer.singleShot(30,loop.quit);loop.exec()
  def state():return json.loads(QMetaObject.invokeMethod(win,'state',Q_RETURN_ARG('QVariant')))
- pump();buttons=[o for o in win.findChildren(QObject) if o.property('text')=='...'];assert len(buttons)==4,(len(buttons),logs)
+ pump();buttons=[o for o in win.findChildren(QObject) if o.property('text')=='...' and o.metaObject().indexOfSignal('clicked()')>=0];assert len(buttons)==4,(len(buttons),logs)
  for index in [0,1,3]:
   QMetaObject.invokeMethod(buttons[index],'clicked');pump();QMetaObject.invokeMethod(win,'deliver');pump()
  result=state();assert result=={'requests':['lobbyBg','roomBg','ladyImg'],'saves':3,'lobby':'file:///new-lobbyBg','room':'file:///new-roomBg','lady':'file:///new-ladyImg','music':'old-music'},result

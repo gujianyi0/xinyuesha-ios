@@ -29,6 +29,18 @@ public final class BackgroundImagesTest {
         int pixel=decoded.getPixel(20,40);
         require(Color.red(pixel)>220 && Color.green(pixel)<40 && Color.blue(pixel)<40,"normalized image preserves visible color");
         require(!decoded.hasGainmap(),"output is an ordinary SDR image");decoded.recycle();
+        Bitmap photo=Bitmap.createBitmap(512,512,Bitmap.Config.ARGB_8888);
+        for(int y=0;y<512;y++) for(int x=0;x<512;x++) photo.setPixel(x,y,Color.rgb((x*17+y*23)%256,(x*11+y*7)%256,(x*31+y*3)%256));
+        photo.setHasAlpha(false);
+        File photoPng=new File(root,"photo.png");try(FileOutputStream out=new FileOutputStream(photoPng)){photo.compress(Bitmap.CompressFormat.PNG,100,out);}photo.recycle();
+        File reduced=CounterBackgroundImages.importImage(null,Uri.fromFile(photoPng),root);
+        require(reduced.length()<photoPng.length(),"photographic content uses less storage than PNG");
+        System.out.println("TEST: photo storage "+photoPng.length()+" -> "+reduced.length()+" bytes");
+        Bitmap alpha=Bitmap.createBitmap(40,40,Bitmap.Config.ARGB_8888);alpha.eraseColor(Color.argb(80,255,0,0));
+        File alphaPng=new File(root,"alpha.png");try(FileOutputStream out=new FileOutputStream(alphaPng)){alpha.compress(Bitmap.CompressFormat.PNG,100,out);}alpha.recycle();
+        File transparent=CounterBackgroundImages.importImage(null,Uri.fromFile(alphaPng),root);
+        require(transparent.getName().endsWith(".png"),"transparent image retains PNG");
+        Bitmap transparentResult=BitmapFactory.decodeFile(transparent.getAbsolutePath());require(Color.alpha(transparentResult.getPixel(10,10))==80,"alpha preserved");transparentResult.recycle();
         int sample=CounterBackgroundImages.sampleSize(8160,6120);
         require((long)((8160+sample-1)/sample)*((6120+sample-1)/sample)<=8000000,"50 MP decode memory bound");
         File large = new File(args[1]);
