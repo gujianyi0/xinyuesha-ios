@@ -16,10 +16,15 @@
 @implementation FKBackgroundPresentation
 - (BOOL)present:(PHPickerViewController *)picker fromWindow:(UIWindow *)previous {
   NSAssert(NSThread.isMainThread, @"PhotosUI must be presented on the main thread");
-  if (!previous.windowScene || self.window) return NO;
+  if (!previous || self.window) return NO;
   self.previousWindow = previous;
   [previous endEditing:YES];
-  UIWindow *window = [[UIWindow alloc] initWithWindowScene:previous.windowScene];
+  // Qt 6.8 also supports apps without UIApplicationSceneManifest. Those
+  // windows need the legacy initializer; do not reject a usable game window.
+  UIWindow *window = previous.windowScene
+    ? [[UIWindow alloc] initWithWindowScene:previous.windowScene]
+    : [[UIWindow alloc] initWithFrame:previous.bounds];
+  if (!previous.windowScene) window.screen = previous.screen;
   window.windowLevel = previous.windowLevel + 1;
   UIViewController *host = [[UIViewController alloc] init];
   host.view.backgroundColor = UIColor.systemBackgroundColor;

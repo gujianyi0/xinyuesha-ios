@@ -23,12 +23,6 @@ targets:
     info:
       path: Info.plist
       properties:
-        UIApplicationSceneManifest:
-          UIApplicationSupportsMultipleScenes: false
-          UISceneConfigurations:
-            UIWindowSceneSessionRoleApplication:
-              - UISceneConfigurationName: Default
-                UISceneDelegateClassName: PickerScene
         UISupportedInterfaceOrientations: [UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
     dependencies:
       - sdk: PhotosUI.framework

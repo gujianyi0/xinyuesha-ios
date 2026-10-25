@@ -55,8 +55,16 @@
 }
 @end
 @interface PickerApp : UIResponder <UIApplicationDelegate>
+@property(nonatomic, strong) UIWindow *window;
 @end
 @implementation PickerApp
+- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)options {
+  // Match the shipped Qt app's Info.plist: no Scene manifest/delegate.
+  self.window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
+  self.window.rootViewController = [[PickerController alloc] init];
+  [self.window makeKeyAndVisible];
+  return YES;
+}
 @end
 int main(int argc, char **argv) {
   @autoreleasepool { return UIApplicationMain(argc, argv, nil, NSStringFromClass(PickerApp.class)); }

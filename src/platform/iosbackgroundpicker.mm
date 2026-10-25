@@ -103,6 +103,10 @@ void fkPickIosBackground(bool allowVideo, std::function<void(QUrl, QString)> com
       if (candidate.isKeyWindow) { window = candidate; break; }
     if (window) break;
   }
+  if (!window) {
+    for (UIWindow *candidate in UIApplication.sharedApplication.windows)
+      if (candidate.isKeyWindow && candidate.rootViewController) { window = candidate; break; }
+  }
   if (!window || !window.rootViewController || window.rootViewController.isBeingDismissed) {
     completed({}, QStringLiteral("界面正在切换，请稍后再选图片")); return;
   }
