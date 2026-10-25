@@ -34,7 +34,12 @@ int main(int argc, char **argv) {
   require(util.contains("marks.splice(elemIdx, 1, Object.assign({}, elem"), "repeated mark updates replace the typed list element");
   require(!util.contains("elem.value = textValue;"), "do not mutate a temporary mark wrapper");
   const auto description = fkIosRuntimePayload::read(output+"/LunarLtk/Pages/InfoPopups/GeneralDetail.qml");
-  require(description.contains("Layout.preferredHeight: skillDesc.implicitHeight"), "nonzero skill description layout");
+  require(description.contains("width: Math.max(1, root.width - 40)"), "skill description follows the popup viewport width");
+  require(description.contains("contentHeight: skillDesc.height + 24"), "long descriptions remain scrollable");
+  require(!description.contains("ColumnLayout"), "no nested implicit-size layout in the mark description popup");
+  const auto roomBase = fkIosRuntimePayload::read(output+"/LunarLtk/Pages/RoomBase.qml");
+  require(roomBase.contains("roomBackgroundChatShortcut"), "background double-click shortcut installed");
+  require(roomBase.contains("Mediator.notify(roomScene, Command.IWantToChat)"), "shortcut reuses the existing chat action");
   const auto server = fkIosRuntimePayload::read(output+"/Fk/Pages/Common/JoinServer.qml");
   require(server.contains("String(misMatchMsg).replace"), "HTML version size normalization");
   require(!server.contains("font.pixelSize: 26"), "bounded server count font");

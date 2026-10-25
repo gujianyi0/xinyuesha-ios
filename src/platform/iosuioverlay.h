@@ -27,11 +27,51 @@ inline QString adapt(const QString &path, QString text) {
     text.replace("text: Lua.tr(\"Exit Lobby\")",
       "text: Lua.tr(\"Exit Lobby\")\n    contentItem: Text {\n      text: parent.text; color: parent.enabled ? 'black' : 'gray'\n      font: parent.font\n      horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter\n      elide: Text.ElideRight\n    }");
   } else if (path == "LunarLtk/Pages/InfoPopups/GeneralDetail.qml") {
-    text.replace("property list<string> generals", "property var generals: []");
-    // A Flickable has zero implicitHeight. Filling its ColumnLayout parent's
-    // height creates a zero-height cycle, so skill text exists but is invisible.
-    text.replace("height: parent.height\n      contentHeight: skillDesc.height",
-      "Layout.fillWidth: true\n      Layout.preferredHeight: skillDesc.implicitHeight\n      contentHeight: skillDesc.height");
+    // Mark -> general -> skill reuses this popup. Bind the text directly to
+    // its viewport: nested Flickable/ColumnLayout implicit sizes can otherwise
+    // leave the rich description in a narrow column. Keep the core's formatter.
+    const qsizetype formatter = text.indexOf("  function getGeneralDescText()");
+    if (formatter >= 0) text = QStringLiteral(R"QML(import QtQuick
+import QtQuick.Controls
+import Fk
+import LunarLtk
+import LunarLtk.Components
+
+Flickable {
+  id: root
+  anchors.fill: parent
+  property var generals: []
+  signal finish()
+  clip: true
+  contentWidth: width
+  contentHeight: skillDesc.height + 24
+  flickableDirection: Flickable.VerticalFlick
+  boundsBehavior: Flickable.StopAtBounds
+  ScrollBar.vertical: ScrollBar {}
+  DescriptionText {
+    id: skillDesc
+    x: 20; y: 12
+    width: Math.max(1, root.width - 40)
+    color: "#E4D5A0"
+    selectByKeyboard: false
+    text: root.getGeneralDescText()
+  }
+
+)QML") + text.mid(formatter);
+  } else if (path == "LunarLtk/Pages/RoomBase.qml") {
+    const QString sceneId = "  id: roomScene\n";
+    const qsizetype position = text.indexOf(sceneId);
+    if (position >= 0) text.insert(position + sceneId.size(), R"QML(
+  // Behind all cards/controls: only unhandled background clicks reach here.
+  MouseArea {
+    objectName: "roomBackgroundChatShortcut"
+    anchors.fill: parent
+    z: -1
+    acceptedButtons: Qt.LeftButton
+    enabled: roomScene.visible && !roomScene.infoPopup.visible && !roomScene.popupItem && !roomScene.agItem
+    onDoubleClicked: Mediator.notify(roomScene, Command.IWantToChat)
+  }
+)QML");
   } else if (path == "LunarLtk/Models/Popups/MoveCardInBoardModel.qml") {
     // A property map cannot initialize these primitive lists on Qt 6.8 iOS.
     // Keep the server-provided candidates/positions intact as JS arrays.

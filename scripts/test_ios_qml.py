@@ -52,7 +52,7 @@ QtObject {
 }
 ''')
 put("LunarLtk/Components/qmldir", "module LunarLtk.Components\nDescriptionText 1.0 DescriptionText.qml\nCardItem 1.0 CardItem.qml\nBigGlowText 1.0 BigGlowText.qml\n")
-put("LunarLtk/Components/DescriptionText.qml", 'import QtQuick\nText {textFormat:Text.RichText;wrapMode:Text.Wrap;font.pixelSize:18}')
+shutil.copyfile(UI / "LunarLtk/Components/DescriptionText.qml", base / "LunarLtk/Components/DescriptionText.qml")
 put("LunarLtk/Components/CardItem.qml", 'import QtQuick\nRectangle {width:93;height:130;property bool autoBack;property var dataModel;}')
 put("LunarLtk/Components/BigGlowText.qml", 'import QtQuick\nText {}')
 put("Fk/Widgets/qmldir", "module Fk.Widgets\nTapHandler 1.0 TapHandler.qml\n")
