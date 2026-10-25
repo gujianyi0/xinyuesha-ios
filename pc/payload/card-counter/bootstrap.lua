@@ -64,3 +64,14 @@ if ClientInstance and ClientInstance.callbacks then
   install(ClientInstance.class)
   ClientInstance.callbacks.PrepareDrawPile = ClientInstance.class.prepareDrawPile
 end
+
+-- Route the named built-in skin downloader to the local responsive frontend.
+-- Only runtime menu metadata changes; packages and their checksums stay intact.
+for _, package in pairs((Fk and Fk.packages) or {}) do
+  for _, page in ipairs(package.customPages or {}) do
+    local qml = page.qml
+    if qml and qml.uri == "LunarLtk.Pages" and qml.name == "SkinSetting" then
+      page.qml = {url = "card-counter/SkinSetting.qml"}
+    end
+  end
+end

@@ -185,6 +185,15 @@ Flickable {
   } else if (path == "Fk/Pages/Lobby/BGSetting.qml") {
     text.replace("*.mp4\"", "*.mp4)\"");
     text.replace("*.jpeg *.gif", "*.jpeg *.heic *.heif *.gif");
+    text.replace("    id: fdialog", R"QML(    id: fdialog
+    property var nativeResult: Connections {
+      target: Backend
+      function onBackgroundPicked(key, file, error) {
+        if (key !== fdialog.configKey) return;
+        if (file) { Config[key] = file; Config.saveConf(); }
+        if (error) Backend.showDialog("Error", error);
+      }
+    })QML");
     text.replace("        fdialog.open();", R"QML(        if (typeof Backend.pickBackground === "function" && ["lobbyBg","roomBg","ladyImg"].indexOf(fdialog.configKey)>=0)
           Backend.pickBackground(fdialog.configKey);
         else fdialog.open();)QML");

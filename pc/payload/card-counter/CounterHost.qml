@@ -11,7 +11,7 @@ Item {
   objectName: "fkCounterHost"
   property var currentScene: null
   property string revealFocusSkill: ""
-  onCurrentSceneChanged: { revealFocusSkill=""; playerActions.close(); syncPlayerActions(); }
+  onCurrentSceneChanged: { cancelPresentQueue(); revealFocusSkill=""; playerActions.close(); syncPlayerActions(); }
   property var playerActionWatchers: []
   readonly property var actionRoomModel: currentScene && currentScene.dataModel &&
     ("playersChanged" in currentScene.dataModel || "playerAdded" in currentScene.dataModel) ? currentScene.dataModel : null
@@ -24,16 +24,16 @@ Item {
   Connections {
     target: host.currentScene
     ignoreUnknownSignals: true
-    function onVisibleChanged() { if (!host.currentScene.visible) playerActions.close(); }
+    function onVisibleChanged() { if (!host.currentScene.visible) {host.cancelPresentQueue();playerActions.close();} }
   }
   Connections {
     target: host.Window.window
-    function onActiveChanged() { if (!host.Window.window.active) playerActions.close(); }
+    function onActiveChanged() { if (!host.Window.window.active) {host.cancelPresentQueue();playerActions.close();} }
   }
   Connections {
     target: Config
     ignoreUnknownSignals: true
-    function onReplayingChanged() { if (Config.replaying) playerActions.close(); }
+    function onReplayingChanged() { if (Config.replaying) {host.cancelPresentQueue();playerActions.close();} }
   }
   readonly property var activeRoomScene: Ltk.roomScene || null
   onActiveRoomSceneChanged: Qt.callLater(host.syncScene)
@@ -44,6 +44,15 @@ Item {
   property var clientContext: typeof ClientInstance !== "undefined" ? ClientInstance : null
   property bool bootstrapReady: false
   property bool settingsReady: false
+  function prepareSkinMenu(model) {
+    if (!model || typeof model.get !== "function" || typeof model.setProperty !== "function" || model.count > 512) return;
+    for (let i=0; i<model.count; i++) {
+      const row=model.get(i);
+      if (row.qml && row.qml.uri === "LunarLtk.Pages" && row.qml.name === "SkinSetting")
+        model.setProperty(i,"qml",{url:"card-counter/SkinSetting.qml"});
+      if (row.pages) prepareSkinMenu(row.pages);
+    }
+  }
   // Follow the stock StackView without walking its full object tree each second.
   property var navigationRoot: null
   readonly property var navigationStack: navigationRoot
@@ -216,7 +225,7 @@ Item {
       Layout.preferredWidth: 56; Layout.preferredHeight: 44
       visible: !Config.replaying
       ToolTip.visible: hovered
-      ToolTip.text: "选择玩家，按住送花或砸蛋可连续发送"
+      ToolTip.text: "点按向全员送花或砸蛋，砸蛋排除自己"
       onClicked: host.showPlayerActions(null)
     }
   }
@@ -272,69 +281,94 @@ Item {
     playerActions.targetModel=model;
     playerActions.open();
   }
-  function sendPresent(kind, keepOpen) {
-    const model=playerActions.targetModel;
-    if(presentCooldown.running || Config.replaying || !currentScene || !model ||
-       !Number.isInteger(model.playerid) || model.playerid===0 || model.playerid===-1 ||
-       ["Egg","Flower"].indexOf(kind)<0 || !clientContext) return false;
-    clientContext.notifyServer("Chat",{type:2,msg:"$@"+kind+":"+model.playerid});
-    presentCooldown.start(); if (!keepOpen) playerActions.close(); return true;
+  property var presentQueue: []
+  property var presentQueueScene: null
+  property string presentQueueKind: ""
+  property int presentRestSeconds: 0
+  function cancelPresentQueue() {
+    if (presentQueue.length) { presentRestSeconds=10; presentRest.restart(); }
+    presentSendTimer.stop(); presentQueue=[]; presentQueueScene=null;
   }
-  Timer {id:presentCooldown;interval:1500}
+  function sendNextPresent() {
+    if (!currentScene || currentScene !== presentQueueScene || Config.replaying || !clientContext ||
+        !currentScene.visible || (host.Window.window && !host.Window.window.active)) { cancelPresentQueue(); return; }
+    const valid = actionTargets().map(p => p.playerid);
+    const queue = presentQueue.slice();
+    let id = null;
+    while (queue.length) { const next = queue.shift(); if (valid.indexOf(next) >= 0) { id=next; break; } }
+    presentQueue=queue;
+    if (id !== null) clientContext.notifyServer("Chat",{type:2,msg:"$@"+presentQueueKind+":"+id});
+    if (!queue.length) { cancelPresentQueue(); presentRestSeconds=10; presentRest.restart(); }
+    else presentSendTimer.restart();
+  }
+  function sendPresent(kind, keepOpen) {
+    if (presentRestSeconds > 0 || presentQueue.length || !currentScene || Config.replaying || !clientContext ||
+        ["Egg","Flower"].indexOf(kind)<0) return false;
+    const selfId = typeof Self !== "undefined" && Self ? Self.id : 0;
+    const ids = [];
+    for (const p of actionTargets()) {
+      const id=p.playerid;
+      if (Number.isInteger(id) && id !== 0 && id !== -1 && ids.indexOf(id)<0 &&
+          (kind !== "Egg" || id !== selfId)) ids.push(id);
+    }
+    if (!ids.length) return false;
+    presentQueue=ids; presentQueueScene=currentScene; presentQueueKind=kind;
+    sendNextPresent(); return true;
+  }
+  // Preserve the server's per-message rate limit rather than flooding all ids
+  // in one frame. Only a finite click snapshot is sent; room changes cancel it.
+  Timer {id:presentSendTimer;interval:1600;onTriggered:host.sendNextPresent()}
+  Timer {id:presentRest;interval:1000;repeat:true;onTriggered:{
+    host.presentRestSeconds--; if (host.presentRestSeconds <= 0) stop();
+  }}
   Dialog {
     id:playerActions;objectName:"playerPresentActions"
     property var targetModel:null
     property var targets:[]
     parent:Overlay.overlay;anchors.centerIn:parent
-    width:Math.min(360,parent ? parent.width-24 : 360)
+    width:Math.min(280,parent ? parent.width-16 : 280)
+    height:Math.min(implicitHeight,parent ? parent.height-16 : implicitHeight)
+    padding:12; spacing:6
     modal:true;title:"武将互动";exit:Transition {}
+    header:Label {text:playerActions.title;font.pixelSize:16;font.bold:true;leftPadding:12;topPadding:10;bottomPadding:4}
     onClosed: {targetModel=null;targets=[];}
     contentItem:ColumnLayout {
+      spacing:6
       ComboBox {
         objectName: "presentTargetSelector"
-        Layout.fillWidth:true
+        Layout.fillWidth:true;Layout.preferredHeight:40;font.pixelSize:14
         model: playerActions.targets.map(p => p.screenName || (p.seatNumber ? "第 " + p.seatNumber + " 位玩家" : "玩家"))
         currentIndex: playerActions.targets.indexOf(playerActions.targetModel)
         onActivated: playerActions.targetModel=playerActions.targets[currentIndex]
       }
-      Label {Layout.fillWidth:true;wrapMode:Text.Wrap;text:"点击发送一次，按住连续发送；松手或移出按钮即停止"}
-      RowLayout {
-        PresentButton {objectName:"presentEggButton";text:"砸蛋";presentKind:"Egg"}
-        PresentButton {objectName:"presentFlowerButton";text:"送花";presentKind:"Flower"}
+      Label {
+        objectName:"presentCooldownHint";Layout.fillWidth:true;wrapMode:Text.Wrap;font.pixelSize:12
+        text:host.presentRestSeconds > 0 ? "冷却中："+host.presentRestSeconds+" 秒，送花／砸蛋共用冷却"
+          : host.presentQueue.length ? "正在依次发送，剩余 "+host.presentQueue.length+" 人"
+          : "点按向全员发送，砸蛋排除自己\n发送完成后冷却 10 秒"
       }
-      Button {text:"查看资料";Layout.fillWidth:true;onClicked:{
-        const model=playerActions.targetModel;playerActions.close();
-        if(host.currentScene && model)host.currentScene.showInfoPopup(Qt.createComponent("LunarLtk.Pages.InfoPopups","PlayerDetail"),{dataModel:model});
-      }}
-      Button {text:"取消";Layout.fillWidth:true;onClicked:playerActions.close()}
+      RowLayout {
+        spacing:8
+        PresentButton {objectName:"presentEggButton";text:"全员砸蛋";presentKind:"Egg"}
+        PresentButton {objectName:"presentFlowerButton";text:"全员送花";presentKind:"Flower"}
+      }
+      RowLayout {
+        spacing:8
+        Button {text:"查看资料";Layout.fillWidth:true;Layout.preferredHeight:38;font.pixelSize:13;onClicked:{
+          const model=playerActions.targetModel;playerActions.close();
+          if(host.currentScene && model)host.currentScene.showInfoPopup(Qt.createComponent("LunarLtk.Pages.InfoPopups","PlayerDetail"),{dataModel:model});
+        }}
+        Button {text:"关闭";Layout.fillWidth:true;Layout.preferredHeight:38;font.pixelSize:13;onClicked:playerActions.close()}
+      }
     }
   }
   component PresentButton: Button {
     property string presentKind
-    property int pressedTargetId: 0
-    property var pressedScene: null
-    Layout.fillWidth:true
-    enabled: playerActions.opened && !!host.currentScene && !Config.replaying && !!host.clientContext
-    autoRepeat: playerActions.opened
-    autoRepeatDelay: 0
-    autoRepeatInterval: 1600
-    onPressed: {
-      // AbstractButton repeats pressed/released as well as clicked. Keep the
-      // original target frozen until the physical press actually finishes.
-      if (!pressedScene) {
-        pressedTargetId=playerActions.targetModel ? playerActions.targetModel.playerid : 0;
-        pressedScene=host.currentScene;
-      }
-      if (pressedScene===host.currentScene && playerActions.targetModel &&
-          pressedTargetId===playerActions.targetModel.playerid) host.sendPresent(presentKind,true);
-    }
-    onClicked: {
-      if (pressed && pressedScene===host.currentScene && playerActions.targetModel &&
-          pressedTargetId===playerActions.targetModel.playerid) host.sendPresent(presentKind,true);
-    }
-    onReleased: Qt.callLater(function() { if (!pressed) pressedScene=null; })
-    onCanceled: pressedScene=null
-    onVisibleChanged: if (!visible) pressedScene=null
+    Layout.fillWidth:true;Layout.preferredHeight:44;font.pixelSize:14
+    enabled: playerActions.opened && !!host.currentScene && !Config.replaying && !!host.clientContext &&
+      host.presentRestSeconds === 0 && !host.presentQueue.length
+    autoRepeat: false
+    onClicked: host.sendPresent(presentKind,true)
   }
   function refreshCompatibility(rootItem) {
     // Periodic whole-tree scans must never run during a match or spectating.
@@ -350,6 +384,7 @@ Item {
     function scan(item, depth, serverPage, lobbyPage, chatBox) {
       if (!item || seen.has(item) || depth > 24 || ++visited > 12000) return;
       seen.add(item);
+      if ("model" in item) host.prepareSkinMenu(item.model);
       const type = String(item);
       if ("rightClicked" in item && "dataModel" in item && "playerid" in item && "general" in item && "goBackAnim" in item)
         host.attachPlayerActions(item);

@@ -21,6 +21,9 @@ public final class BackgroundImagesTest {
         exif.setAttribute(ExifInterface.TAG_ORIENTATION,"6");exif.saveAttributes();
         System.out.println("TEST: importing oriented JPEG");
         File imported = CounterBackgroundImages.importImage(null,Uri.fromFile(ordinary),root);
+        require(imported.getName().endsWith(".jpg"),"opaque photo uses JPEG");
+        File repeated = CounterBackgroundImages.importImage(null,Uri.fromFile(ordinary),root);
+        require(repeated.equals(imported),"repeated photo reuses content-addressed file");
         Bitmap decoded = BitmapFactory.decodeFile(imported.getAbsolutePath());
         require(decoded.getWidth()==40 && decoded.getHeight()==80,"EXIF orientation preserved");
         int pixel=decoded.getPixel(20,40);

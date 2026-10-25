@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#import "../../src/platform/iosbackgroundpresentation.h"
+#import "../../src/platform/iosbackgroundsession.h"
 
 @interface PickerController : UIViewController <PHPickerViewControllerDelegate>
 @property(nonatomic, strong) FKBackgroundPresentation *presentation;
@@ -21,30 +21,20 @@
   [self.view addSubview:self.result];
 }
 - (void)choose {
-  NSAssert(!self.presentation.window, @"Old picker window leaked");
-  PHPickerConfiguration *configuration = fkBackgroundPickerConfiguration(false);
-  NSAssert(configuration.selectionLimit == 1, @"Only one background may be selected");
-  PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:configuration];
-  picker.delegate = self;
-  self.presentation = [[FKBackgroundPresentation alloc] init];
-  NSAssert([self.presentation present:picker fromWindow:self.view.window], @"Picker failed to present");
-  // This is the actual production presenter, not a mock PhotosUI screen.
-  NSAssert(self.presentation.window != self.view.window, @"Picker shares the game window");
-  NSAssert(CATransform3DIsIdentity(self.presentation.window.layer.sublayerTransform), @"Picker is transformed");
-}
-- (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results {
-  self.callbacks++;
-  void (^finish)(BOOL) = ^(BOOL selected) {
-    NSString *message = [NSString stringWithFormat:@"%@ %ld", selected ? @"Selected" : @"Cancelled", (long)self.callbacks];
-    [self.presentation close:^{
-    NSAssert(!self.presentation.window, @"Picker window not released");
+  NSAssert(!fkActiveBackgroundSession, @"Old picker session leaked");
+  fkOpenBackgroundPicker(self.view.window, false, ^(NSURL *url, NSString *error) {
+    self.callbacks++;
+    NSAssert(!error, @"Unexpected session error: %@", error);
+    NSAssert(!fkActiveBackgroundSession, @"Session ownership not released");
     NSAssert(self.view.window.isKeyWindow, @"Game window not restored");
-    self.result.text = message;
-    }];
-  };
-  if (results.count) [self.presentation confirmSelection:finish];
-  else finish(NO);
+    if (url) {
+      NSAssert([NSFileManager.defaultManager fileExistsAtPath:url.path], @"Selected image not decoded");
+      [NSFileManager.defaultManager removeItemAtURL:url error:nil];
+    }
+    self.result.text = [NSString stringWithFormat:@"%@ %ld", url ? @"Selected" : @"Cancelled", (long)self.callbacks];
+  });
 }
+
 @end
 
 @interface PickerScene : UIResponder <UIWindowSceneDelegate>

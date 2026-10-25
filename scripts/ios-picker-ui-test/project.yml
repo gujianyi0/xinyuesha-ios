@@ -29,6 +29,7 @@ targets:
       - sdk: UIKit.framework
       - sdk: QuartzCore.framework
       - sdk: Foundation.framework
+      - sdk: ImageIO.framework
   PickerTests:
     type: bundle.ui-testing
     platform: iOS

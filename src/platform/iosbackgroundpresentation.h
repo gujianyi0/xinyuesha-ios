@@ -6,6 +6,18 @@
 // UIKit owns this window, including the search keyboard. Presenting inside Qt's
 // root controller shares its keyboard scrolling/gesture handling with PhotosUI.
 // Do not change PHPicker's system-owned view hierarchy, alpha or transforms.
+@interface FKBackgroundHost : UIViewController
+@property(nonatomic, copy) void (^whenVisible)(void);
+@end
+@implementation FKBackgroundHost
+- (void)viewDidAppear:(BOOL)animated {
+  [super viewDidAppear:animated];
+  void (^ready)(void) = self.whenVisible;
+  self.whenVisible = nil;
+  if (ready) ready();
+}
+@end
+
 @interface FKBackgroundPresentation : NSObject
 @property(nonatomic, strong) UIWindow *window;
 @property(nonatomic, weak) UIWindow *previousWindow;
@@ -27,17 +39,19 @@
     : [[UIWindow alloc] initWithFrame:previous.bounds];
   if (!previous.windowScene) window.screen = previous.screen;
   window.windowLevel = previous.windowLevel + 1;
-  UIViewController *host = [[UIViewController alloc] init];
+  FKBackgroundHost *host = [[FKBackgroundHost alloc] init];
   host.view.backgroundColor = UIColor.systemBackgroundColor;
   window.rootViewController = host;
   self.window = window;
-  [window makeKeyAndVisible];
   picker.modalPresentationStyle = UIModalPresentationFullScreen;
-  [host presentViewController:picker animated:YES completion:nil];
-  // UIKit establishes presentingViewController during its transition. A nil
-  // value in this call stack is not rejection: checking it here cancels a valid
-  // presentation before PhotosUI can become interactive. The caller checks on
-  // the next main-loop turn and owns the asynchronous failure cleanup.
+  // The window must finish joining UIKit's hierarchy before presenting. A
+  // main-queue hop is not a view-appearance guarantee, especially under Qt.
+  __weak FKBackgroundHost *weakHost = host;
+  host.whenVisible = ^{
+    FKBackgroundHost *liveHost = weakHost;
+    if (liveHost.view.window) [liveHost presentViewController:picker animated:YES completion:nil];
+  };
+  [window makeKeyAndVisible];
   return YES;
 }
 - (void)confirmSelection:(void (^)(BOOL))finished {

@@ -125,17 +125,30 @@ public final class CounterBackgroundImages {
             // A software ARGB target normalizes wide-gamut/HDR metadata to a
             // conventional SDR image that Qt can load on all supported devices.
             normalized = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            normalized.setHasAlpha(oriented.hasAlpha());
             new Canvas(normalized).drawBitmap(oriented, null, new android.graphics.Rect(0,0,width,height), new Paint(Paint.FILTER_BITMAP_FLAG));
             File directory = new File(root.getCanonicalFile(), "assets/backgrounds");
             if (!directory.getCanonicalPath().startsWith(root.getCanonicalPath() + File.separator)
                     || java.nio.file.Files.isSymbolicLink(directory.toPath())) throw new IOException("Invalid image directory");
             if (!directory.isDirectory() && !directory.mkdirs()) throw new IOException("Image directory unavailable");
-            File image = new File(directory, "selected-" + UUID.randomUUID() + ".png");
-            stage = new File(directory, image.getName() + ".new");
+            boolean opaque = !oriented.hasAlpha();
+            String suffix = opaque ? ".jpg" : ".png";
+            stage = new File(directory, "selected-" + UUID.randomUUID() + ".new");
             try (FileOutputStream output = new FileOutputStream(stage)) {
-                if (!normalized.compress(Bitmap.CompressFormat.PNG, 100, output)) throw new IOException("Image encode failed");
+                if (!normalized.compress(opaque ? Bitmap.CompressFormat.JPEG : Bitmap.CompressFormat.PNG, opaque ? 90 : 100, output)) throw new IOException("Image encode failed");
                 output.getFD().sync();
             }
+            java.security.MessageDigest hash = java.security.MessageDigest.getInstance("SHA-256");
+            try (InputStream bytes = new java.io.FileInputStream(stage)) {
+                byte[] buffer = new byte[65536]; int count;
+                while ((count = bytes.read(buffer)) != -1) hash.update(buffer, 0, count);
+            }
+            StringBuilder key = new StringBuilder();
+            for (byte value : hash.digest()) key.append(String.format(java.util.Locale.ROOT, "%02x", value & 255));
+            File image = new File(directory, key.toString() + suffix);
+            if (java.nio.file.Files.isSymbolicLink(image.toPath())) throw new IOException("Invalid image target");
+            // The key is a digest of these exact encoded bytes. Atomic rename
+            // replaces that same owned destination, never an arbitrary path.
             Os.rename(stage.getAbsolutePath(), image.getAbsolutePath()); stage = null;
             return image;
         } finally {

@@ -24,10 +24,20 @@ QString QmlBackend::importBackground(const QString &source) {
     suffix = "image";
   const QString directory = QDir::currentPath() + "/assets/backgrounds";
   if (!QDir().mkpath(directory)) return {};
-  const auto key = QCryptographicHash::hash(source.toUtf8(),QCryptographicHash::Sha256).toHex();
-  const QString dest = directory + '/' + key + '.' + suffix;
   QFile file(input);
   if (!file.open(QIODevice::ReadOnly)) return {};
+  QCryptographicHash hash(QCryptographicHash::Sha256);
+  if (!hash.addData(&file) || !file.seek(0)) return {};
+  // Photo-picker temporary URLs change on every selection. Address imported
+  // media by its contents so repeatedly selecting a photo does not keep copies.
+  const QString dest = directory + '/' + hash.result().toHex() + '.' + suffix;
+  if (QFileInfo(dest).isSymLink() || QFileInfo(directory).isSymLink()) return {};
+  if (QFileInfo(dest).isFile()) {
+    QFile existing(dest);
+    QCryptographicHash check(QCryptographicHash::Sha256);
+    if (existing.open(QIODevice::ReadOnly) && check.addData(&existing) && check.result() == hash.result())
+      return QUrl::fromLocalFile(dest).toString();
+  }
   QSaveFile output(dest);
   if (!output.open(QIODevice::WriteOnly)) return {};
   while (!file.atEnd()) {

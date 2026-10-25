@@ -1205,7 +1205,7 @@ Control {
   }
   SocialDialog {
     id: serviceSettings; objectName: "socialServiceSettings"
-    title: "好友与显示设置 · 20261025.3"; anchors.centerIn: parent; modal: true; exit: Transition {}
+    title: "好友与显示设置 · 20261025.4"; anchors.centerIn: parent; modal: true; exit: Transition {}
     width: Math.min(host.width - 36, 650)
     contentItem: ColumnLayout {
       spacing: 14

@@ -45,6 +45,9 @@ def main():
                 if name == 'classes2.dex':data = dex
                 elif name.startswith('assets/res/') and name[11:] in payload:
                     relative = name[11:];data = payload[relative];present.add(relative)
+                if name in ('classes.dex','classes2.dex'):
+                    item.compress_type = zipfile.ZIP_DEFLATED
+                    item._compresslevel = 9
                 new.writestr(item,data)
             for relative,data in payload.items():
                 if relative not in present:new.writestr('assets/res/'+relative,data,compress_type=zipfile.ZIP_DEFLATED)

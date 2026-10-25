@@ -51,6 +51,7 @@ int main(int argc, char **argv) {
   require(room.contains("parent: Overlay.overlay"), "confirmations have a stable game overlay parent");
   const auto bg = fkIosRuntimePayload::read(output+"/Fk/Pages/Lobby/BGSetting.qml");
   require(bg.contains("Backend.pickBackground(fdialog.configKey)"), "background image buttons use system photo picker");
+  require(bg.contains("function onBackgroundPicked") && bg.contains("Config[key] = file"), "native picker result reaches the selected background config");
   const auto replay = fkIosRuntimePayload::read(output+"/Fk/Pages/Replay/ReplayRecordingFile.qml");
   require(replay.contains("replayNoteField") && !replay.contains("placeholderText: Lua.tr(\"Note\")"), "replay note uses an inline placeholder");
   const auto key = fkSocialAccount::deriveKey("test:9527", QString::fromUtf8("测试用户"), "test-only-password");

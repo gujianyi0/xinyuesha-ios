@@ -24,6 +24,7 @@ jobs:
         run: |
           python3 scripts/test_core_repository.py
           python3 scripts/test_package_ipa.py
+          python3 scripts/test_background_storage.py
           c++ -std=c++17 -fPIC scripts/test_ios_core_repair.cpp -Isrc \
             $(pkg-config --cflags --libs Qt6Core libgit2) -o "$RUNNER_TEMP/test-core-repair"
           "$RUNNER_TEMP/test-core-repair"
@@ -58,6 +59,7 @@ jobs:
           python3 scripts/test_ios_general_detail.py
           python3 scripts/test_ios_background_chat.py
           python3 scripts/test_ios_window_focus.py
+          python3 scripts/test_ios_background_picker.py
           python3 scripts/test_ios_feedback_dialogs.py
           python3 scripts/test_ios_marks.py
       - name: Verify current server core UI without modifying the bundled core
@@ -77,6 +79,7 @@ jobs:
           python3 scripts/test_ios_general_detail.py
           python3 scripts/test_ios_background_chat.py
           python3 scripts/test_ios_window_focus.py
+          python3 scripts/test_ios_background_picker.py
           python3 scripts/test_ios_feedback_dialogs.py
           python3 scripts/test_ios_marks.py
       - uses: actions/upload-artifact@v4
