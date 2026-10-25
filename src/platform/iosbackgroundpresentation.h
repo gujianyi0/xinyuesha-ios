@@ -33,7 +33,11 @@
   [window makeKeyAndVisible];
   picker.modalPresentationStyle = UIModalPresentationFullScreen;
   [host presentViewController:picker animated:YES completion:nil];
-  return picker.presentingViewController != nil;
+  // UIKit establishes presentingViewController during its transition. A nil
+  // value in this call stack is not rejection: checking it here cancels a valid
+  // presentation before PhotosUI can become interactive. The caller checks on
+  // the next main-loop turn and owns the asynchronous failure cleanup.
+  return YES;
 }
 - (void)close:(void (^)(void))finished {
   NSAssert(NSThread.isMainThread, @"PhotosUI must be dismissed on the main thread");
