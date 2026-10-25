@@ -16,7 +16,14 @@ Android、Windows PC、iOS 三端客户端，基于 [FreeKill / 新月杀](https
 
 安装游戏请下载上表对应文件。GitHub 的 **Code → Download ZIP** 是工程源码，不是完整的安装包。
 
-**2026-10-25 更新：iOS 20261025.3；Android / PC 20261024.4。** 本轮仅更新独立 IPA 和 iOS 安装整合包，Android / PC 包保持原校验值。文件名沿用 `20261019`，按 [SHA256 清单](downloads/SHA256SUMS.txt) 区分。iOS 源码 `9c736ff`，原生构建及 PhotosUI 界面测试：[40177156872](https://github.com/gujianyi0/xinyuesha-ios/actions/runs/40177156872)；共同功能回归：[40176144052](https://github.com/gujianyi0/xinyuesha-ios/actions/runs/40176144052)（共同界面和对应测试源码与本轮一致）。
+**2026-10-25 更新：Android 20261025.1；iOS 20261025.3；PC 20261024.4。** 本轮仅更新 Android APK，iOS / PC 包保持原校验值。文件名沿用 `20261019`，按 [SHA256 清单](downloads/SHA256SUMS.txt) 区分。Android 源码 `b7102f4`，[共同功能与手势回归 40179223058](https://github.com/gujianyi0/xinyuesha-ios/actions/runs/40179223058) 全部通过。
+
+## 2026-10-25 Android 更新（20261025.1）
+
+- 缩小武将互动面板，查看资料与关闭按钮横向排列。
+- 按住送花／砸蛋最多连送 5 秒；连送结束后共用 10 秒冷却，显示倒计时。关闭重开、切换玩家或互动种类不重置冷却。
+- 单击仍发送一次，保留原版发送间隔；松手、移出或关闭即停止。
+- 原生程序、DEX、权限和游戏核心保持原样，覆盖安装保留数据。手机体验仍待复测，本轮未操作手机。详见 [验证记录](docs/Android互动面板与冷却-20261025.md)。
 
 ## 2026-10-25 iOS 更新（20261025.3）
 
