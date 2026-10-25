@@ -108,7 +108,7 @@ jobs:
           path: ${{ runner.temp }}/picker-test.xcresult
   build:
     name: Build iOS arm64
-    needs: [test-core-repair, test-picker]
+    needs: test-core-repair
     runs-on: macos-14
     timeout-minutes: 120
 
