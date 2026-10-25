@@ -1,5 +1,7 @@
 name: BackgroundPickerTest
 options:
+  xcodeVersion: '15.4'
+  projectFormat: xcode15_3
   bundleIdPrefix: com.cui.freekill.tests
   deploymentTarget:
     iOS: '16.0'
