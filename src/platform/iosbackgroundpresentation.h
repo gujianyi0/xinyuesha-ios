@@ -10,6 +10,7 @@
 @property(nonatomic, strong) UIWindow *window;
 @property(nonatomic, weak) UIWindow *previousWindow;
 - (BOOL)present:(PHPickerViewController *)picker fromWindow:(UIWindow *)previous;
+- (void)confirmSelection:(void (^)(BOOL))finished;
 - (void)close:(void (^)(void))finished;
 @end
 
@@ -39,6 +40,19 @@
   // the next main-loop turn and owns the asynchronous failure cleanup.
   return YES;
 }
+- (void)confirmSelection:(void (^)(BOOL))finished {
+  UIViewController *host = self.window.rootViewController;
+  [self.window endEditing:YES];
+  [host dismissViewControllerAnimated:YES completion:^{
+    UIAlertController *confirm = [UIAlertController alertControllerWithTitle:@"使用所选背景？"
+      message:@"点击确认后保存，取消则保留原背景。" preferredStyle:UIAlertControllerStyleAlert];
+    [confirm addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel
+      handler:^(UIAlertAction *) { finished(NO); }]];
+    [confirm addAction:[UIAlertAction actionWithTitle:@"确认" style:UIAlertActionStyleDefault
+      handler:^(UIAlertAction *) { finished(YES); }]];
+    [host presentViewController:confirm animated:YES completion:nil];
+  }];
+}
 - (void)close:(void (^)(void))finished {
   NSAssert(NSThread.isMainThread, @"PhotosUI must be dismissed on the main thread");
   UIWindow *window = self.window;
@@ -66,8 +80,7 @@ static inline PHPickerConfiguration *fkBackgroundPickerConfiguration(bool allowV
     ? [PHPickerFilter anyFilterMatchingSubfilters:@[PHPickerFilter.imagesFilter, PHPickerFilter.videosFilter]]
     : PHPickerFilter.imagesFilter;
   configuration.selectionLimit = 1;
-  // Ordered selection retains PhotosUI's explicit Add/Done action even for one
-  // background, rather than immediately importing when a thumbnail is tapped.
-  configuration.selection = PHPickerConfigurationSelectionOrdered;
+  // Single selection finishes immediately on iOS 16/17, regardless of ordered
+  // selection. The session supplies an explicit confirmation after the pick.
   return configuration;
 }

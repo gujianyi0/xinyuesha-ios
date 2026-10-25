@@ -54,6 +54,8 @@
   QString filePath = outputPath;
   if (movie) filePath.replace(".png", ".mov");
   const QString path = filePath;
+  [presentation confirmSelection:^(BOOL accepted) {
+  if (!accepted) { [presentation close:^{ done({}, {}); }]; return; }
   [presentation close:^{
   [provider loadFileRepresentationForTypeIdentifier:movie ? @"public.movie" : @"public.image" completionHandler:^(NSURL *url, NSError *error) {
     bool ok = false;
@@ -83,6 +85,7 @@
     dispatch_async(dispatch_get_main_queue(), ^{
       done(ok ? QUrl::fromLocalFile(path) : QUrl(), ok ? QString() : QStringLiteral("无法读取所选图片，请换一张图片重试"));
     });
+  }];
   }];
   }];
 }

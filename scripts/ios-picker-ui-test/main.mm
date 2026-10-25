@@ -23,8 +23,7 @@
 - (void)choose {
   NSAssert(!self.presentation.window, @"Old picker window leaked");
   PHPickerConfiguration *configuration = fkBackgroundPickerConfiguration(false);
-  NSAssert(configuration.selectionLimit == 1 && configuration.selection == PHPickerConfigurationSelectionOrdered,
-           @"Single background needs explicit confirmation");
+  NSAssert(configuration.selectionLimit == 1, @"Only one background may be selected");
   PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:configuration];
   picker.delegate = self;
   self.presentation = [[FKBackgroundPresentation alloc] init];
@@ -35,12 +34,16 @@
 }
 - (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results {
   self.callbacks++;
-  NSString *message = [NSString stringWithFormat:@"%@ %ld", results.count ? @"Selected" : @"Cancelled", (long)self.callbacks];
-  [self.presentation close:^{
+  void (^finish)(BOOL) = ^(BOOL selected) {
+    NSString *message = [NSString stringWithFormat:@"%@ %ld", selected ? @"Selected" : @"Cancelled", (long)self.callbacks];
+    [self.presentation close:^{
     NSAssert(!self.presentation.window, @"Picker window not released");
     NSAssert(self.view.window.isKeyWindow, @"Game window not restored");
     self.result.text = message;
-  }];
+    }];
+  };
+  if (results.count) [self.presentation confirmSelection:finish];
+  else finish(NO);
 }
 @end
 

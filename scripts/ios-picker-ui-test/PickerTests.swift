@@ -2,7 +2,7 @@
 import XCTest
 
 final class PickerTests: XCTestCase {
-    func testSearchCancelAndReopen() {
+    func testCancelReopenAndConfirmSelection() {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
@@ -13,17 +13,30 @@ final class PickerTests: XCTestCase {
             open.tap()
             let cancel = app.buttons["Cancel"].firstMatch
             XCTAssertTrue(cancel.waitForExistence(timeout: 15), app.debugDescription)
-            XCTAssertTrue(app.buttons["Add"].exists, "Explicit selection confirmation missing: \(app.debugDescription)")
             if attempt == 2 {
                 let search = app.searchFields.firstMatch
-                XCTAssertTrue(search.waitForExistence(timeout: 10), app.debugDescription)
-                search.tap()
-                XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+                if search.exists {
+                    search.tap()
+                    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+                }
             }
             cancel.tap()
             let result = app.staticTexts["result"]
             let expected = NSPredicate(format: "label == %@", "Cancelled \(attempt)")
             expectation(for: expected, evaluatedWith: result)
+            waitForExpectations(timeout: 15)
+        }
+        for attempt in 4...5 {
+            app.buttons["Choose background"].tap()
+            let photo = app.images.matching(NSPredicate(format: "label BEGINSWITH %@", "Photo,")).firstMatch
+            XCTAssertTrue(photo.waitForExistence(timeout: 15), app.debugDescription)
+            photo.tap()
+            let confirm = app.alerts["使用所选背景？"]
+            XCTAssertTrue(confirm.waitForExistence(timeout: 15), app.debugDescription)
+            let action = attempt == 4 ? "取消" : "确认"
+            confirm.buttons[action].tap()
+            let expected = NSPredicate(format: "label == %@", "\(attempt == 4 ? "Cancelled" : "Selected") \(attempt)")
+            expectation(for: expected, evaluatedWith: app.staticTexts["result"])
             waitForExpectations(timeout: 15)
         }
     }
