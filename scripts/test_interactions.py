@@ -3,14 +3,18 @@ import argparse,json,os,shutil,tempfile,time
 from pathlib import Path
 os.environ.setdefault('QT_QPA_PLATFORM','offscreen')
 os.environ.setdefault('QT_QUICK_BACKEND','software')
+os.environ.setdefault('QT_QUICK_CONTROLS_STYLE','Material')
 from PySide6.QtCore import QObject,QUrl,QMetaObject,Q_RETURN_ARG,QPoint,QPointF,Qt,QEventLoop,QTimer,QEvent,qInstallMessageHandler
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication,QFontDatabase,QFont
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtTest import QTest
 p=argparse.ArgumentParser();p.add_argument('--payload',type=Path,required=True);p.add_argument('--work-dir',type=Path,required=True);a=p.parse_args();a.work_dir.mkdir(parents=True,exist_ok=True)
 C=Path(__file__).resolve().parents[1];messages=[]
 qInstallMessageHandler(lambda kind,context,message:messages.append(message));app=QGuiApplication([])
+font=Path('C:/Windows/Fonts/msyh.ttc')
+if font.exists():
+ index=QFontDatabase.addApplicationFont(str(font));app.setFont(QFont(QFontDatabase.applicationFontFamilies(index)[0]))
 with tempfile.TemporaryDirectory(dir=a.work_dir) as temp:
  B=Path(temp)
  def put(name,text):
