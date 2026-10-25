@@ -66,7 +66,8 @@ Window {
  function switchTargetId(){target.playerid=9;}
  function restoreTargetId(){target.playerid=2;}
  function resetSent(){sent=[];}
- function state(){return JSON.stringify({sent:sent,watchers:counter.playerActionWatchers.length,stockOpens:stockOpens,stockCloses:stockCloses});}
+ function forcePresent(){counter.sendPresent("Flower",true);}
+ function state(){return JSON.stringify({rest:("presentRestSeconds" in counter ? counter.presentRestSeconds : 0),sent:sent,watchers:counter.playerActionWatchers.length,stockOpens:stockOpens,stockCloses:stockCloses});}
 }''')
  engine=QQmlApplicationEngine();engine.addImportPath(str(B));engine.rootContext().setContextProperty('ClientInstance',None);engine.rootContext().setContextProperty('Self',None)
  engine.load(QUrl.fromLocalFile(str(B/'Main.qml')));assert engine.rootObjects(),messages;win=engine.rootObjects()[0]
@@ -78,6 +79,8 @@ Window {
    QMetaObject.invokeMethod(win.findChild(QObject,'playerPresentActions'),'close');pump(80);return
   QMetaObject.invokeMethod(win,name);pump(300 if name=='menu' else 80)
  def state():return json.loads(QMetaObject.invokeMethod(win,'state',Q_RETURN_ARG('QVariant')))
+ def wait_rest():
+  while state()['rest'] > 0:pump(1020)
  def center(item):
   point=item.mapToScene(QPointF(item.width()/2,item.height()/2));return QPoint(round(point.x()),round(point.y()))
  def click(item):QTest.mouseClick(win,Qt.LeftButton,Qt.NoModifier,center(item));pump(100)
@@ -96,10 +99,12 @@ Window {
  held=state()['sent'];assert len(held)==2 and all(x['data']['msg']=='$@Flower:2' for x in held),held
  assert held[1]['time']-held[0]['time']>=1500,held
  pump(1750);assert state()['sent']==held,'release must stop repeating'
+ wait_rest()
  call('resetSent');point=center(egg)
  device=QTest.createTouchDevice();QTest.touchEvent(win,device).press(0,point,win).commit();pump(2400);QTest.touchEvent(win,device).release(0,point,win).commit();pump(100)
  touch=state()['sent'];assert len(touch)==2 and all(x['data']['msg']=='$@Egg:2' for x in touch),touch
  pump(1750);assert state()['sent']==touch,'touch release must stop repeating'
+ wait_rest()
  call('resetSent');QTest.mousePress(win,Qt.LeftButton,Qt.NoModifier,center(flower));pump(750);QTest.mouseMove(win,QPoint(10,480));pump(1900);QTest.mouseRelease(win,Qt.LeftButton,Qt.NoModifier,QPoint(10,480));pump(80)
  moved=state()['sent'];assert len(moved)==1,'moving off the button must stop repeating'
  pump(1600);call('menu');call('resetSent')
@@ -118,9 +123,27 @@ Window {
  assert len(changed)==1 and state()['sent']==changed,('a held action must never move to another target id',changed,state())
  call('restoreTargetId');call('menu');pump(1600);call('resetSent');QTest.mousePress(win,Qt.LeftButton,Qt.NoModifier,center(flower));pump(750);call('leave');left=state()['sent'];pump(1900);QTest.mouseRelease(win,Qt.LeftButton,Qt.NoModifier,center(flower));pump(80)
  assert len(left)==1 and state()['sent']==left and not actions.property('visible') and state()['watchers']==0,'leaving must stop repeats and dispose player watchers'
+ burst_result={}
+ # Only the Android payload has this new policy; retain older platform behavior.
+ counter=win.findChild(QObject,'fkCounterHost')
+ if counter.metaObject().indexOfProperty('presentRestSeconds') >= 0:
+  call('enter');call('menu');wait_rest();pump(1600);call('resetSent')
+  assert actions.property('width') <= 280 and actions.property('height') <= 260, (actions.property('width'),actions.property('height'))
+  QTest.mousePress(win,Qt.LeftButton,Qt.NoModifier,center(egg));pump(5350)
+  burst=state()['sent'];assert len(burst)==4,burst
+  assert burst[-1]['time']-burst[0]['time'] < 5000,burst
+  assert 9 <= state()['rest'] <= 10 and not egg.property('enabled') and not flower.property('enabled'),state()
+  win.grabWindow().save(str(a.work_dir/'interaction-cooldown.png'))
+  QTest.mouseRelease(win,Qt.LeftButton,Qt.NoModifier,center(egg));pump(80)
+  call('closeMenu');call('menu');call('switchTargetId');call('forcePresent');pump(250)
+  assert state()['sent']==burst and not flower.property('enabled'), 'Reopen/target/other gift bypassed shared cooldown'
+  wait_rest();assert state()['sent']==burst, 'Holding through expiry must not resume automatically'
+  call('restoreTargetId');click(flower)
+  assert len(state()['sent'])==len(burst)+1 and state()['sent'][-1]['data']['msg']=='$@Flower:2',state()
+  burst_result={'max_burst_ms':5000,'cooldown_ms':10000,'burst_sends':len(burst),'shared_cooldown':True,'reopen_and_target_bypass_blocked':True,'resume_requires_new_press':True,'dialog_width':actions.property('width'),'dialog_height':actions.property('height')}
  call('enter');call('menu');call('replay');assert not actions.property('visible'),'replays cannot send interactions'
  errors=[m for m in messages if any(s in m for s in ['TypeError','ReferenceError','Cannot assign','Unable to assign','Binding loop','is not a type'])]
  assert not errors,errors
- result={'delayed_photo':True,'replacement_photo':True,'added_player':True,'chat_entry':True,'mouse_hold_count':len(held),'touch_hold_count':len(touch),'minimum_interval_ms':held[1]['time']-held[0]['time'],'release_cancel':True,'move_out_cancel':True,'close_cancel':True,'target_change_guard':True,'leave_cleanup':True,'replay_guard':True,'errors':errors}
+ result={'burst_policy':burst_result,'delayed_photo':True,'replacement_photo':True,'added_player':True,'chat_entry':True,'mouse_hold_count':len(held),'touch_hold_count':len(touch),'minimum_interval_ms':held[1]['time']-held[0]['time'],'release_cancel':True,'move_out_cancel':True,'close_cancel':True,'target_change_guard':True,'leave_cleanup':True,'replay_guard':True,'errors':errors}
  (a.work_dir/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf8');print(json.dumps(result,ensure_ascii=False,indent=2))
  win.close();engine.deleteLater();pump(30)

@@ -272,55 +272,86 @@ Item {
     playerActions.targetModel=model;
     playerActions.open();
   }
+  property double presentBurstDeadline: 0
+  property bool presentBurstRepeated: false
+  property int presentRestSeconds: 0
+  function finishPresentBurst(forceRest) {
+    const active = presentBurstDeadline > 0;
+    const rest = active && (forceRest || presentBurstRepeated);
+    presentBurstLimit.stop(); presentBurstDeadline = 0; presentBurstRepeated = false;
+    if (rest) { presentRestSeconds = 10; presentRest.start(); }
+  }
   function sendPresent(kind, keepOpen) {
     const model=playerActions.targetModel;
-    if(presentCooldown.running || Config.replaying || !currentScene || !model ||
+    if (presentBurstDeadline && Date.now() >= presentBurstDeadline) finishPresentBurst(true);
+    if(presentRestSeconds > 0 || presentCooldown.running || Config.replaying || !currentScene || !model ||
        !Number.isInteger(model.playerid) || model.playerid===0 || model.playerid===-1 ||
        ["Egg","Flower"].indexOf(kind)<0 || !clientContext) return false;
+    if (!presentBurstDeadline) {
+      presentBurstDeadline = Date.now() + 5000; presentBurstRepeated = false; presentBurstLimit.start();
+    } else presentBurstRepeated = true;
     clientContext.notifyServer("Chat",{type:2,msg:"$@"+kind+":"+model.playerid});
     presentCooldown.start(); if (!keepOpen) playerActions.close(); return true;
   }
   Timer {id:presentCooldown;interval:1500}
+  Timer {id:presentBurstLimit;interval:5000;onTriggered:host.finishPresentBurst(true)}
+  // Only runs during the ten-second rest, never while the game is idle.
+  Timer {id:presentRest;interval:1000;repeat:true;onTriggered:{
+    host.presentRestSeconds--; if (host.presentRestSeconds <= 0) stop();
+  }}
   Dialog {
     id:playerActions;objectName:"playerPresentActions"
     property var targetModel:null
     property var targets:[]
     parent:Overlay.overlay;anchors.centerIn:parent
-    width:Math.min(360,parent ? parent.width-24 : 360)
+    width:Math.min(280,parent ? parent.width-16 : 280)
+    height:Math.min(implicitHeight,parent ? parent.height-16 : implicitHeight)
+    padding:12; spacing:6
     modal:true;title:"武将互动";exit:Transition {}
+    header:Label {text:playerActions.title;font.pixelSize:16;font.bold:true;leftPadding:12;topPadding:10;bottomPadding:4}
+    onAboutToHide: host.finishPresentBurst(false)
     onClosed: {targetModel=null;targets=[];}
     contentItem:ColumnLayout {
+      spacing:6
       ComboBox {
         objectName: "presentTargetSelector"
-        Layout.fillWidth:true
+        Layout.fillWidth:true;Layout.preferredHeight:40;font.pixelSize:14
         model: playerActions.targets.map(p => p.screenName || (p.seatNumber ? "第 " + p.seatNumber + " 位玩家" : "玩家"))
         currentIndex: playerActions.targets.indexOf(playerActions.targetModel)
         onActivated: playerActions.targetModel=playerActions.targets[currentIndex]
       }
-      Label {Layout.fillWidth:true;wrapMode:Text.Wrap;text:"点击发送一次，按住连续发送；松手或移出按钮即停止"}
+      Label {
+        objectName:"presentCooldownHint";Layout.fillWidth:true;wrapMode:Text.Wrap;font.pixelSize:12
+        text:host.presentRestSeconds > 0 ? "冷却中："+host.presentRestSeconds+" 秒，送花／砸蛋共用冷却"
+          : "点击单送；按住连送最多 5 秒\n连送后冷却 10 秒，松手即停"
+      }
       RowLayout {
+        spacing:8
         PresentButton {objectName:"presentEggButton";text:"砸蛋";presentKind:"Egg"}
         PresentButton {objectName:"presentFlowerButton";text:"送花";presentKind:"Flower"}
       }
-      Button {text:"查看资料";Layout.fillWidth:true;onClicked:{
-        const model=playerActions.targetModel;playerActions.close();
-        if(host.currentScene && model)host.currentScene.showInfoPopup(Qt.createComponent("LunarLtk.Pages.InfoPopups","PlayerDetail"),{dataModel:model});
-      }}
-      Button {text:"取消";Layout.fillWidth:true;onClicked:playerActions.close()}
+      RowLayout {
+        spacing:8
+        Button {text:"查看资料";Layout.fillWidth:true;Layout.preferredHeight:38;font.pixelSize:13;onClicked:{
+          const model=playerActions.targetModel;playerActions.close();
+          if(host.currentScene && model)host.currentScene.showInfoPopup(Qt.createComponent("LunarLtk.Pages.InfoPopups","PlayerDetail"),{dataModel:model});
+        }}
+        Button {text:"关闭";Layout.fillWidth:true;Layout.preferredHeight:38;font.pixelSize:13;onClicked:playerActions.close()}
+      }
     }
   }
   component PresentButton: Button {
     property string presentKind
     property int pressedTargetId: 0
     property var pressedScene: null
-    Layout.fillWidth:true
-    enabled: playerActions.opened && !!host.currentScene && !Config.replaying && !!host.clientContext
+    Layout.fillWidth:true;Layout.preferredHeight:44;font.pixelSize:14
+    enabled: playerActions.opened && !!host.currentScene && !Config.replaying && !!host.clientContext && host.presentRestSeconds === 0
     autoRepeat: playerActions.opened
     autoRepeatDelay: 0
     autoRepeatInterval: 1600
     onPressed: {
-      // AbstractButton repeats pressed/released as well as clicked. Keep the
-      // original target frozen until the physical press actually finishes.
+      // Auto-repeat also emits pressed/released. Preserve the physical press's
+      // target and end a burst only when that physical press actually ends.
       if (!pressedScene) {
         pressedTargetId=playerActions.targetModel ? playerActions.targetModel.playerid : 0;
         pressedScene=host.currentScene;
@@ -332,9 +363,9 @@ Item {
       if (pressed && pressedScene===host.currentScene && playerActions.targetModel &&
           pressedTargetId===playerActions.targetModel.playerid) host.sendPresent(presentKind,true);
     }
-    onReleased: Qt.callLater(function() { if (!pressed) pressedScene=null; })
-    onCanceled: pressedScene=null
-    onVisibleChanged: if (!visible) pressedScene=null
+    onReleased: Qt.callLater(function() { if (!pressed) { pressedScene=null;host.finishPresentBurst(false); } })
+    onCanceled: {pressedScene=null;host.finishPresentBurst(false);}
+    onVisibleChanged: if (!visible) {pressedScene=null;host.finishPresentBurst(false);}
   }
   function refreshCompatibility(rootItem) {
     // Never walk the entire animated table from a periodic UI-thread callback.
