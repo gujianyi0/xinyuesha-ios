@@ -30,6 +30,9 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
     dependencies:
       - sdk: PhotosUI.framework
+      - sdk: UIKit.framework
+      - sdk: QuartzCore.framework
+      - sdk: Foundation.framework
   PickerTests:
     type: bundle.ui-testing
     platform: iOS

@@ -34,8 +34,9 @@
   // Programmatic/system dismissal need not invoke the picker delegate. Release
   // the backend's busy flag even on that path, without retaining the controller.
   auto done = std::exchange(completion, {});
+  FKBackgroundPresentation *presentation = self.presentation;
   if (done) dispatch_async(dispatch_get_main_queue(), ^{
-    done({}, QStringLiteral("相册已关闭，请重新选择"));
+    [presentation close:^{ done({}, QStringLiteral("相册已关闭，请重新选择")); }];
   });
 }
 - (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results {
@@ -111,8 +112,8 @@ void fkPickIosBackground(bool allowVideo, std::function<void(QUrl, QString)> com
   delegate->completion = std::move(completed);
   delegate->outputPath = QStandardPaths::writableLocation(QStandardPaths::TempLocation) + "/fk-background-" + QUuid::createUuid().toString(QUuid::Id128) + ".png";
   picker.delegate = delegate;
-  // PHPicker's delegate is weak; keep it for the controller's lifetime without
-  // a delegate -> controller retain cycle.
+  // PHPicker's delegate is weak. Own the session until selection/cancellation;
+  // close() tears down the window/root controller and releases this ownership.
   static const char ownerKey = 0;
   objc_setAssociatedObject(picker, &ownerKey, delegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   delegate.presentation = [[FKBackgroundPresentation alloc] init];
