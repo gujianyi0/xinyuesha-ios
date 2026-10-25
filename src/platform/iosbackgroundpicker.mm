@@ -3,6 +3,9 @@
 #include <QStandardPaths>
 #include <QUuid>
 #include <utility>
+#include <QGuiApplication>
+#include <QInputMethod>
+#import "iosbackgroundpresentation.h"
 #import <UIKit/UIKit.h>
 #import <PhotosUI/PhotosUI.h>
 #import <ImageIO/ImageIO.h>
@@ -14,13 +17,15 @@
   std::function<void(QUrl, QString)> completion;
   QString outputPath;
 }
+@property(nonatomic, strong) FKBackgroundPresentation *presentation;
 - (void)cancelPending;
 @end
 
 @implementation FKBackgroundPickerDelegate
 - (void)cancelPending {
   auto done = std::exchange(completion, {});
-  if (done) done({}, {});
+  if (!done) return;
+  [self.presentation close:^{ if (done) done({}, {}); }];
 }
 - (void)presentationControllerDidDismiss:(UIPresentationController *)controller {
   [self cancelPending];
@@ -36,13 +41,19 @@
 - (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results {
   auto done = std::exchange(completion, {});
   if (!done) return;
-  [picker dismissViewControllerAnimated:YES completion:nil];
-  if (results.count == 0) { done({}, {}); return; }
+  if (results.count == 0) {
+    [self.presentation close:^{ done({}, {}); }];
+    return;
+  }
+  // Release the native window before publishing a result back into QML. File
+  // decoding runs in the item-provider callback, never in a UIKit tap handler.
+  FKBackgroundPresentation *presentation = self.presentation;
   NSItemProvider *provider = results.firstObject.itemProvider;
   const bool movie = [provider hasItemConformingToTypeIdentifier:@"public.movie"];
   QString filePath = outputPath;
   if (movie) filePath.replace(".png", ".mov");
   const QString path = filePath;
+  [presentation close:^{
   [provider loadFileRepresentationForTypeIdentifier:movie ? @"public.movie" : @"public.image" completionHandler:^(NSURL *url, NSError *error) {
     bool ok = false;
     if (url && !error && movie) {
@@ -72,12 +83,18 @@
       done(ok ? QUrl::fromLocalFile(path) : QUrl(), ok ? QString() : QStringLiteral("无法读取所选图片，请换一张图片重试"));
     });
   }];
+  }];
 }
 @end
 
 void fkPickIosBackground(bool allowVideo, std::function<void(QUrl, QString)> completed) {
-  // Called by QML on the GUI thread. Follow the active window's presented
-  // controller; do not present through a detached Qt/native dialog controller.
+  // Finish Qt's current input delivery before handing focus to UIKit. In
+  // particular, do not leave a QML text responder active beneath PhotosUI.
+  if (QGuiApplication::inputMethod()) {
+    QGuiApplication::inputMethod()->reset();
+    QGuiApplication::inputMethod()->hide();
+  }
+  dispatch_async(dispatch_get_main_queue(), ^{
   UIWindow *window = nil;
   for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
     if (![scene isKindOfClass:UIWindowScene.class] || scene.activationState != UISceneActivationStateForegroundActive) continue;
@@ -85,15 +102,10 @@ void fkPickIosBackground(bool allowVideo, std::function<void(QUrl, QString)> com
       if (candidate.isKeyWindow) { window = candidate; break; }
     if (window) break;
   }
-  UIViewController *presenter = window.rootViewController;
-  while (presenter.presentedViewController && !presenter.presentedViewController.isBeingDismissed)
-    presenter = presenter.presentedViewController;
-  if (!presenter || presenter.isBeingDismissed || presenter.isBeingPresented) {
+  if (!window || !window.rootViewController || window.rootViewController.isBeingDismissed) {
     completed({}, QStringLiteral("界面正在切换，请稍后再选图片")); return;
   }
-  PHPickerConfiguration *configuration = [[PHPickerConfiguration alloc] init];
-  configuration.filter = allowVideo ? [PHPickerFilter anyFilterMatchingSubfilters:@[PHPickerFilter.imagesFilter, PHPickerFilter.videosFilter]] : PHPickerFilter.imagesFilter;
-  configuration.selectionLimit = 1;
+  PHPickerConfiguration *configuration = fkBackgroundPickerConfiguration(allowVideo);
   PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:configuration];
   FKBackgroundPickerDelegate *delegate = [[FKBackgroundPickerDelegate alloc] init];
   delegate->completion = std::move(completed);
@@ -103,7 +115,11 @@ void fkPickIosBackground(bool allowVideo, std::function<void(QUrl, QString)> com
   // a delegate -> controller retain cycle.
   static const char ownerKey = 0;
   objc_setAssociatedObject(picker, &ownerKey, delegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  [presenter presentViewController:picker animated:YES completion:nil];
+  delegate.presentation = [[FKBackgroundPresentation alloc] init];
+  if (![delegate.presentation present:picker fromWindow:window]) {
+    [delegate cancelPending];
+    return;
+  }
   picker.presentationController.delegate = delegate;
   // A rejected presentation may not call a completion/delegate method at all.
   // A weak reference keeps this check from prolonging a dismissed picker.
@@ -112,5 +128,6 @@ void fkPickIosBackground(bool allowVideo, std::function<void(QUrl, QString)> com
     PHPickerViewController *livePicker = weakPicker;
     if (livePicker && !livePicker.presentingViewController && !livePicker.isBeingPresented)
       [delegate cancelPending];
+  });
   });
 }

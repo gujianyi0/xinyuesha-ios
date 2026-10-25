@@ -1,0 +1,45 @@
+name: BackgroundPickerTest
+options:
+  bundleIdPrefix: com.cui.freekill.tests
+  deploymentTarget:
+    iOS: '16.0'
+settings:
+  CLANG_ENABLE_OBJC_ARC: YES
+  CODE_SIGNING_ALLOWED: NO
+  TARGETED_DEVICE_FAMILY: 1
+targets:
+  PickerHarness:
+    type: application
+    platform: iOS
+    sources: [main.mm]
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.cui.freekill.tests.picker
+      GENERATE_INFOPLIST_FILE: YES
+      INFOPLIST_KEY_UILaunchScreen_Generation: YES
+    info:
+      path: Info.plist
+      properties:
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default
+                UISceneDelegateClassName: PickerScene
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+    dependencies:
+      - sdk: PhotosUI.framework
+  PickerTests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [PickerTests.swift]
+    dependencies:
+      - target: PickerHarness
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+schemes:
+  PickerHarness:
+    build:
+      targets:
+        PickerHarness: all
+    test:
+      targets: [PickerTests]
