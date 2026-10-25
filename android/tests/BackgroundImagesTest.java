@@ -30,7 +30,8 @@ public final class BackgroundImagesTest {
         require(Color.red(pixel)>220 && Color.green(pixel)<40 && Color.blue(pixel)<40,"normalized image preserves visible color");
         require(!decoded.hasGainmap(),"output is an ordinary SDR image");decoded.recycle();
         Bitmap photo=Bitmap.createBitmap(512,512,Bitmap.Config.ARGB_8888);
-        for(int y=0;y<512;y++) for(int x=0;x<512;x++) photo.setPixel(x,y,Color.rgb((x*17+y*23)%256,(x*11+y*7)%256,(x*31+y*3)%256));
+        java.util.Random noise=new java.util.Random(42);
+        for(int y=0;y<512;y++) for(int x=0;x<512;x++) photo.setPixel(x,y,Color.rgb(noise.nextInt(256),noise.nextInt(256),noise.nextInt(256)));
         photo.setHasAlpha(false);
         File photoPng=new File(root,"photo.png");try(FileOutputStream out=new FileOutputStream(photoPng)){photo.compress(Bitmap.CompressFormat.PNG,100,out);}photo.recycle();
         File reduced=CounterBackgroundImages.importImage(null,Uri.fromFile(photoPng),root);
