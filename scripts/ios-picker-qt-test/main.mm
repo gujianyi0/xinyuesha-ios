@@ -49,11 +49,10 @@ void PickerBridge::pickBackground(const QString &key) {
     emit statusChanged();
   });
   if (callbacks == 0 && QCoreApplication::arguments().contains("--interrupt-picker")) {
-    QTimer::singleShot(6500, this, [this, game] {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 8 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
       // Model an external dismissal without calling our Cancel/result handler.
-      [game.rootViewController.presentedViewController dismissViewControllerAnimated:NO completion:^{
-        m_status = QStringLiteral("Interrupted"); emit statusChanged();
-      }];
+      [game.rootViewController.presentedViewController dismissViewControllerAnimated:NO completion:nil];
+      m_status = QStringLiteral("Interrupted"); emit statusChanged();
     });
   }
 }
