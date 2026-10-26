@@ -17,7 +17,9 @@ bool fkReleaseClosedIosBackgroundPicker() {
   if (!session || !session->completion || !owned || owned.presentingViewController ||
       owned.isBeingPresented || owned.isBeingDismissed) return false;
   fkBackgroundTrace(@"recover-closed-session");
-  [session failPending:@"相册被系统关闭，已恢复选图，请重试"]; return true;
+  // Finish silently before the replacement picker starts. An error dialog here
+  // would itself compete for the same UIKit presentation controller.
+  [session cancelPending]; return true;
 }
 
 void fkPickIosBackground(bool allowVideo, std::function<void(QUrl, QString)> completed) {
