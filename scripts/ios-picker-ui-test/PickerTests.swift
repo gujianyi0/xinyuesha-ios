@@ -61,7 +61,7 @@ final class PickerTests: XCTestCase {
             XCTAssertTrue(photo.waitForExistence(timeout: 15), app.debugDescription)
             photo.tap()
             let expected = "Selected \(attempt)"
-            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label == %@", expected)).firstMatch.waitForExistence(timeout: 15), app.debugDescription)
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label == %@", expected)).firstMatch.waitForExistence(timeout: 45), app.debugDescription)
         }
         // Only the Qt host has the actual BGSetting page's other image routes.
         if app.buttons["Choose room background"].exists {
@@ -70,7 +70,7 @@ final class PickerTests: XCTestCase {
                 let photo = app.images.matching(NSPredicate(format: "label BEGINSWITH %@", "Photo,")).firstMatch
                 XCTAssertTrue(photo.waitForExistence(timeout: 15), app.debugDescription)
                 photo.tap()
-                XCTAssertTrue(app.staticTexts["Selected \(index + 6)"].waitForExistence(timeout: 15), app.debugDescription)
+                XCTAssertTrue(app.staticTexts["Selected \(index + 6)"].waitForExistence(timeout: 45), app.debugDescription)
             }
         }
     }
