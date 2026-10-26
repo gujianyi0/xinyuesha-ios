@@ -12,6 +12,20 @@ final class PickerTests: XCTestCase {
     func testQtWindowCancelReopenAndConfirmSelection() {
         exercise(XCUIApplication(bundleIdentifier: "com.cui.freekill.tests.qtpicker"))
     }
+    func testQtWindowRecoversAfterExternalDismissal() {
+        let app = XCUIApplication(bundleIdentifier: "com.cui.freekill.tests.qtpicker")
+        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "--interrupt-picker"]
+        app.launch()
+        let open = app.buttons["Choose background"]
+        XCTAssertTrue(open.waitForExistence(timeout: 15), app.debugDescription)
+        open.tap()
+        XCTAssertTrue(app.staticTexts["Interrupted"].waitForExistence(timeout: 15), app.debugDescription)
+        open.tap()
+        let cancel = app.buttons["Cancel"].firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 15), app.debugDescription)
+        cancel.tap()
+        XCTAssertTrue(app.staticTexts["Cancelled 2"].waitForExistence(timeout: 15), app.debugDescription)
+    }
     private func exercise(_ app: XCUIApplication) {
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()

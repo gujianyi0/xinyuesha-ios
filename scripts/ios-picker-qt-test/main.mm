@@ -10,6 +10,7 @@
 #include <QTemporaryDir>
 #include <QSettings>
 #include <QQuickStyle>
+#include <QTimer>
 #import <UIKit/UIKit.h>
 
 void PickerBridge::choose() { pickBackground(QStringLiteral("lobbyBg")); }
@@ -26,6 +27,7 @@ void PickerBridge::save(const QString &lobby, const QString &room, const QString
   }
 }
 void PickerBridge::pickBackground(const QString &key) {
+  if (busy) fkReleaseClosedIosBackgroundPicker();
   Q_ASSERT(!busy); busy = true;
   QWindow *origin = QGuiApplication::focusWindow();
   while (origin && origin->transientParent()) origin = origin->transientParent();
@@ -35,7 +37,8 @@ void PickerBridge::pickBackground(const QString &key) {
   UIViewController *root = game.rootViewController;
   fkPickIosBackground(key == "roomBg", [this, key, game, root](QUrl url, QString error) {
     Q_ASSERT(busy); busy = false;
-    Q_ASSERT_X(error.isEmpty(), "picker", qPrintable(error));
+    const bool interrupted = QCoreApplication::arguments().contains("--interrupt-picker") && callbacks == 0;
+    Q_ASSERT_X(error.isEmpty() || interrupted, "picker", qPrintable(error));
     Q_ASSERT(game.isKeyWindow && !game.hidden && game.rootViewController == root);
     if (!url.isEmpty()) Q_ASSERT(QFile::exists(url.toLocalFile()));
     emit backgroundPicked(key, url.toString(), error);
@@ -44,6 +47,14 @@ void PickerBridge::pickBackground(const QString &key) {
     m_status = (url.isEmpty() ? QStringLiteral("Cancelled ") : QStringLiteral("Selected ")) + QString::number(++callbacks);
     emit statusChanged();
   });
+  if (callbacks == 0 && QCoreApplication::arguments().contains("--interrupt-picker")) {
+    QTimer::singleShot(2000, this, [this, game] {
+      // Model an external dismissal without calling our Cancel/result handler.
+      [game.rootViewController.presentedViewController dismissViewControllerAnimated:NO completion:^{
+        m_status = QStringLiteral("Interrupted"); emit statusChanged();
+      }];
+    });
+  }
 }
 static void write(const QString &path, const QByteArray &data) {
   QDir().mkpath(QFileInfo(path).path());

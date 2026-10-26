@@ -390,6 +390,7 @@ QString QmlBackend::deriveSocialAccountKey(const QString &server,
 
 #ifdef Q_OS_IOS
 void QmlBackend::pickBackground(const QString &key) {
+  if (m_backgroundPicking) fkReleaseClosedIosBackgroundPicker();
   if (m_backgroundPicking || !QStringList{"lobbyBg", "roomBg", "ladyImg"}.contains(key)) return;
   m_backgroundPicking = true;
   const QPointer<QmlBackend> guard(this);

@@ -10,6 +10,16 @@
 #import <ImageIO/ImageIO.h>
 #import <dispatch/dispatch.h>
 
+bool fkReleaseClosedIosBackgroundPicker() {
+  FKBackgroundPickerSession *session = fkActiveBackgroundSession;
+  UIViewController *owned = session.presentation.ownedController;
+  // A nil completion means the item-provider/confirmation already owns it.
+  if (!session || !session->completion || !owned || owned.presentingViewController ||
+      owned.isBeingPresented || owned.isBeingDismissed) return false;
+  fkBackgroundTrace(@"recover-closed-session");
+  [session failPending:@"相册被系统关闭，已恢复选图，请重试"]; return true;
+}
+
 void fkPickIosBackground(bool allowVideo, std::function<void(QUrl, QString)> completed) {
   // Resolve the originating Qt window BEFORE resetting the text responder.
   // keyWindow may temporarily be a UIKit keyboard/text-effects window.

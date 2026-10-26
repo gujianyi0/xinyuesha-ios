@@ -5,3 +5,5 @@
 #include <functional>
 // Explicit one-image system picker; no photo-library enumeration/permission.
 void fkPickIosBackground(bool allowVideo, std::function<void(QUrl, QString)> completed);
+// Called only on a new user request. Preserve active UI and in-flight imports.
+bool fkReleaseClosedIosBackgroundPicker();
