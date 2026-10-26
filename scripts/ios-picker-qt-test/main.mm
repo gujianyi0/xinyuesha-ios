@@ -10,14 +10,14 @@
 void PickerBridge::choose() {
   Q_ASSERT(!busy);
   busy = true;
-  const NSUInteger windows = UIApplication.sharedApplication.windows.count;
   UIWindow *game = UIApplication.sharedApplication.keyWindow;
   UIViewController *root = game.rootViewController;
-  fkPickIosBackground(false, [this, windows, game, root](QUrl url, QString error) {
+  fkPickIosBackground(false, [this, game, root](QUrl url, QString error) {
     Q_ASSERT(busy);
     busy = false;
     Q_ASSERT_X(error.isEmpty(), "picker", qPrintable(error));
-    Q_ASSERT(UIApplication.sharedApplication.windows.count == windows);
+    // UIKit may retain its own keyboard/text-effects windows after PhotosUI.
+    // Verify our actual game window, not the count of system-owned windows.
     Q_ASSERT(game.isKeyWindow && !game.hidden && game.rootViewController == root);
     if (!url.isEmpty()) {
       Q_ASSERT(QFile::exists(url.toLocalFile()));
