@@ -8,8 +8,12 @@ class PickerBridge : public QObject {
 public:
   QString status() const { return m_status; }
   Q_INVOKABLE void choose();
+  Q_INVOKABLE void pickBackground(const QString &key);
+  Q_INVOKABLE void save(const QString &lobby, const QString &room, const QString &portrait);
+  Q_INVOKABLE void showDialog(const QString &, const QString &error);
 signals:
   void statusChanged();
+  void backgroundPicked(QString key, QString file, QString error);
 private:
   QString m_status = QStringLiteral("Ready");
   int callbacks = 0;

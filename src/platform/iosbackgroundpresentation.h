@@ -4,6 +4,21 @@
 #import <PhotosUI/PhotosUI.h>
 #import <dispatch/dispatch.h>
 
+// Small local lifecycle trace for failures that only reproduce in the full
+// game on a physical iPhone. No photo names, paths, account or image data.
+static inline void fkBackgroundTrace(NSString *event, NSString *detail = nil) {
+  NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+  if (!docs) return;
+  NSString *dir = [docs stringByAppendingPathComponent:@"FreeKill/assets"];
+  [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+  NSString *path = [dir stringByAppendingPathComponent:@"background-picker.log"];
+  NSData *line = [[NSString stringWithFormat:@"%@ %@ %@\n", NSDate.date, event, detail ?: @""] dataUsingEncoding:NSUTF8StringEncoding];
+  NSDictionary *attrs = [NSFileManager.defaultManager attributesOfItemAtPath:path error:nil];
+  if (!attrs || [attrs fileSize] > 64 * 1024) { [line writeToFile:path atomically:YES]; return; }
+  NSFileHandle *file = [NSFileHandle fileHandleForWritingAtPath:path];
+  [file seekToEndOfFile]; [file writeData:line]; [file closeFile];
+}
+
 // Present from the existing game window, as Qt's own iOS file-dialog helper
 // does. A second key UIWindow competes with Qt activation and keyboard window
 // levels. Never change PhotosUI's system-owned view hierarchy or transforms.
@@ -28,18 +43,27 @@
   self.window = window;
   self.host = host;
   self.ownedController = picker;
+  fkBackgroundTrace(@"present-request", NSStringFromClass(host.class));
   [window endEditing:YES];
-  picker.modalPresentationStyle = UIModalPresentationFullScreen;
-  [host presentViewController:picker animated:YES completion:nil];
-  // UIKit can refuse presentation during another transition. Allow startup to
-  // finish, then release the backend busy flag if no picker actually appeared.
+  // FullScreen removes Qt's view from its window during presentation. Keep the
+  // original render/input surface attached throughout the native modal instead.
+  picker.modalPresentationStyle = UIModalPresentationOverFullScreen;
+  picker.modalInPresentation = YES;
+  [host presentViewController:picker animated:YES completion:^{
+    fkBackgroundTrace(@"present-completed", [NSString stringWithFormat:@"picker-attached=%d game-attached=%d",
+      picker.viewIfLoaded.window != nil, host.viewIfLoaded.window != nil]);
+  }];
+  // A rejected presentation has no presenting controller. Check that relation
+  // after dispatch; do not close an open/loading picker after an arbitrary timer
+  // just because its remote view is temporarily detached.
   __weak FKBackgroundPresentation *weakSelf = self;
   __weak PHPickerViewController *weakPicker = picker;
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+  dispatch_async(dispatch_get_main_queue(), ^{
     FKBackgroundPresentation *live = weakSelf;
     PHPickerViewController *pending = weakPicker;
     if (live && pending && live.ownedController == pending &&
-        (!pending.presentingViewController || !pending.viewIfLoaded.window)) {
+        !pending.presentingViewController) {
+      fkBackgroundTrace(@"present-rejected");
       void (^failed)(NSString *) = live.presentationFailed;
       live.presentationFailed = nil;
       if (failed) failed(@"相册未能打开，请返回后重新选择");
@@ -48,6 +72,7 @@
   return YES;
 }
 - (void)confirmSelection:(void (^)(BOOL))finished {
+  fkBackgroundTrace(@"confirm-request");
   UIViewController *host = self.host;
   UIViewController *picker = self.ownedController;
   if (!host || !picker || picker.presentingViewController != host) { finished(NO); return; }
@@ -67,6 +92,7 @@
 - (void)close:(void (^)(void))finished {
   NSAssert(NSThread.isMainThread, @"PhotosUI must be dismissed on the main thread");
   UIViewController *owned = self.ownedController;
+  fkBackgroundTrace(@"close-owned", owned ? NSStringFromClass(owned.class) : @"nil");
   self.presentationFailed = nil;
   void (^cleanup)(void) = ^{
     self.ownedController = nil;

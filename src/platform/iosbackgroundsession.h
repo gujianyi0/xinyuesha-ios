@@ -19,23 +19,27 @@
   [self failPending:nil];
 }
 - (void)failPending:(NSString *)error {
+  fkBackgroundTrace(@"session-finish", error ?: @"cancel");
   auto done = completion; completion = nil;
   if (!done) return;
   [self.presentation close:^{ done(nil, error); }];
 }
 - (void)presentationControllerDidDismiss:(UIPresentationController *)controller {
+  fkBackgroundTrace(@"presentation-dismissed");
   [self cancelPending];
 }
 - (void)dealloc {
   // Programmatic/system dismissal need not invoke the picker delegate. Release
   // the backend's busy flag even on that path, without retaining the controller.
   auto done = completion; completion = nil;
+  if (done) fkBackgroundTrace(@"session-dealloc-pending");
   FKBackgroundPresentation *presentation = self.presentation;
   if (done) dispatch_async(dispatch_get_main_queue(), ^{
     [presentation close:^{ done(nil, @"相册已关闭，请重新选择"); }];
   });
 }
 - (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results {
+  fkBackgroundTrace(@"picker-result", [NSString stringWithFormat:@"count=%lu", (unsigned long)results.count]);
   auto done = completion; completion = nil;
   if (!done) return;
   if (results.count == 0) {
@@ -81,6 +85,7 @@
       }
     }
     dispatch_async(dispatch_get_main_queue(), ^{
+      fkBackgroundTrace(@"import-result", ok ? @"saved" : @"failed");
       done(ok ? [NSURL fileURLWithPath:path] : nil, ok ? nil : @"无法读取所选图片，请换一张图片重试");
     });
   }];

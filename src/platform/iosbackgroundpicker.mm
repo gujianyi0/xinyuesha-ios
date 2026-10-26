@@ -2,6 +2,8 @@
 #include "iosbackgroundpicker.h"
 #include <QGuiApplication>
 #include <QInputMethod>
+#include <QWindow>
+#include <QPointer>
 #import "iosbackgroundsession.h"
 #import <UIKit/UIKit.h>
 #import <PhotosUI/PhotosUI.h>
@@ -9,6 +11,11 @@
 #import <dispatch/dispatch.h>
 
 void fkPickIosBackground(bool allowVideo, std::function<void(QUrl, QString)> completed) {
+  // Resolve the originating Qt window BEFORE resetting the text responder.
+  // keyWindow may temporarily be a UIKit keyboard/text-effects window.
+  QWindow *origin = QGuiApplication::focusWindow();
+  while (origin && origin->transientParent()) origin = origin->transientParent();
+  const QPointer<QWindow> gameWindow(origin);
   // Finish Qt's current input delivery before handing focus to UIKit. In
   // particular, do not leave a QML text responder active beneath PhotosUI.
   if (QGuiApplication::inputMethod()) {
@@ -16,17 +23,11 @@ void fkPickIosBackground(bool allowVideo, std::function<void(QUrl, QString)> com
     QGuiApplication::inputMethod()->hide();
   }
   dispatch_async(dispatch_get_main_queue(), ^{
-  UIWindow *window = nil;
-  for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
-    if (![scene isKindOfClass:UIWindowScene.class] || scene.activationState != UISceneActivationStateForegroundActive) continue;
-    for (UIWindow *candidate in ((UIWindowScene *)scene).windows)
-      if (candidate.isKeyWindow) { window = candidate; break; }
-    if (window) break;
-  }
-  if (!window) {
-    for (UIWindow *candidate in UIApplication.sharedApplication.windows)
-      if (candidate.isKeyWindow && candidate.rootViewController) { window = candidate; break; }
-  }
+  UIView *gameView = gameWindow ? (__bridge UIView *)reinterpret_cast<void *>(gameWindow->winId()) : nil;
+  UIWindow *window = gameView.window;
+  fkBackgroundTrace(@"qt-origin", [NSString stringWithFormat:@"window=%@ root=%@ attached=%d",
+    window ? NSStringFromClass(window.class) : @"nil",
+    window.rootViewController ? NSStringFromClass(window.rootViewController.class) : @"nil", gameView.window != nil]);
   if (!window || !window.rootViewController || window.rootViewController.isBeingDismissed) {
     completed({}, QStringLiteral("界面正在切换，请稍后再选图片")); return;
   }

@@ -6,9 +6,9 @@ Window {
   visibility: Window.FullScreen
   color: "#183137"
   Column {
-    x: 40; y: 30; spacing: 16
+    anchors.fill: parent; anchors.margins: 20; spacing: 12
     TextField {width:300;placeholderText:"Game chat";Accessible.name:"Game chat"}
-    Button {text:"Choose background";onClicked:pickerBridge.choose()}
+    BGSetting {width:parent.width}
     Text {text:pickerBridge.status;color:"white";font.pixelSize:24;Accessible.role:Accessible.StaticText;Accessible.name:text}
   }
 }
