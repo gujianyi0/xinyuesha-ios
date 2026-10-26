@@ -197,6 +197,16 @@ Flickable {
     text.replace("        fdialog.open();", R"QML(        if (typeof Backend.pickBackground === "function" && ["lobbyBg","roomBg","ladyImg"].indexOf(fdialog.configKey)>=0)
           Backend.pickBackground(fdialog.configKey);
         else fdialog.open();)QML");
+    const qsizetype end = text.lastIndexOf('}');
+    if (end >= 0) text.insert(end, R"QML(
+  Button {
+    text: "复制相册诊断"
+    onClicked: {
+      Backend.copyToClipboard("iOS 20261026.3\n" + Backend.readFileFromAssets("background-picker.log"));
+      text = "相册诊断已复制";
+    }
+  }
+)QML");
   } else if (path == "Fk/Pages/Replay/ReplayRecordingFile.qml") {
     text.replace("placeholderText: Lua.tr(\"Note\")", R"QML(placeholderText: ""
           objectName: "replayNoteField"

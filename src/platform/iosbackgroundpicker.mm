@@ -25,7 +25,8 @@ void fkPickIosBackground(bool allowVideo, std::function<void(QUrl, QString)> com
   dispatch_async(dispatch_get_main_queue(), ^{
   UIView *gameView = gameWindow ? (__bridge UIView *)reinterpret_cast<void *>(gameWindow->winId()) : nil;
   UIWindow *window = gameView.window;
-  fkBackgroundTrace(@"qt-origin", [NSString stringWithFormat:@"window=%@ root=%@ attached=%d",
+  fkBackgroundTrace(@"qt-origin", [NSString stringWithFormat:@"system=%@ window=%@ root=%@ attached=%d",
+    UIDevice.currentDevice.systemVersion,
     window ? NSStringFromClass(window.class) : @"nil",
     window.rootViewController ? NSStringFromClass(window.rootViewController.class) : @"nil", gameView.window != nil]);
   if (!window || !window.rootViewController || window.rootViewController.isBeingDismissed) {
