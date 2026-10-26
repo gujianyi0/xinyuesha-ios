@@ -26,7 +26,6 @@ static inline void fkBackgroundTrace(NSString *event, NSString *detail = nil) {
 @property(nonatomic, weak) UIWindow *window;
 @property(nonatomic, weak) UIViewController *host;
 @property(nonatomic, strong) UIViewController *ownedController;
-@property(nonatomic, copy) void (^presentationFailed)(NSString *);
 - (BOOL)present:(PHPickerViewController *)picker fromWindow:(UIWindow *)window;
 - (void)confirmSelection:(void (^)(BOOL))finished;
 - (void)close:(void (^)(void))finished;
@@ -53,22 +52,10 @@ static inline void fkBackgroundTrace(NSString *event, NSString *detail = nil) {
     fkBackgroundTrace(@"present-completed", [NSString stringWithFormat:@"picker-attached=%d game-attached=%d",
       picker.viewIfLoaded.window != nil, host.viewIfLoaded.window != nil]);
   }];
-  // A rejected presentation has no presenting controller. Check that relation
-  // after dispatch; do not close an open/loading picker after an arbitrary timer
-  // just because its remote view is temporarily detached.
-  __weak FKBackgroundPresentation *weakSelf = self;
-  __weak PHPickerViewController *weakPicker = picker;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    FKBackgroundPresentation *live = weakSelf;
-    PHPickerViewController *pending = weakPicker;
-    if (live && pending && live.ownedController == pending &&
-        !pending.presentingViewController) {
-      fkBackgroundTrace(@"present-rejected");
-      void (^failed)(NSString *) = live.presentationFailed;
-      live.presentationFailed = nil;
-      if (failed) failed(@"相册未能打开，请返回后重新选择");
-    }
-  });
+  // UIKit establishes presentation relationships during the transition. Neither
+  // an early presentingViewController nor a temporarily detached view is proof
+  // of failure. Never synthesize Cancel from a startup snapshot or timer.
+  // A later explicit user retry can recover a genuinely closed session.
   return YES;
 }
 - (void)confirmSelection:(void (^)(BOOL))finished {
@@ -93,7 +80,6 @@ static inline void fkBackgroundTrace(NSString *event, NSString *detail = nil) {
   NSAssert(NSThread.isMainThread, @"PhotosUI must be dismissed on the main thread");
   UIViewController *owned = self.ownedController;
   fkBackgroundTrace(@"close-owned", owned ? NSStringFromClass(owned.class) : @"nil");
-  self.presentationFailed = nil;
   void (^cleanup)(void) = ^{
     self.ownedController = nil;
     self.host = nil;

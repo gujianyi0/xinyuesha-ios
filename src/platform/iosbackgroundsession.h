@@ -115,8 +115,6 @@ static inline void fkOpenBackgroundPicker(UIWindow *window, bool allowVideo,
   PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:fkBackgroundPickerConfiguration(allowVideo)];
   picker.delegate = session;
   session.presentation = [[FKBackgroundPresentation alloc] init];
-  __weak FKBackgroundPickerSession *weakSession = session;
-  session.presentation.presentationFailed = ^(NSString *error) { [weakSession failPending:error]; };
   if (![session.presentation present:picker fromWindow:window]) {
     [session failPending:@"界面正在切换，请稍后再选图片"]; return;
   }
