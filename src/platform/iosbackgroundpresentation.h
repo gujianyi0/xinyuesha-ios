@@ -2,6 +2,7 @@
 #pragma once
 #import <UIKit/UIKit.h>
 #import <PhotosUI/PhotosUI.h>
+#import <dispatch/dispatch.h>
 
 // Present from the existing game window, as Qt's own iOS file-dialog helper
 // does. A second key UIWindow competes with Qt activation and keyboard window

@@ -8,7 +8,8 @@ qt_add_executable(QtPickerHarness MANUAL_FINALIZATION
 qt_add_qml_module(QtPickerHarness URI PickerHarness VERSION 1.0 QML_FILES Main.qml)
 target_link_libraries(QtPickerHarness PRIVATE Qt6::Quick Qt6::QuickControls2
   "-framework PhotosUI" "-framework UIKit" "-framework ImageIO" "-framework CoreGraphics")
-target_compile_options(QtPickerHarness PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>")
+set_source_files_properties(main.mm ../../src/platform/iosbackgroundpicker.mm PROPERTIES
+  LANGUAGE OBJCXX SKIP_PRECOMPILE_HEADERS ON COMPILE_OPTIONS "-fobjc-arc")
 set_target_properties(QtPickerHarness PROPERTIES
   MACOSX_BUNDLE TRUE
   MACOSX_BUNDLE_GUI_IDENTIFIER com.cui.freekill.tests.qtpicker

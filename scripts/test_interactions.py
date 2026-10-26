@@ -55,6 +55,7 @@ ColumnLayout {id:root;anchors.fill:parent;anchors.margins:12;required property v
 import QtQuick.Controls
 import QtQuick.Layouts
 import Fk
+import LunarLtk
 import "card-counter" as Counter
 Window {
  id:win;width:800;height:500;visible:true
@@ -65,7 +66,7 @@ Window {
  Counter.CounterHost{id:counter}
  QtObject{id:target;property int playerid:2;property string screenName:"测试玩家";property int seatNumber:2;property var photoItem:null}
  QtObject{id:extra;property int playerid:3;property string screenName:"新增玩家";property int seatNumber:3;property var photoItem:null}
- QtObject{id:room;property list<QtObject> players:[];signal playerAdded(var model)}
+ QtObject{id:room;property int dashboardId:1;property list<QtObject> players:[];signal playerAdded(var model)}
  Item{id:scene;property var dataModel:room;property var popupItem:null;property alias infoPopup:profilePopup
   PopupItem{id:profilePopup;objectName:"stockPlayerDetailPopup";x:20;y:20;width:720;height:370;onClosed:win.stockCloses++}
  }
@@ -77,7 +78,7 @@ Window {
  Component{id:photoFactory
   BasicItem{required property QtObject dataModel;property int playerid:dataModel.playerid;property string general:"fixture";x:650;y:200;width:100;height:130;selectable:false;onRightClicked:{win.stockOpens++;win.menu();}}
  }
- function enter(){counter.currentScene=scene;counter.attachRoleVoices(chat);counter.refreshCompatibility(scene);}
+ function enter(){Ltk.roomScene=scene;counter.currentScene=scene;counter.attachRoleVoices(chat);counter.refreshCompatibility(scene);}
  function addPlayer(){room.players=[target];}
  function spawnPhoto(){target.photoItem=photoFactory.createObject(scene,{dataModel:target});}
  function replacePhoto(){const old=target.photoItem;target.photoItem=photoFactory.createObject(scene,{dataModel:target});if(old)old.destroy();}
