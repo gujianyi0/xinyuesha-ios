@@ -29,6 +29,7 @@ void PickerBridge::save(const QString &lobby, const QString &room, const QString
 void PickerBridge::pickBackground(const QString &key) {
   if (busy) fkReleaseClosedIosBackgroundPicker();
   Q_ASSERT(!busy); busy = true;
+  m_status = QStringLiteral("Opening"); emit statusChanged();
   QWindow *origin = QGuiApplication::focusWindow();
   while (origin && origin->transientParent()) origin = origin->transientParent();
   Q_ASSERT(origin);
