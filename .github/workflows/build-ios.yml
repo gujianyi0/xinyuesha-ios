@@ -128,9 +128,12 @@ jobs:
           xcrun simctl boot "$device" || true
           xcrun simctl bootstatus "$device" -b
           xcrun simctl install "$device" "$RUNNER_TEMP/qt-picker/Debug-iphonesimulator/QtPickerHarness.app"
+          xcrun simctl get_app_container "$device" com.cui.freekill.tests.qtpicker app
           xcodebuild -project BackgroundPickerTest.xcodeproj -scheme PickerHarness \
-            -destination "platform=iOS Simulator,id=$device,arch=x86_64" \
-            -resultBundlePath "$RUNNER_TEMP/picker-test.xcresult" test CODE_SIGNING_ALLOWED=NO
+            -destination "platform=iOS Simulator,id=$device" \
+            -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 \
+            -resultBundlePath "$RUNNER_TEMP/picker-test.xcresult" test \
+            CODE_SIGNING_ALLOWED=NO ARCHS=x86_64 ONLY_ACTIVE_ARCH=NO
       - uses: actions/upload-artifact@v4
         if: always()
         with:

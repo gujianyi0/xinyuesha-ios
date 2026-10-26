@@ -2,6 +2,10 @@
 import XCTest
 
 final class PickerTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+    }
     func testCancelReopenAndConfirmSelection() {
         exercise(XCUIApplication())
     }
