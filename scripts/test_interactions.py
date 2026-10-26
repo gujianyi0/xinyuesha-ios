@@ -59,7 +59,7 @@ import LunarLtk
 import "card-counter" as Counter
 Window {
  id:win;width:800;height:500;visible:true
- property var sent:[];property int stockOpens:0;property int stockCloses:0
+ property var sent:[];property int stockOpens:0;property int stockCloses:0;property int singleClicks:0
  property alias endpoint:client;property alias selfObject:selfPlayer
  QtObject{id:selfPlayer;property int id:1}
  QtObject{id:client;function notifyServer(command,data){win.sent=win.sent.concat([{command:command,data:data,time:Date.now()}]);}}
@@ -76,14 +76,15 @@ Window {
   RowLayout{anchors.fill:parent;TextInput{Layout.fillWidth:true;maximumLength:300}}
  }
  Component{id:photoFactory
-  BasicItem{required property QtObject dataModel;property int playerid:dataModel.playerid;property string general:"fixture";x:650;y:200;width:100;height:130;selectable:false;onRightClicked:{win.stockOpens++;win.menu();}}
+  BasicItem{required property QtObject dataModel;property int playerid:dataModel.playerid;property string general:"fixture";x:650;y:200;width:100;height:130;selectable:true;onClicked:win.singleClicks++;onRightClicked:{win.stockOpens++;win.openProfile(dataModel);}}
  }
  function enter(){Ltk.roomScene=scene;counter.currentScene=scene;counter.attachRoleVoices(chat);counter.refreshCompatibility(scene);}
  function addPlayer(){room.players=[target];}
  function spawnPhoto(){target.photoItem=photoFactory.createObject(scene,{dataModel:target});}
  function replacePhoto(){const old=target.photoItem;target.photoItem=photoFactory.createObject(scene,{dataModel:target});if(old)old.destroy();}
  function addExtra(){room.players=[target,extra];room.playerAdded(extra);extra.photoItem=photoFactory.createObject(scene,{dataModel:extra});extra.photoItem.x=520;}
- function menu(){const c=Qt.createComponent("PlayerDetail.qml");if(c.status!==Component.Ready){console.warn(c.errorString());return;}profilePopup.setSourceComponent(c,{dataModel:target,endpoint:client});profilePopup.open();}
+ function openProfile(player){const c=Qt.createComponent("PlayerDetail.qml");if(c.status!==Component.Ready){console.warn(c.errorString());return;}profilePopup.setSourceComponent(c,{dataModel:player,endpoint:client});profilePopup.open();}
+ function menu(){openProfile(target);}
  function narrow(){profilePopup.width=340;}
  function wide(){profilePopup.width=720;}
  function singleGift(){const row=profilePopup.item.children.find(c=>c.children&&Array.from(c.children).some(b=>b.objectName==="allPresentActionBar"));const bar=row.children.find(c=>c.objectName==="allPresentActionBar");bar.children.find(b=>b.text==="Give Flower").clicked();}
@@ -98,7 +99,7 @@ Window {
  function allPlayers(){room.players=[target,extra,own,duplicate,invalid];}
  function resetSent(){sent=[];}
  function forcePresent(){counter.sendPresent("Flower",true);}
- function state(){return JSON.stringify({rest:("presentRestSeconds" in counter ? counter.presentRestSeconds : 0),sent:sent,stockOpens:stockOpens,stockCloses:stockCloses});}
+ function state(){return JSON.stringify({rest:("presentRestSeconds" in counter ? counter.presentRestSeconds : 0),sent:sent,stockOpens:stockOpens,stockCloses:stockCloses,singleClicks:singleClicks,selected:target.photoItem && target.photoItem.selected,profileId:profilePopup.item ? profilePopup.item.dataModel.playerid : 0});}
 }''')
  engine=QQmlApplicationEngine();engine.addImportPath(str(B));engine.rootContext().setContextProperty('ClientInstance',None);engine.rootContext().setContextProperty('Self',None)
  engine.load(QUrl.fromLocalFile(str(B/'Main.qml')));assert engine.rootObjects(),messages;win=engine.rootObjects()[0]
@@ -122,6 +123,24 @@ Window {
  assert not state()['sent'] and state()['stockOpens']==1 and state()['stockCloses']==0,state()
  egg=win.findChild(QObject,'presentEggButton');flower=win.findChild(QObject,'presentFlowerButton');assert egg and flower
  win.grabWindow().save(str(a.work_dir/'player-detail-actions.png'))
+ # A single tap still selects its original target; a double tap opens once.
+ call('closeMenu');pump(600);before=state()
+ QTest.mouseClick(win,Qt.LeftButton,Qt.NoModifier,QPoint(700,250));pump(120)
+ assert not actions.property('visible') and state()['singleClicks']==before['singleClicks']+1
+ assert state()['selected'] != before['selected'],'single-click selection must survive'
+ pump(600);before=state()['stockOpens']
+ QTest.mouseDClick(win,Qt.LeftButton,Qt.NoModifier,QPoint(700,250));QTest.mouseRelease(win,Qt.LeftButton,Qt.NoModifier,QPoint(700,250))
+ pump(200)
+ assert actions.property('visible') and state()['stockOpens']==before+1,('mouse double tap',state(),messages)
+ assert state()['profileId']==2
+ call('closeMenu');pump(600);call('addExtra')
+ profile_touch=QTest.createTouchDevice();point=QPoint(570,250);before=state()['stockOpens']
+ for _ in range(2):
+  QTest.touchEvent(win,profile_touch).press(0,point,win).commit();pump(40)
+  QTest.touchEvent(win,profile_touch).release(0,point,win).commit();pump(60)
+ pump(200)
+ assert actions.property('visible') and state()['stockOpens']==before+1 and state()['profileId']==3,('new player touch double tap',state(),messages)
+ assert not state()['sent'],'opening profiles must not send gifts'
  # A physical hold must not auto-repeat or send before the release click.
  call('addExtra');call('allPlayers');call('menu');call('resetSent')
  egg=win.findChild(QObject,'presentEggButton');flower=win.findChild(QObject,'presentFlowerButton')
@@ -154,11 +173,16 @@ Window {
  call('restoreTargetId');call('replacePhoto');call('menu');call('closeMenu')
  QTest.mousePress(win,Qt.LeftButton,Qt.NoModifier,QPoint(700,250));pump(950);QTest.mouseRelease(win,Qt.LeftButton,Qt.NoModifier,QPoint(700,250));pump(100)
  assert actions.property('visible'),('replacement photo entry remains usable',state(),messages)
+ call('closeMenu');pump(600);before=state()['stockOpens']
+ QTest.mouseDClick(win,Qt.LeftButton,Qt.NoModifier,QPoint(700,250));QTest.mouseRelease(win,Qt.LeftButton,Qt.NoModifier,QPoint(700,250))
+ pump(200)
+ assert actions.property('visible') and state()['stockOpens']==before+1,('replacement photo double tap',state(),messages)
  assert not win.findChild(QObject,'playerPresentActions') and not win.findChild(QObject,'playerInteractionButton')
  call('singleGift');pump(350);assert state()['sent'][-1]['data']['msg']=='$@Flower:2' and not actions.property('visible')
  call('menu');call('replay');assert not win.findChild(QObject,'presentEggButton').property('enabled')
  errors=[m for m in messages if any(t in m for t in ['TypeError','ReferenceError','Cannot assign','Unable to assign','Binding loop','is not a type'])]
  assert not errors,errors
  result={'tap_all':True,'eggs_exclude_self':True,'flowers_include_self':True,'duplicate_and_observer_ids_filtered':True,'mouse_hold_does_not_repeat':True,'touch_click':True,'minimum_interval_ms':egg_sends[1]['time']-egg_sends[0]['time'],'shared_cooldown_seconds':10,'leave_cancels_queue':True,'changed_ids_not_retargeted':True,'delayed_and_replacement_photo':True,'stock_profile_preserved':True,'single_gifts_preserved':True,'wrapped_action_row':True,'extra_dialog_removed':True,'errors':errors}
+ result.update(mouse_double_tap_profile=True,touch_double_tap_added_player=True,replacement_photo_double_tap=True,single_click_selection_preserved=True,opening_profile_sends_nothing=True)
  (a.work_dir/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf8');print(json.dumps(result,ensure_ascii=False,indent=2))
  win.close();engine.deleteLater();pump(30)

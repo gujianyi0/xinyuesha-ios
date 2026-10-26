@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import QtQuick
+import QtQml.Models
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
@@ -10,6 +11,20 @@ Item {
   objectName: "fkCounterHost"
   property var currentScene: null
   property string revealFocusSkill: ""
+  // Use the stock double-tap signal and the same profile action as long press.
+  // Model/photo bindings cover delayed creation and replacement without polling.
+  Instantiator {
+    model: host.currentScene && host.currentScene.dataModel && host.currentScene.dataModel.players || []
+    delegate: Connections {
+      required property var modelData
+      readonly property var photo: modelData && modelData.photoItem || null
+      target: photo
+      ignoreUnknownSignals: true
+      function onDoubleClicked(card) {
+        if (photo && photo.visible && typeof photo.rightClicked === "function") photo.rightClicked();
+      }
+    }
+  }
   onCurrentSceneChanged: { cancelPresentQueue(); revealFocusSkill=""; Qt.callLater(host.adaptPlayerDetail); }
   readonly property var detailPopup: currentScene && currentScene.infoPopup || null
   Connections {
