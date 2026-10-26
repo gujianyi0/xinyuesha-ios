@@ -129,16 +129,26 @@ jobs:
           xcrun simctl bootstatus "$device" -b
           xcrun simctl install "$device" "$RUNNER_TEMP/qt-picker/Debug-iphonesimulator/QtPickerHarness.app"
           xcrun simctl get_app_container "$device" com.cui.freekill.tests.qtpicker app
+          xcrun simctl launch --terminate-running-process \
+            --stdout="$RUNNER_TEMP/qt-picker-stdout.log" --stderr="$RUNNER_TEMP/qt-picker-stderr.log" \
+            "$device" com.cui.freekill.tests.qtpicker
           xcodebuild -project BackgroundPickerTest.xcodeproj -scheme PickerHarness \
             -destination "platform=iOS Simulator,id=$device" \
             -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 \
             -resultBundlePath "$RUNNER_TEMP/picker-test.xcresult" test \
             CODE_SIGNING_ALLOWED=NO ARCHS=x86_64 ONLY_ACTIVE_ARCH=NO
+      - name: Collect Qt startup diagnostics
+        if: always()
+        run: |
+          cat "$RUNNER_TEMP/qt-picker-stdout.log" "$RUNNER_TEMP/qt-picker-stderr.log" || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ios-picker-ui-test-result
-          path: ${{ runner.temp }}/picker-test.xcresult
+          path: |
+            ${{ runner.temp }}/picker-test.xcresult
+            ${{ runner.temp }}/qt-picker-stdout.log
+            ${{ runner.temp }}/qt-picker-stderr.log
   build:
     name: Build iOS arm64
     needs: [test-core-repair, test-picker]

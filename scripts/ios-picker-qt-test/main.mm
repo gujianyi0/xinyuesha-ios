@@ -32,7 +32,7 @@ int main(int argc, char **argv) {
   PickerBridge bridge;
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty("pickerBridge", &bridge);
-  engine.loadFromModule("PickerHarness", "Main");
+  engine.load(QUrl(QStringLiteral("qrc:/qt/qml/PickerHarness/Main.qml")));
   if (engine.rootObjects().isEmpty()) return 1;
   return app.exec();
 }

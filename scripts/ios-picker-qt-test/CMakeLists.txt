@@ -3,9 +3,11 @@ project(QtPickerHarness LANGUAGES CXX OBJCXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_AUTOMOC ON)
 find_package(Qt6 6.8 REQUIRED COMPONENTS Quick QuickControls2)
+qt_standard_project_setup(REQUIRES 6.8)
 qt_add_executable(QtPickerHarness MANUAL_FINALIZATION
   main.mm bridge.h ../../src/platform/iosbackgroundpicker.mm)
-qt_add_qml_module(QtPickerHarness URI PickerHarness VERSION 1.0 QML_FILES Main.qml)
+qt_add_qml_module(QtPickerHarness URI PickerHarness VERSION 1.0
+  RESOURCE_PREFIX /qt/qml QML_FILES Main.qml)
 target_link_libraries(QtPickerHarness PRIVATE Qt6::Quick Qt6::QuickControls2
   "-framework PhotosUI" "-framework UIKit" "-framework ImageIO" "-framework CoreGraphics")
 set_source_files_properties(main.mm ../../src/platform/iosbackgroundpicker.mm PROPERTIES

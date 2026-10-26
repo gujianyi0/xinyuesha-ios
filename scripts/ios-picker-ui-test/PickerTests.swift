@@ -18,7 +18,7 @@ final class PickerTests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         for attempt in 1...3 {
             let open = app.buttons["Choose background"]
-            XCTAssertTrue(open.waitForExistence(timeout: 15))
+            XCTAssertTrue(open.waitForExistence(timeout: 15), app.debugDescription)
             open.tap()
             let cancel = app.buttons["Cancel"].firstMatch
             XCTAssertTrue(cancel.waitForExistence(timeout: 15), app.debugDescription)
