@@ -27,7 +27,6 @@ static inline void fkBackgroundTrace(NSString *event, NSString *detail = nil) {
 @property(nonatomic, weak) UIViewController *host;
 @property(nonatomic, strong) UIViewController *ownedController;
 - (BOOL)present:(PHPickerViewController *)picker fromWindow:(UIWindow *)window;
-- (void)confirmSelection:(void (^)(BOOL))finished;
 - (void)close:(void (^)(void))finished;
 @end
 
@@ -58,24 +57,6 @@ static inline void fkBackgroundTrace(NSString *event, NSString *detail = nil) {
   // A later explicit user retry can recover a genuinely closed session.
   return YES;
 }
-- (void)confirmSelection:(void (^)(BOOL))finished {
-  fkBackgroundTrace(@"confirm-request");
-  UIViewController *host = self.host;
-  UIViewController *picker = self.ownedController;
-  if (!host || !picker || picker.presentingViewController != host) { finished(NO); return; }
-  [self.window endEditing:YES];
-  [picker dismissViewControllerAnimated:YES completion:^{
-    if (!host.view.window || host.presentedViewController) { finished(NO); return; }
-    UIAlertController *confirm = [UIAlertController alertControllerWithTitle:@"使用所选背景？"
-      message:@"点击确认后保存，取消则保留原背景。" preferredStyle:UIAlertControllerStyleAlert];
-    [confirm addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel
-      handler:^(UIAlertAction *) { finished(NO); }]];
-    [confirm addAction:[UIAlertAction actionWithTitle:@"确认" style:UIAlertActionStyleDefault
-      handler:^(UIAlertAction *) { finished(YES); }]];
-    self.ownedController = confirm;
-    [host presentViewController:confirm animated:YES completion:nil];
-  }];
-}
 - (void)close:(void (^)(void))finished {
   NSAssert(NSThread.isMainThread, @"PhotosUI must be dismissed on the main thread");
   UIViewController *owned = self.ownedController;
@@ -88,8 +69,11 @@ static inline void fkBackgroundTrace(NSString *event, NSString *detail = nil) {
   };
   // Dismiss only this session's controller; keep the game window and unrelated
   // system dialogs' root controllers, visibility and key-window state intact.
-  if (owned.presentingViewController) [owned dismissViewControllerAnimated:YES completion:cleanup];
-  else cleanup();
+  if (owned.presentingViewController) {
+    [owned dismissViewControllerAnimated:NO completion:nil];
+    fkBackgroundTrace(@"dismiss-returned");
+  }
+  cleanup();
 }
 @end
 

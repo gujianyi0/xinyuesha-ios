@@ -52,8 +52,6 @@
   NSItemProvider *provider = results.firstObject.itemProvider;
   const bool movie = [provider hasItemConformingToTypeIdentifier:@"public.movie"];
   __block NSString *path = movie ? [[outputPath stringByDeletingPathExtension] stringByAppendingPathExtension:@"mov"] : outputPath;
-  [presentation confirmSelection:^(BOOL accepted) {
-  if (!accepted) { [presentation close:^{ done(nil, nil); }]; return; }
   [presentation close:^{
   [provider loadFileRepresentationForTypeIdentifier:movie ? @"public.movie" : @"public.image" completionHandler:^(NSURL *url, NSError *error) {
     bool ok = false;
@@ -88,7 +86,6 @@
       fkBackgroundTrace(@"import-result", ok ? @"saved" : @"failed");
       done(ok ? [NSURL fileURLWithPath:path] : nil, ok ? nil : @"无法读取所选图片，请换一张图片重试");
     });
-  }];
   }];
   }];
 }

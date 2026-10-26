@@ -60,11 +60,7 @@ final class PickerTests: XCTestCase {
             let photo = app.images.matching(NSPredicate(format: "label BEGINSWITH %@", "Photo,")).firstMatch
             XCTAssertTrue(photo.waitForExistence(timeout: 15), app.debugDescription)
             photo.tap()
-            let confirm = app.alerts["使用所选背景？"]
-            XCTAssertTrue(confirm.waitForExistence(timeout: 15), app.debugDescription)
-            let action = attempt == 4 ? "取消" : "确认"
-            confirm.buttons[action].tap()
-            let expected = "\(attempt == 4 ? "Cancelled" : "Selected") \(attempt)"
+            let expected = "Selected \(attempt)"
             XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label == %@", expected)).firstMatch.waitForExistence(timeout: 15), app.debugDescription)
         }
         // Only the Qt host has the actual BGSetting page's other image routes.
@@ -74,9 +70,6 @@ final class PickerTests: XCTestCase {
                 let photo = app.images.matching(NSPredicate(format: "label BEGINSWITH %@", "Photo,")).firstMatch
                 XCTAssertTrue(photo.waitForExistence(timeout: 15), app.debugDescription)
                 photo.tap()
-                let confirm = app.alerts["使用所选背景？"]
-                XCTAssertTrue(confirm.waitForExistence(timeout: 15), app.debugDescription)
-                confirm.buttons["确认"].tap()
                 XCTAssertTrue(app.staticTexts["Selected \(index + 6)"].waitForExistence(timeout: 15), app.debugDescription)
             }
         }
