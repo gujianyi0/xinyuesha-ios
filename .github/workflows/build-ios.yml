@@ -90,19 +90,46 @@ jobs:
             ${{ runner.temp }}/ios-ui
             ${{ runner.temp }}/server-ui
   test-picker:
-    name: Test PhotosUI cancel and reopen on iOS Simulator
+    name: Test PhotosUI with UIKit and the shipped Qt window
     runs-on: macos-14
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - run: brew install xcodegen
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/Qt/6.8.3/ios
+            ~/Qt/6.8.3/macos
+            ios-deps
+          key: fk-ios-deps-${{ runner.os }}-qt683-openssl351-git2-197-v1
+      - name: Prepare the shipped Qt version for simulator integration
+        run: |
+          if [ "$(uname -m)" = arm64 ]; then
+            sudo softwareupdate --install-rosetta --agree-to-license || true
+          fi
+          python3 -m venv "$RUNNER_TEMP/picker-aqt"
+          "$RUNNER_TEMP/picker-aqt/bin/pip" install aqtinstall
+          if [ ! -x "$HOME/Qt/6.8.3/ios/bin/qt-cmake" ]; then
+            "$RUNNER_TEMP/picker-aqt/bin/aqt" install-qt mac ios 6.8.3 ios -m qtmultimedia qt5compat qtshadertools -O "$HOME/Qt"
+          fi
+          if [ ! -x "$HOME/Qt/6.8.3/macos/bin/qmake" ]; then
+            "$RUNNER_TEMP/picker-aqt/bin/aqt" install-qt mac desktop 6.8.3 clang_64 -m qtshadertools -O "$HOME/Qt"
+          fi
+          "$HOME/Qt/6.8.3/ios/bin/qt-cmake" -S scripts/ios-picker-qt-test -B "$RUNNER_TEMP/qt-picker" -G Xcode \
+            -DCMAKE_OSX_SYSROOT=iphonesimulator -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DQT_HOST_PATH="$HOME/Qt/6.8.3/macos" -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0
+          cmake --build "$RUNNER_TEMP/qt-picker" --config Debug --parallel 3
       - name: Build and exercise the real PhotosUI presenter
         run: |
           cd scripts/ios-picker-ui-test
           xcodegen generate
           device=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; print(next(d["udid"] for group in json.load(sys.stdin)["devices"].values() for d in group if d["name"].startswith("iPhone")))')
+          xcrun simctl boot "$device" || true
+          xcrun simctl bootstatus "$device" -b
+          xcrun simctl install "$device" "$RUNNER_TEMP/qt-picker/Debug-iphonesimulator/QtPickerHarness.app"
           xcodebuild -project BackgroundPickerTest.xcodeproj -scheme PickerHarness \
-            -destination "platform=iOS Simulator,id=$device" \
+            -destination "platform=iOS Simulator,id=$device,arch=x86_64" \
             -resultBundlePath "$RUNNER_TEMP/picker-test.xcresult" test CODE_SIGNING_ALLOWED=NO
       - uses: actions/upload-artifact@v4
         if: always()
@@ -111,7 +138,7 @@ jobs:
           path: ${{ runner.temp }}/picker-test.xcresult
   build:
     name: Build iOS arm64
-    needs: test-core-repair
+    needs: [test-core-repair, test-picker]
     runs-on: macos-14
     timeout-minutes: 120
 

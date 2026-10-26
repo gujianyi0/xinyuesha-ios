@@ -3,87 +3,79 @@
 #import <UIKit/UIKit.h>
 #import <PhotosUI/PhotosUI.h>
 
-// UIKit owns this window, including the search keyboard. Presenting inside Qt's
-// root controller shares its keyboard scrolling/gesture handling with PhotosUI.
-// Do not change PHPicker's system-owned view hierarchy, alpha or transforms.
-@interface FKBackgroundHost : UIViewController
-@property(nonatomic, copy) void (^whenVisible)(void);
-@end
-@implementation FKBackgroundHost
-- (void)viewDidAppear:(BOOL)animated {
-  [super viewDidAppear:animated];
-  void (^ready)(void) = self.whenVisible;
-  self.whenVisible = nil;
-  if (ready) ready();
-}
-@end
-
+// Present from the existing game window, as Qt's own iOS file-dialog helper
+// does. A second key UIWindow competes with Qt activation and keyboard window
+// levels. Never change PhotosUI's system-owned view hierarchy or transforms.
 @interface FKBackgroundPresentation : NSObject
-@property(nonatomic, strong) UIWindow *window;
-@property(nonatomic, weak) UIWindow *previousWindow;
-- (BOOL)present:(PHPickerViewController *)picker fromWindow:(UIWindow *)previous;
+@property(nonatomic, weak) UIWindow *window;
+@property(nonatomic, weak) UIViewController *host;
+@property(nonatomic, strong) UIViewController *ownedController;
+@property(nonatomic, copy) void (^presentationFailed)(NSString *);
+- (BOOL)present:(PHPickerViewController *)picker fromWindow:(UIWindow *)window;
 - (void)confirmSelection:(void (^)(BOOL))finished;
 - (void)close:(void (^)(void))finished;
 @end
 
 @implementation FKBackgroundPresentation
-- (BOOL)present:(PHPickerViewController *)picker fromWindow:(UIWindow *)previous {
+- (BOOL)present:(PHPickerViewController *)picker fromWindow:(UIWindow *)window {
   NSAssert(NSThread.isMainThread, @"PhotosUI must be presented on the main thread");
-  if (!previous || self.window) return NO;
-  self.previousWindow = previous;
-  [previous endEditing:YES];
-  // Qt 6.8 also supports apps without UIApplicationSceneManifest. Those
-  // windows need the legacy initializer; do not reject a usable game window.
-  UIWindow *window = previous.windowScene
-    ? [[UIWindow alloc] initWithWindowScene:previous.windowScene]
-    : [[UIWindow alloc] initWithFrame:previous.bounds];
-  if (!previous.windowScene) window.screen = previous.screen;
-  window.windowLevel = previous.windowLevel + 1;
-  FKBackgroundHost *host = [[FKBackgroundHost alloc] init];
-  host.view.backgroundColor = UIColor.systemBackgroundColor;
-  window.rootViewController = host;
+  if (!window || window.hidden || self.ownedController) return NO;
+  UIViewController *host = window.rootViewController;
+  while (host.presentedViewController && !host.presentedViewController.isBeingDismissed)
+    host = host.presentedViewController;
+  if (!host.view.window || host.isBeingDismissed || host.isBeingPresented || host.presentedViewController) return NO;
   self.window = window;
+  self.host = host;
+  self.ownedController = picker;
+  [window endEditing:YES];
   picker.modalPresentationStyle = UIModalPresentationFullScreen;
-  // The window must finish joining UIKit's hierarchy before presenting. A
-  // main-queue hop is not a view-appearance guarantee, especially under Qt.
-  __weak FKBackgroundHost *weakHost = host;
-  host.whenVisible = ^{
-    FKBackgroundHost *liveHost = weakHost;
-    if (liveHost.view.window) [liveHost presentViewController:picker animated:YES completion:nil];
-  };
-  [window makeKeyAndVisible];
+  [host presentViewController:picker animated:YES completion:nil];
+  // UIKit can refuse presentation during another transition. Allow startup to
+  // finish, then release the backend busy flag if no picker actually appeared.
+  __weak FKBackgroundPresentation *weakSelf = self;
+  __weak PHPickerViewController *weakPicker = picker;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+    FKBackgroundPresentation *live = weakSelf;
+    PHPickerViewController *pending = weakPicker;
+    if (live && pending && live.ownedController == pending &&
+        (!pending.presentingViewController || !pending.viewIfLoaded.window)) {
+      void (^failed)(NSString *) = live.presentationFailed;
+      live.presentationFailed = nil;
+      if (failed) failed(@"相册未能打开，请返回后重新选择");
+    }
+  });
   return YES;
 }
 - (void)confirmSelection:(void (^)(BOOL))finished {
-  UIViewController *host = self.window.rootViewController;
+  UIViewController *host = self.host;
+  UIViewController *picker = self.ownedController;
+  if (!host || !picker || picker.presentingViewController != host) { finished(NO); return; }
   [self.window endEditing:YES];
-  [host dismissViewControllerAnimated:YES completion:^{
+  [picker dismissViewControllerAnimated:YES completion:^{
+    if (!host.view.window || host.presentedViewController) { finished(NO); return; }
     UIAlertController *confirm = [UIAlertController alertControllerWithTitle:@"使用所选背景？"
       message:@"点击确认后保存，取消则保留原背景。" preferredStyle:UIAlertControllerStyleAlert];
     [confirm addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel
       handler:^(UIAlertAction *) { finished(NO); }]];
     [confirm addAction:[UIAlertAction actionWithTitle:@"确认" style:UIAlertActionStyleDefault
       handler:^(UIAlertAction *) { finished(YES); }]];
+    self.ownedController = confirm;
     [host presentViewController:confirm animated:YES completion:nil];
   }];
 }
 - (void)close:(void (^)(void))finished {
   NSAssert(NSThread.isMainThread, @"PhotosUI must be dismissed on the main thread");
-  UIWindow *window = self.window;
-  if (!window) { if (finished) finished(); return; }
-  // Restore Qt only after UIKit has finished dismissing. Keeping a hidden Qt
-  // keyboard/window active underneath the picker can swallow its Cancel tap.
+  UIViewController *owned = self.ownedController;
+  self.presentationFailed = nil;
   void (^cleanup)(void) = ^{
-    BOOL restoreKey = window.isKeyWindow;
-    window.hidden = YES;
-    window.rootViewController = nil;
+    self.ownedController = nil;
+    self.host = nil;
     self.window = nil;
-    if (restoreKey && !self.previousWindow.hidden) [self.previousWindow makeKeyWindow];
-    self.previousWindow = nil;
     if (finished) finished();
   };
-  if (window.rootViewController.presentedViewController)
-    [window.rootViewController dismissViewControllerAnimated:YES completion:cleanup];
+  // Dismiss only this session's controller; keep the game window and unrelated
+  // system dialogs' root controllers, visibility and key-window state intact.
+  if (owned.presentingViewController) [owned dismissViewControllerAnimated:YES completion:cleanup];
   else cleanup();
 }
 @end
@@ -94,7 +86,6 @@ static inline PHPickerConfiguration *fkBackgroundPickerConfiguration(bool allowV
     ? [PHPickerFilter anyFilterMatchingSubfilters:@[PHPickerFilter.imagesFilter, PHPickerFilter.videosFilter]]
     : PHPickerFilter.imagesFilter;
   configuration.selectionLimit = 1;
-  // Single selection finishes immediately on iOS 16/17, regardless of ordered
-  // selection. The session supplies an explicit confirmation after the pick.
+  // iOS 16/17 single selection finishes immediately. Confirm in the session.
   return configuration;
 }

@@ -121,10 +121,9 @@ Window {
  function hideReveal(){reveal.visible=false;counter.rememberPopupCards();}
  BasicItem {id:targetPhoto;onRightClicked:win.longPresses++;x:800;y:200;width:100;height:130;selectable:false;property var dataModel:({playerid:2,screenName:"测试目标"})}
  function actionsState(){return JSON.stringify({signals:longPresses,scene:!!counter.currentScene,visible:targetPhoto.visible,x:targetPhoto.x,y:targetPhoto.y});}
- function prepareActions(){control().soundList.visible=false;control().children.find(b=>b.objectName==="roleVoiceButton");interactionScene.dataModel={players:[targetPhoto.dataModel],drawPileNum:12};counter.currentScene=interactionScene;counter.attachPlayerActions(targetPhoto);}
+ function prepareActions(){control().soundList.visible=false;control().children.find(b=>b.objectName==="roleVoiceButton");interactionScene.dataModel={players:[targetPhoto.dataModel],drawPileNum:12};counter.currentScene=interactionScene;}
  function egg(){return counter.sendPresent("Egg");}
  function flower(){return counter.sendPresent("Flower");}
- function reopenActions(){counter.showPlayerActions(targetPhoto.dataModel);}
  function replayMode(){Config.replaying=true;}
 
  function voice(){return chat.children[0].children[0];}
@@ -266,7 +265,7 @@ call('silentCatalog');pump(.2);empty=json.loads(invoke('catalogState'));assert e
 QMetaObject.invokeMethod(picker,'close');win.setWidth(1000);win.setHeight(540);call('prepareActions')
 pump(.4)  # Let the prior modal picker's exit transition release pointer input.
 QTest.mousePress(win,Qt.LeftButton,Qt.NoModifier,QPoint(850,250));pump(.95);QTest.mouseRelease(win,Qt.LeftButton,Qt.NoModifier,QPoint(850,250));pump(.1)
-actions=win.findChild(QObject,'playerPresentActions');win.grabWindow().save(str(a.work_dir/'actions.png'));assert actions and actions.property('visible'),('long press opens interaction choices',invoke('actionsState'),logs)
+assert json.loads(invoke('actionsState'))['signals']==1 and not win.findChild(QObject,'playerPresentActions'),'stock long press must remain untouched'
 before_present=json.loads(invoke('snapshot'))['sent'];assert before_present==final['sent'],'opening interaction choices sends nothing'
 assert invoke('egg') is True
 assert invoke('flower') is False,'gift cooldown prevents duplicate sends'
@@ -276,7 +275,6 @@ assert host.property('presentRestSeconds') == 10, 'completed click starts shared
 cooldown_deadline=time.monotonic()+12
 while host.property('presentRestSeconds') > 0 and time.monotonic()<cooldown_deadline:pump(.02)
 assert host.property('presentRestSeconds') == 0,'shared cooldown did not expire'
-call('reopenActions')
 assert invoke('flower') is True
 assert json.loads(invoke('snapshot'))['sent'][-1]['data']['msg']=='$@Flower:2'
 call('replayMode');assert invoke('egg') is False,'replays cannot send gifts'

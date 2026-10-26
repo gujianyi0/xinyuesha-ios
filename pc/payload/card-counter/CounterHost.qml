@@ -11,29 +11,26 @@ Item {
   objectName: "fkCounterHost"
   property var currentScene: null
   property string revealFocusSkill: ""
-  onCurrentSceneChanged: { cancelPresentQueue(); revealFocusSkill=""; playerActions.close(); syncPlayerActions(); }
-  property var playerActionWatchers: []
-  readonly property var actionRoomModel: currentScene && currentScene.dataModel &&
-    ("playersChanged" in currentScene.dataModel || "playerAdded" in currentScene.dataModel) ? currentScene.dataModel : null
+  onCurrentSceneChanged: { cancelPresentQueue(); revealFocusSkill=""; Qt.callLater(host.adaptPlayerDetail); }
+  readonly property var detailPopup: currentScene && currentScene.infoPopup || null
   Connections {
-    target: host.actionRoomModel
+    target: host.detailPopup
     ignoreUnknownSignals: true
-    function onPlayersChanged() { host.syncPlayerActions(); }
-    function onPlayerAdded() { host.syncPlayerActions(); }
+    function onItemChanged() { Qt.callLater(host.adaptPlayerDetail); }
   }
   Connections {
     target: host.currentScene
     ignoreUnknownSignals: true
-    function onVisibleChanged() { if (!host.currentScene.visible) {host.cancelPresentQueue();playerActions.close();} }
+    function onVisibleChanged() { if (!host.currentScene.visible) {host.cancelPresentQueue();} }
   }
   Connections {
     target: host.Window.window
-    function onActiveChanged() { if (!host.Window.window.active) {host.cancelPresentQueue();playerActions.close();} }
+    function onActiveChanged() { if (!host.Window.window.active) {host.cancelPresentQueue();} }
   }
   Connections {
     target: Config
     ignoreUnknownSignals: true
-    function onReplayingChanged() { if (Config.replaying) {host.cancelPresentQueue();playerActions.close();} }
+    function onReplayingChanged() { if (Config.replaying) {host.cancelPresentQueue();} }
   }
   readonly property var activeRoomScene: Ltk.roomScene || null
   onActiveRoomSceneChanged: Qt.callLater(host.syncScene)
@@ -213,20 +210,7 @@ Item {
     if (component.status !== Component.Ready) { console.warn(component.errorString()); return; }
     const control = component.createObject(input, {chatBox:chat, soundList:sound, cacheStore:host.roleVoiceCache});
     if (control) {
-      interactionEntry.createObject(input);
       adaptedControls.push(chat);
-    }
-  }
-  Component {
-    id: interactionEntry
-    Button {
-      objectName: "playerInteractionButton"
-      text: "互动"; font.pixelSize: 14; leftPadding: 4; rightPadding: 4
-      Layout.preferredWidth: 56; Layout.preferredHeight: 44
-      visible: !Config.replaying
-      ToolTip.visible: hovered
-      ToolTip.text: "点按向全员送花或砸蛋，砸蛋排除自己"
-      onClicked: host.showPlayerActions(null)
     }
   }
   function actionTargets() {
@@ -234,52 +218,40 @@ Item {
     return Array.from(room && room.players || []).filter(model => model &&
       Number.isInteger(model.playerid) && model.playerid !== 0 && model.playerid !== -1);
   }
-  function syncPlayerActions() {
-    const models = actionTargets();
-    playerActionWatchers = playerActionWatchers.filter(watcher => {
-      if (watcher && watcher.scene === currentScene && models.indexOf(watcher.playerModel) >= 0) return true;
-      if (watcher) watcher.destroy();
-      return false;
-    });
-    for (const model of models) {
-      if (model.photoItem) attachPlayerActions(model.photoItem);
-      if (!("photoItemChanged" in model) || playerActionWatchers.some(w => w.playerModel === model)) continue;
-      const watcher = playerActionWatcher.createObject(host, {playerModel:model, scene:currentScene});
-      if (watcher) playerActionWatchers.push(watcher);
-    }
-    if (playerActions.visible && models.indexOf(playerActions.targetModel) < 0) playerActions.close();
+  // Adapt only the newly opened stock profile. Never intercept a general's
+  // rightClicked signal: that belongs to the original player-detail page.
+  function adaptPlayerDetail(item) {
+    if (!item) item = detailPopup && detailPopup.item;
+    if (!item || !("dataModel" in item) || !("finish" in item) ||
+        !item.children) return;
+    const row = Array.from(item.children).find(c => c.children &&
+      Array.from(c.children).some(b => b.text === Lua.tr("Give Flower")) &&
+      Array.from(c.children).some(b => b.text === Lua.tr("Give Egg")));
+    if (!row) return;
+    const buttons = Array.from(row.children);
+    if (Array.from(row.children).some(c => c.objectName === "allPresentActionBar")) return;
+    const bar = allPresentActionBar.createObject(row, {profile:item});
+    if (!bar) return;
+    row.Layout.fillWidth = true;
+    // Keep the row in its original ColumnLayout slot. The Flow becomes its
+    // only visual child; the stock buttons retain their scope and handlers.
+    const additions = Array.from(bar.children);
+    for (const button of buttons) button.parent = bar;
+    bar.children = buttons.concat(additions);
   }
   Component {
-    id: playerActionWatcher
-    Connections {
-      objectName: "playerActionWatcher"
-      required property var playerModel
-      required property var scene
-      target: playerModel
-      function onPhotoItemChanged() {
-        if (scene === host.currentScene && playerModel.photoItem) host.attachPlayerActions(playerModel.photoItem);
-      }
+    id: allPresentActionBar
+    Flow {
+      id: bar
+      objectName: "allPresentActionBar"
+      required property var profile
+      property alias eggButton: eggButton
+      Layout.fillWidth: true
+      Layout.preferredHeight: implicitHeight
+      spacing: 6
+      PresentButton {id:eggButton;objectName:"presentEggButton";text:"全员砸蛋";presentKind:"Egg"}
+      PresentButton {objectName:"presentFlowerButton";text:"全员送花";presentKind:"Flower"}
     }
-  }
-  function attachPlayerActions(photo) {
-    if (!photo || !("rightClicked" in photo) || !("dataModel" in photo)) return;
-    if (adaptedControls.indexOf(photo)>=0) return;
-    photo.rightClicked.connect(function() {
-      Qt.callLater(function() { if(photo && photo.parent) host.showPlayerActions(photo.dataModel); });
-    });
-    adaptedControls.push(photo);
-  }
-  function showPlayerActions(model) {
-    if (!currentScene || Config.replaying) return;
-    let targets = actionTargets();
-    if (model && targets.indexOf(model) < 0) targets.push(model);
-    if (!model) model = targets.find(p => p.playerid !== (typeof Self !== "undefined" && Self ? Self.id : 0)) || targets[0];
-    if (!model || !Number.isInteger(model.playerid) || model.playerid===0 || model.playerid===-1) return;
-    if(typeof currentScene.closeInfoPopup==="function")currentScene.closeInfoPopup();
-    playerActions.close();
-    playerActions.targets=targets;
-    playerActions.targetModel=model;
-    playerActions.open();
   }
   property var presentQueue: []
   property var presentQueueScene: null
@@ -301,7 +273,7 @@ Item {
     if (!queue.length) { cancelPresentQueue(); presentRestSeconds=10; presentRest.restart(); }
     else presentSendTimer.restart();
   }
-  function sendPresent(kind, keepOpen) {
+  function sendPresent(kind) {
     if (presentRestSeconds > 0 || presentQueue.length || !currentScene || Config.replaying || !clientContext ||
         ["Egg","Flower"].indexOf(kind)<0) return false;
     const selfId = typeof Self !== "undefined" && Self ? Self.id : 0;
@@ -321,54 +293,21 @@ Item {
   Timer {id:presentRest;interval:1000;repeat:true;onTriggered:{
     host.presentRestSeconds--; if (host.presentRestSeconds <= 0) stop();
   }}
-  Dialog {
-    id:playerActions;objectName:"playerPresentActions"
-    property var targetModel:null
-    property var targets:[]
-    parent:Overlay.overlay;anchors.centerIn:parent
-    width:Math.min(280,parent ? parent.width-16 : 280)
-    height:Math.min(implicitHeight,parent ? parent.height-16 : implicitHeight)
-    padding:12; spacing:6
-    modal:true;title:"武将互动";exit:Transition {}
-    header:Label {text:playerActions.title;font.pixelSize:16;font.bold:true;leftPadding:12;topPadding:10;bottomPadding:4}
-    onClosed: {targetModel=null;targets=[];}
-    contentItem:ColumnLayout {
-      spacing:6
-      ComboBox {
-        objectName: "presentTargetSelector"
-        Layout.fillWidth:true;Layout.preferredHeight:40;font.pixelSize:14
-        model: playerActions.targets.map(p => p.screenName || (p.seatNumber ? "第 " + p.seatNumber + " 位玩家" : "玩家"))
-        currentIndex: playerActions.targets.indexOf(playerActions.targetModel)
-        onActivated: playerActions.targetModel=playerActions.targets[currentIndex]
-      }
-      Label {
-        objectName:"presentCooldownHint";Layout.fillWidth:true;wrapMode:Text.Wrap;font.pixelSize:12
-        text:host.presentRestSeconds > 0 ? "冷却中："+host.presentRestSeconds+" 秒，送花／砸蛋共用冷却"
-          : host.presentQueue.length ? "正在依次发送，剩余 "+host.presentQueue.length+" 人"
-          : "点按向全员发送，砸蛋排除自己\n发送完成后冷却 10 秒"
-      }
-      RowLayout {
-        spacing:8
-        PresentButton {objectName:"presentEggButton";text:"全员砸蛋";presentKind:"Egg"}
-        PresentButton {objectName:"presentFlowerButton";text:"全员送花";presentKind:"Flower"}
-      }
-      RowLayout {
-        spacing:8
-        Button {text:"查看资料";Layout.fillWidth:true;Layout.preferredHeight:38;font.pixelSize:13;onClicked:{
-          const model=playerActions.targetModel;playerActions.close();
-          if(host.currentScene && model)host.currentScene.showInfoPopup(Qt.createComponent("LunarLtk.Pages.InfoPopups","PlayerDetail"),{dataModel:model});
-        }}
-        Button {text:"关闭";Layout.fillWidth:true;Layout.preferredHeight:38;font.pixelSize:13;onClicked:playerActions.close()}
-      }
-    }
-  }
   component PresentButton: Button {
     property string presentKind
-    Layout.fillWidth:true;Layout.preferredHeight:44;font.pixelSize:14
-    enabled: playerActions.opened && !!host.currentScene && !Config.replaying && !!host.clientContext &&
+    width: implicitWidth; height: 40
+    font.pixelSize: 16
+    leftPadding: 8; rightPadding: 8; topInset: 0; bottomInset: 0
+    enabled: !!host.currentScene && host.currentScene.visible && !Config.replaying && !!host.clientContext &&
       host.presentRestSeconds === 0 && !host.presentQueue.length
     autoRepeat: false
-    onClicked: host.sendPresent(presentKind,true)
+    background: Rectangle {radius:6;color:parent.down ? "#5C3D3D" : "#2A1F1F";border.color:"#6B4F3A";opacity:parent.enabled ? 1 : 0.35}
+    contentItem: Text {text:parent.text;font:parent.font;color:"#E8D5B0";horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter}
+    ToolTip.visible: hovered || down
+    ToolTip.text: host.presentRestSeconds>0 ? "冷却中："+host.presentRestSeconds+" 秒" :
+      host.presentQueue.length ? "正在依次发送，剩余 "+host.presentQueue.length+" 人" :
+      "点按向全员发送，砸蛋排除自己；发送完成后共用 10 秒冷却"
+    onClicked: host.sendPresent(presentKind)
   }
   function refreshCompatibility(rootItem) {
     // Periodic whole-tree scans must never run during a match or spectating.
@@ -386,8 +325,7 @@ Item {
       seen.add(item);
       if ("model" in item) host.prepareSkinMenu(item.model);
       const type = String(item);
-      if ("rightClicked" in item && "dataModel" in item && "playerid" in item && "general" in item && "goBackAnim" in item)
-        host.attachPlayerActions(item);
+      if (type.indexOf("PlayerDetail_QMLTYPE") === 0) host.adaptPlayerDetail(item);
       if (type.indexOf("AvatarChatBox_QMLTYPE") === 0 && typeof item.loadSkills === "function")
         host.attachRoleVoices(item);
       if ((Cpp.os==="Android" || Cpp.os==="iOS") &&
@@ -546,9 +484,6 @@ Item {
   }
   Timer { id: backgroundSave; interval: 250; onTriggered: Config.saveConf(); }
   function releaseScene() {
-    playerActions.close(); playerActions.targetModel=null;
-    for (const watcher of playerActionWatchers) if (watcher) watcher.destroy();
-    playerActionWatchers=[];
     if (deckHit) deckHit.destroy();
     if (fallbackButton) fallbackButton.destroy();
     if (popup) popup.destroy();

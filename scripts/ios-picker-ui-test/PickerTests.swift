@@ -3,7 +3,12 @@ import XCTest
 
 final class PickerTests: XCTestCase {
     func testCancelReopenAndConfirmSelection() {
-        let app = XCUIApplication()
+        exercise(XCUIApplication())
+    }
+    func testQtWindowCancelReopenAndConfirmSelection() {
+        exercise(XCUIApplication(bundleIdentifier: "com.cui.freekill.tests.qtpicker"))
+    }
+    private func exercise(_ app: XCUIApplication) {
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         XCUIDevice.shared.orientation = .landscapeLeft
@@ -21,10 +26,7 @@ final class PickerTests: XCTestCase {
                 }
             }
             cancel.tap()
-            let result = app.staticTexts["result"]
-            let expected = NSPredicate(format: "label == %@", "Cancelled \(attempt)")
-            expectation(for: expected, evaluatedWith: result)
-            waitForExpectations(timeout: 15)
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label == %@", "Cancelled \(attempt)")).firstMatch.waitForExistence(timeout: 15), app.debugDescription)
         }
         for attempt in 4...5 {
             app.buttons["Choose background"].tap()
@@ -35,9 +37,8 @@ final class PickerTests: XCTestCase {
             XCTAssertTrue(confirm.waitForExistence(timeout: 15), app.debugDescription)
             let action = attempt == 4 ? "取消" : "确认"
             confirm.buttons[action].tap()
-            let expected = NSPredicate(format: "label == %@", "\(attempt == 4 ? "Cancelled" : "Selected") \(attempt)")
-            expectation(for: expected, evaluatedWith: app.staticTexts["result"])
-            waitForExpectations(timeout: 15)
+            let expected = "\(attempt == 4 ? "Cancelled" : "Selected") \(attempt)"
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label == %@", expected)).firstMatch.waitForExistence(timeout: 15), app.debugDescription)
         }
     }
 }

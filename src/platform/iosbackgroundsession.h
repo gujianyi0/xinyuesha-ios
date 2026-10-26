@@ -11,13 +11,17 @@
 }
 @property(nonatomic, strong) FKBackgroundPresentation *presentation;
 - (void)cancelPending;
+- (void)failPending:(NSString *)error;
 @end
 
 @implementation FKBackgroundPickerSession
 - (void)cancelPending {
+  [self failPending:nil];
+}
+- (void)failPending:(NSString *)error {
   auto done = completion; completion = nil;
   if (!done) return;
-  [self.presentation close:^{ if (done) done(nil, nil); }];
+  [self.presentation close:^{ done(nil, error); }];
 }
 - (void)presentationControllerDidDismiss:(UIPresentationController *)controller {
   [self cancelPending];
@@ -38,7 +42,7 @@
     [self.presentation close:^{ done(nil, nil); }];
     return;
   }
-  // Release the native window before publishing a result back into QML. File
+  // Dismiss the native controller before publishing a result back into QML. File
   // decoding runs in the item-provider callback, never in a UIKit tap handler.
   FKBackgroundPresentation *presentation = self.presentation;
   NSItemProvider *provider = results.firstObject.itemProvider;
@@ -106,6 +110,10 @@ static inline void fkOpenBackgroundPicker(UIWindow *window, bool allowVideo,
   PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:fkBackgroundPickerConfiguration(allowVideo)];
   picker.delegate = session;
   session.presentation = [[FKBackgroundPresentation alloc] init];
-  if (![session.presentation present:picker fromWindow:window]) { [session cancelPending]; return; }
+  __weak FKBackgroundPickerSession *weakSession = session;
+  session.presentation.presentationFailed = ^(NSString *error) { [weakSession failPending:error]; };
+  if (![session.presentation present:picker fromWindow:window]) {
+    [session failPending:@"界面正在切换，请稍后再选图片"]; return;
+  }
   picker.presentationController.delegate = session;
 }
