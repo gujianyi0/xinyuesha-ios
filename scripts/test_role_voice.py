@@ -120,7 +120,7 @@ Window {
  function revealUnrelatedPoxi(){poxiModel.poxiType="unrelated";counter.rememberPopupCards();}
  function revealEagle(){interactionScene.popupItem=null;interactionScene.dataModel={players:[{marks:[{origName:"@[yingshis]",qml:{uri:"LunarLtk.Pages.InfoPopups",name:"ViewPile",prop:{ids:[31,32]}}}]}],drawPileNum:12};infoReveal.visible=true;}
  function revealUnrelatedInfo(){interactionScene.dataModel={players:[],drawPileNum:12};counter.rememberInfoCards();}
- function revealQuanbian(){infoReveal.visible=false;Mediator.commandGot(null,"MoveFocus",[[1],"quanbian",10000]);arrangeReveal.visible=true;interactionScene.popupItem=arrangeReveal;}
+ function revealQuanbian(){infoReveal.visible=false;arrangeModel.accepted.connect(function(){interactionScene.popupItem=null;});Mediator.commandGot(null,"MoveFocus",[[1],"quanbian",10000]);arrangeReveal.visible=true;interactionScene.popupItem=arrangeReveal;}
  function acceptQuanbian(){arrangeModel.accepted();}
  QtObject {id:deckModel;property var cards:[31,32];property string prompt:"$ViewCards";property string promptText:"请观看卡牌";property int minNum:0;property int maxNum:0}
  Item {id:deckReveal;visible:false;property var dataModel:deckModel

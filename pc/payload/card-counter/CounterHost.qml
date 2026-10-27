@@ -39,11 +39,17 @@ Item {
     ignoreUnknownSignals: true
     function onIdsChanged() { visibleCardCapture.restart(); }
   }
-  readonly property var revealModel: currentScene && currentScene.popupItem && currentScene.popupItem.dataModel || null
-  Connections {
-    target: host.revealModel
-    ignoreUnknownSignals: true
-    function onAccepted() { host.rememberArrangement(); }
+  Component {
+    id: arrangementCaptureComponent
+    Connections {
+      objectName: "counterArrangementCapture"
+      required property var box
+      target: box.dataModel
+      ignoreUnknownSignals: true
+      // Stock replyToServer clears popupItem before later accepted handlers.
+      // Keep this connection bound to the box until its deferred destruction.
+      function onAccepted() { host.rememberArrangement(box); }
+    }
   }
   Connections {
     target: host.currentScene
@@ -523,8 +529,8 @@ Item {
     if(evidence)rememberVisible(ids,null);
     rememberVisible(ids,evidence);
   }
-  function rememberArrangement() {
-    const item=currentScene && currentScene.popupItem,model=item && item.dataModel;
+  function rememberArrangement(item) {
+    const model=item && item.dataModel;
     if(!item || !item.visible || !model || revealFocusSkill!=="quanbian" || !model.areaNames ||
        model.areaNames[0]!=="Top" || model.areaNames[1]!=="toObtain" || !model.result || !model.origCards)return;
     // Quanbian leaves the arranged prefix and removes the chosen card. Place
@@ -537,7 +543,12 @@ Item {
   }
   function adaptRoomPopup() {
     const item = currentScene && currentScene.popupItem;
-    if (item) refreshCompatibility(item);
+    if (item) {
+      if(item.dataModel && item.dataModel.origCards && item.dataModel.result &&
+         !Array.from(item.data || []).some(child=>child && child.objectName==="counterArrangementCapture"))
+        arrangementCaptureComponent.createObject(item,{box:item});
+      refreshCompatibility(item);
+    }
   }
   property var fallbackButton: null
   onClientContextChanged: { bootstrapReady = false; if (clientContext) Qt.callLater(host.syncScene); else Qt.callLater(host.releaseScene); }
