@@ -31,7 +31,19 @@ Item {
   Connections {
     target: host.detailPopup
     ignoreUnknownSignals: true
-    function onItemChanged() { Qt.callLater(host.adaptPlayerDetail); }
+    function onItemChanged() { Qt.callLater(host.adaptPlayerDetail); visibleCardCapture.restart(); }
+    function onVisibleChanged() { if (host.detailPopup.visible) visibleCardCapture.restart(); }
+  }
+  Connections {
+    target: host.detailPopup && host.detailPopup.item || null
+    ignoreUnknownSignals: true
+    function onIdsChanged() { visibleCardCapture.restart(); }
+  }
+  readonly property var revealModel: currentScene && currentScene.popupItem && currentScene.popupItem.dataModel || null
+  Connections {
+    target: host.revealModel
+    ignoreUnknownSignals: true
+    function onAccepted() { host.rememberArrangement(); }
   }
   Connections {
     target: host.currentScene
@@ -435,9 +447,53 @@ Item {
     ignoreUnknownSignals: true
     function onPopupItemChanged() { Qt.callLater(host.adaptRoomPopup); visibleCardCapture.restart(); }
   }
-  Timer {id:visibleCardCapture;interval:32;onTriggered:host.rememberPopupCards()}
+  Timer {id:visibleCardCapture;interval:32;onTriggered:{host.rememberPopupCards();host.rememberInfoCards();}}
+  function visibleCardIds(item) {
+    const ids=new Set(),pending=[item];
+    while(pending.length) {
+      const node=pending.pop();
+      if(!node || !node.visible)continue;
+      if(String(node).indexOf("CardItem_QMLTYPE")===0 && node.dataModel && node.known===true && node.dataModel.cardId>0)
+        ids.add(node.dataModel.cardId);
+      if(node.children)pending.push(...Array.from(node.children));
+    }
+    return ids;
+  }
+  function rememberVisible(ids, evidence) {
+    if(!ids.size)return;
+    const args=evidence ? evidence.ids.join(',')+'},'+JSON.stringify(evidence.edge)+','+evidence.count : Array.from(ids).join(',')+'}';
+    try {Lua.ev('(function() FkCardCounterV2=FkCardCounterV2 or dofile("card-counter/counter.lua"); return FkCardCounterV2.remember({' + args + ') end)()');}
+    catch(_) { /* The client may have been replaced while closing. */ }
+  }
+  function deckEvidence(ids, edge, visibleIds) {
+    const ordered=Array.from(ids || []);
+    const count=Number(currentScene.dataModel && currentScene.dataModel.drawPileNum);
+    return ordered.length && ordered.every(id=>visibleIds.has(id)) && Number.isInteger(count) && count>=ordered.length && count<=10000
+      ? {ids:ordered,edge:edge,count:count} : null;
+  }
+  function rememberInfoCards() {
+    const item=detailPopup && detailPopup.visible && detailPopup.item;
+    if(!item || !item.visible)return;
+    const ids=visibleCardIds(item);
+    let evidence=null;
+    // Eagle Sight exposes its exact prefix through the stock public mark spec.
+    // Match the opened view to that spec; unrelated piles imply no deck order.
+    for(const player of currentScene.dataModel.players || []) for(const mark of player.marks || []) {
+      const spec=mark.qml,shown=spec && spec.prop && spec.prop.ids;
+      if(mark.origName!=="@[yingshis]" || !shown || !item.ids ||
+         spec.name!=="ViewPile" || spec.uri!=="LunarLtk.Pages.InfoPopups")continue;
+      if(JSON.stringify(Array.from(shown))===JSON.stringify(Array.from(item.ids))) evidence=deckEvidence(shown,"top",ids);
+    }
+    rememberVisible(ids,evidence);
+  }
   function popupDeckEvidence(item, visibleIds) {
     const model=item.dataModel;
+    if (model && model.poxiType==="guanxu_exchange" && model.cardData) {
+      const row=Array.from(model.cardData).find(row=>row[0]==="Top");
+      return row ? deckEvidence(row[1],"top",visibleIds) : null;
+    }
+    if (model && revealFocusSkill==="quanbian" && model.origCards && model.areaNames && model.areaNames[0]==="Top")
+      return deckEvidence(model.origCards[0],"top",visibleIds);
     if (!model || model.minNum!==0 || model.maxNum!==0 || !model.cards) return null;
     let ordered=Array.from(model.cards);
     // Only the face-up cards that the actual view dialog exposes are eligible.
@@ -460,19 +516,24 @@ Item {
   function rememberPopupCards() {
     const item=currentScene && currentScene.popupItem;
     if(!item || !item.visible) return;
-    const ids=new Set(),pending=[item];
-    while(pending.length) {
-      const node=pending.pop();
-      if(!node || !node.visible)continue;
-      if(String(node).indexOf("CardItem_QMLTYPE")===0 && node.dataModel && node.known===true && node.dataModel.cardId>0)
-        ids.add(node.dataModel.cardId);
-      if(node.children)pending.push(...Array.from(node.children));
-    }
+    const ids=visibleCardIds(item);
     if(!ids.size)return;
     const evidence=popupDeckEvidence(item,ids);
-    const args=evidence ? evidence.ids.join(',')+'},'+JSON.stringify(evidence.edge)+','+evidence.count : Array.from(ids).join(',')+'}';
-    try {Lua.ev('(function() FkCardCounterV2=FkCardCounterV2 or dofile("card-counter/counter.lua"); return FkCardCounterV2.remember({' + args + ') end)()');}
-    catch(_) { /* The transient client may have been replaced while closing. */ }
+    // Record the other visible row too: Guanxu also reveals the target's hand.
+    if(evidence)rememberVisible(ids,null);
+    rememberVisible(ids,evidence);
+  }
+  function rememberArrangement() {
+    const item=currentScene && currentScene.popupItem,model=item && item.dataModel;
+    if(!item || !item.visible || !model || revealFocusSkill!=="quanbian" || !model.areaNames ||
+       model.areaNames[0]!=="Top" || model.areaNames[1]!=="toObtain" || !model.result || !model.origCards)return;
+    // Quanbian leaves the arranged prefix and removes the chosen card. Place
+    // that outgoing card after the remainder, then the move hook removes it.
+    const ids=visibleCardIds(item),original=Array.from(model.origCards[0] || []);
+    const ordered=Array.from(model.result[0] || []).concat(Array.from(model.result[1] || []));
+    if(ordered.length!==original.length || new Set(ordered).size!==ordered.length || ordered.some(id=>original.indexOf(id)<0))return;
+    const evidence=deckEvidence(ordered,"top",ids);
+    if(evidence)rememberVisible(ids,evidence);
   }
   function adaptRoomPopup() {
     const item = currentScene && currentScene.popupItem;

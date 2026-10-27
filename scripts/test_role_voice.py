@@ -99,7 +99,29 @@ Window {
  QtObject {id:client;function notifyServer(command,data){win.sent=win.sent.concat([{command:command,data:data}]);}}
  AvatarChatBox {id:chat;x:20;y:10;width:480;height:500}
  Counter.CounterHost {id:counter}
- Item {id:interactionScene;property var popupItem:null;property var dataModel:({players:[],drawPileNum:12});function closeInfoPopup(){}}
+ Item {id:interactionScene;property var popupItem:null;property var infoPopup:infoReveal;property var dataModel:({players:[],drawPileNum:12});function closeInfoPopup(){}}
+ Item {id:infoReveal;visible:false;property var item:infoCards}
+ Item {id:infoCards;visible:infoReveal.visible;property var ids:[31,32]
+  CardItem {known:true;dataModel:({cardId:31})}
+  CardItem {known:true;dataModel:({cardId:32})}
+ }
+ QtObject {id:poxiModel;property string poxiType:"guanxu_exchange";property var cardData:[["Top",[31,32]],["target",[27]]]}
+ Item {id:poxiReveal;visible:false;property var dataModel:poxiModel
+  CardItem {known:true;dataModel:({cardId:31})}
+  CardItem {known:true;dataModel:({cardId:32})}
+  CardItem {known:true;dataModel:({cardId:27})}
+ }
+ QtObject {id:arrangeModel;property var origCards:[[31,32],[]];property var areaNames:["Top","toObtain"];property var result:[[32],[31]];signal accepted()}
+ Item {id:arrangeReveal;visible:false;property var dataModel:arrangeModel
+  CardItem {known:true;dataModel:({cardId:31})}
+  CardItem {known:true;dataModel:({cardId:32})}
+ }
+ function revealGuanxu(){poxiReveal.visible=true;interactionScene.popupItem=poxiReveal;}
+ function revealUnrelatedPoxi(){poxiModel.poxiType="unrelated";counter.rememberPopupCards();}
+ function revealEagle(){interactionScene.popupItem=null;interactionScene.dataModel={players:[{marks:[{origName:"@[yingshis]",qml:{uri:"LunarLtk.Pages.InfoPopups",name:"ViewPile",prop:{ids:[31,32]}}}]}],drawPileNum:12};infoReveal.visible=true;}
+ function revealUnrelatedInfo(){interactionScene.dataModel={players:[],drawPileNum:12};counter.rememberInfoCards();}
+ function revealQuanbian(){infoReveal.visible=false;Mediator.commandGot(null,"MoveFocus",[[1],"quanbian",10000]);arrangeReveal.visible=true;interactionScene.popupItem=arrangeReveal;}
+ function acceptQuanbian(){arrangeModel.accepted();}
  QtObject {id:deckModel;property var cards:[31,32];property string prompt:"$ViewCards";property string promptText:"请观看卡牌";property int minNum:0;property int maxNum:0}
  Item {id:deckReveal;visible:false;property var dataModel:deckModel
   CardItem {known:true;dataModel:({cardId:31})}
@@ -290,6 +312,16 @@ call('revealGeneric');deck_captures=json.loads(invoke('capturedCards'))
 assert ',"top",' not in deck_captures[-1] and ',"bottom",' not in deck_captures[-1],deck_captures
 call('revealOtherFocus');assert ',"top",' not in json.loads(invoke('capturedCards'))[-1],'another player focus cannot supply private order'
 call('revealPartial');assert ',"top",' not in json.loads(invoke('capturedCards'))[-1],'unseen faces cannot enter an ordered record'
+call('revealGuanxu');poxi_captures=json.loads(invoke('capturedCards'))
+assert 'remember({31,32},"top",12)' in poxi_captures[-1],poxi_captures
+assert '27' in poxi_captures[-2],'Guanxu hand row must also be remembered'
+call('revealUnrelatedPoxi');assert ',"top",' not in json.loads(invoke('capturedCards'))[-1]
+call('revealEagle');eagle_captures=json.loads(invoke('capturedCards'))
+assert 'remember({31,32},"top",12)' in eagle_captures[-1],eagle_captures
+pump(.2);assert json.loads(invoke('capturedCards'))==eagle_captures,'no idle reveal polling'
+call('revealUnrelatedInfo');assert ',"top",' not in json.loads(invoke('capturedCards'))[-1]
+call('revealQuanbian');assert 'remember({31,32},"top",12)' in json.loads(invoke('capturedCards'))[-1]
+call('acceptQuanbian');assert 'remember({32,31},"top",12)' in json.loads(invoke('capturedCards'))[-1]
 
 errors=[m for m in logs if any(x in m for x in ['TypeError','ReferenceError','SyntaxError','Unable to assign','Cannot assign','Binding loop','is not a type'])]
 print(json.dumps({'button_geometry':geometry,'initial':initial,'banned':banned,'final':final,'large':{'checked':large_done['checked'],'with_audio':len(large_done['pool']),'first_batch_checked':large_partial['checked'],'directories':large_done['dirs']},'errors':errors},ensure_ascii=False,indent=2));assert not errors,errors

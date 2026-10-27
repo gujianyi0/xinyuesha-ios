@@ -199,6 +199,8 @@ function M.remember(ids, edge, deckCount)
     local old = viewer.card_tracker.draw_pile_order or {}
     local order = {}
     for i = 1, deckCount do order[i] = #old == deckCount and old[i] or -1 end
+    -- A newly observed position supersedes an older position for the same card.
+    for i, id in ipairs(order) do if seen[id] then order[i] = -1 end end
     for i, id in ipairs(ordered) do
       local index = edge == "top" and i or deckCount - #ordered + i
       order[index] = id
@@ -206,6 +208,88 @@ function M.remember(ids, edge, deckCount)
     viewer.card_tracker.draw_pile_order = order
   end
   return true
+end
+
+-- Preserve only viewer-known positions across a whole simultaneous move batch.
+-- The stock tracker processes losses/additions against the final deck size and
+-- clears both ends for a same-size exchange. Never consult hidden deck IDs.
+function M.beforeMoves(room, moves)
+  local viewer = Self
+  if not viewer or not viewer.card_tracker then return nil end
+  local touchesDeck = false
+  for _, move in ipairs(moves or {}) do
+    for _, info in ipairs(move.moveInfo or {}) do
+      if info.fromArea == Card.DrawPile or move.toArea == Card.DrawPile then touchesDeck = true; break end
+    end
+    if touchesDeck then break end
+  end
+  if not touchesDeck then return nil end
+  local old = viewer.card_tracker.draw_pile_order or {}
+  local order, visible = {}, {}
+  for i, id in ipairs(old) do order[i] = id end
+  for _, move in ipairs(moves or {}) do
+    for _, info in ipairs(move.moveInfo or {}) do
+      local id = info.cardId
+      local known = false
+      local tracker = viewer.card_tracker
+      if tracker.getKnownCardsByArea then
+        local zone = tracker:getKnownCardsByArea(info.fromArea, move.from, info.fromSpecialName)
+        for _, seen in ipairs(zone and zone.known_cards or {}) do if seen == id then known = true; break end end
+      end
+      visible[id] = known or viewer:cardVisible(id, move)
+    end
+  end
+  return {order = order, visible = visible, viewer = viewer}
+end
+
+function M.afterMoves(room, moves, before)
+  if not before or Self ~= before.viewer then return end
+  local order, visible = before.order, before.visible
+  local finalCount = #room.draw_pile -- public length only, never its identities
+  local removed, added = 0, 0
+  for _, move in ipairs(moves or {}) do
+    for _, info in ipairs(move.moveInfo or {}) do
+      if info.fromArea == Card.DrawPile then removed = removed + 1 end
+      if move.toArea == Card.DrawPile then added = added + 1 end
+    end
+  end
+  if removed + added == 0 then return end
+  local initialCount = finalCount + removed - added
+  if #order ~= initialCount then
+    order = {}; for i = 1, initialCount do order[i] = -1 end
+  end
+  -- All removals precede insertions. A known card's index is legitimate prior
+  -- knowledge; an unknown removal is positional only for explicit edge draws.
+  for _, move in ipairs(moves or {}) do
+    for _, info in ipairs(move.moveInfo or {}) do
+      if info.fromArea == Card.DrawPile then
+        local index
+        for i, id in ipairs(order) do if id > 0 and id == info.cardId then index = i; break end end
+        if not index and move.drawPilePosition == nil then index = 1 end
+        if not index and move.drawPilePosition == -1 then index = #order end
+        if index and index > 0 then table.remove(order, index)
+        else
+          local count = math.max(0, #order - 1)
+          order = {}; for i = 1, count do order[i] = -1 end
+        end
+      end
+    end
+  end
+  for _, move in ipairs(moves or {}) do
+    for _, info in ipairs(move.moveInfo or {}) do
+      if move.toArea == Card.DrawPile then
+        local pos = move.drawPilePosition
+        local index = pos == -1 and #order + 1 or (pos or 1)
+        if type(index) ~= "number" or index % 1 ~= 0 or index < 1 or index > #order + 1 then
+          local count = #order + 1; order = {}; for i = 1, count do order[i] = -1 end
+        else
+          table.insert(order, index, visible[info.cardId] and info.cardId or -1)
+        end
+      end
+    end
+  end
+  if #order ~= finalCount then order = {}; for i = 1, finalCount do order[i] = -1 end end
+  before.viewer.card_tracker.draw_pile_order = order
 end
 
 function M.current(detailKey)

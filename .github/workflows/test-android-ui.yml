@@ -8,6 +8,8 @@ on:
       - 'pc/payload/**'
       - 'android/tools/test_gameplay_work.py'
       - 'scripts/test_counter_catalogue.py'
+      - 'scripts/test_deck_knowledge.py'
+      - 'scripts/fixtures/known_card_tracker_0_5_25.lua'
       - 'scripts/test_social_session.py'
       - 'scripts/test_social_follow.py'
       - 'scripts/test_social_transport.py'
@@ -47,6 +49,7 @@ jobs:
       - run: |
           sudo apt-get install -y liblua5.4-0
           python3 scripts/test_counter_catalogue.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/counter-catalogue" --lua-library liblua5.4.so.0 --result "$RUNNER_TEMP/counter-catalogue/result.json"
+          python3 scripts/test_deck_knowledge.py --payload '${{ matrix.payload }}' --lua-library liblua5.4.so.0
       - run: python3 scripts/test_social_session.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/social-session"
       - run: python3 scripts/test_social_follow.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/social-follow"
       - run: python3 scripts/test_social_transport.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/social-transport"

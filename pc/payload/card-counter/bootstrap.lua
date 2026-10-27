@@ -21,6 +21,18 @@ klass.prepareDrawPile = function(self, ids)
   end
 end
 
+local originalMove = klass.moveCards
+if type(originalMove) == "function" then
+  klass.moveCards = function(self, data)
+    FkCardCounterV2 = FkCardCounterV2 or dofile("card-counter/counter.lua")
+    local moves = type(data) == "table" and data[1] or {}
+    local ok, before = pcall(FkCardCounterV2.beforeMoves, self, moves)
+    local result = originalMove(self, data)
+    if ok then pcall(FkCardCounterV2.afterMoves, self, moves, before) end
+    return result
+  end
+end
+
 
 local originalShuffle = klass.shuffleDrawPile
 if type(originalShuffle) == "function" then
@@ -63,6 +75,7 @@ end
 if ClientInstance and ClientInstance.callbacks then
   install(ClientInstance.class)
   ClientInstance.callbacks.PrepareDrawPile = ClientInstance.class.prepareDrawPile
+  if ClientInstance.class.moveCards then ClientInstance.callbacks.MoveCards = ClientInstance.class.moveCards end
 end
 
 -- Route the named built-in skin downloader to the local responsive frontend.
