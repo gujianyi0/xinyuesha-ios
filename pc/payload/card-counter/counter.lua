@@ -265,8 +265,10 @@ function M.afterMoves(room, moves, before)
       if info.fromArea == Card.DrawPile then
         local index
         for i, id in ipairs(order) do if id > 0 and id == info.cardId then index = i; break end end
-        if not index and move.drawPilePosition == nil then index = 1 end
-        if not index and move.drawPilePosition == -1 then index = #order end
+        -- drawPilePosition ordinarily describes the destination, not where an
+        -- arbitrary hidden card came from. Only a normal draw certifies top.
+        if not index and move.drawPilePosition == nil and fk and fk.ReasonDraw and
+            move.moveReason == fk.ReasonDraw then index = 1 end
         if index and index > 0 then table.remove(order, index)
         else
           local count = math.max(0, #order - 1)

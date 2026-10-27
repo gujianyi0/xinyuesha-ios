@@ -18,7 +18,7 @@ function table.insertTableIfNeed(t,other) for _,v in ipairs(other) do table.inse
 function table.map(t,f) local out={};for i,v in ipairs(t) do out[i]=f(v) end;return out end
 function table.filter(t,f) local out={};for _,v in ipairs(t) do if f(v) then out[#out+1]=v end end;return out end
 Card={PlayerHand=1,PlayerEquip=2,PlayerJudge=3,PlayerSpecial=4,Processing=5,DrawPile=6,DiscardPile=7,Void=8}
-Player={Hand=1,Equip=2,Judge=3,Special=4}
+Player={Hand=1,Equip=2,Judge=3,Special=4};fk={ReasonDraw=1}
 local room={draw_pile={31,32,33,34,35,36,37,38},players={}}
 Fk={currentRoom=function() return room end,boardgames={}}
 local viewer={id=1};Self=viewer;ClientInstance=room
@@ -53,6 +53,16 @@ assert(table.concat(tracker.draw_pile_order,',')=='31,32,27,34,35,-1,-1,38','sam
 local draw={{to=2,toArea=1,moveInfo={{cardId=31,fromArea=6}}}}
 before=M.beforeMoves(room,draw);actual={32,27,34,35,36,37,38};M.afterMoves(room,draw,before)
 assert(table.concat(tracker.draw_pile_order,',')=='32,27,34,35,-1,-1,38')
+-- A normal unknown draw still certifies the top, preserving a known bottom.
+tracker.draw_pile_order={-1,-1,-1,-1,-1,-1,38}
+local unknownDraw={{to=2,toArea=1,moveReason=1,moveInfo={{cardId=32,fromArea=6}}}}
+before=M.beforeMoves(room,unknownDraw);actual={27,34,35,36,37,38};M.afterMoves(room,unknownDraw,before)
+assert(table.concat(tracker.draw_pile_order,',')=='-1,-1,-1,-1,-1,38')
+-- Destination metadata or nil alone cannot certify an arbitrary hidden source.
+local hiddenPick={{to=2,toArea=1,moveInfo={{cardId=36,fromArea=6}}}}
+before=M.beforeMoves(room,hiddenPick);actual={27,34,35,37,38};M.afterMoves(room,hiddenPick,before)
+assert(table.concat(tracker.draw_pile_order,',')=='-1,-1,-1,-1,-1')
+actual={32,27,34,35,36,37,38};tracker.draw_pile_order={32,27,34,35,-1,-1,38}
 -- Unknown interior removal cannot retain unsupported exact positions.
 local random={{to=2,toArea=1,drawPilePosition=3,moveInfo={{cardId=36,fromArea=6}}}}
 before=M.beforeMoves(room,random);actual={32,27,34,35,37,38};M.afterMoves(room,random,before)
