@@ -15,6 +15,7 @@ on:
       - 'scripts/test_social_transport.py'
       - 'scripts/test_social_native_bridge.py'
       - 'scripts/test_touch_log.py'
+      - 'scripts/test_room_drawer_swipe.py'
       - 'scripts/test_role_voice.py'
       - 'scripts/test_interactions.py'
       - 'scripts/test_skin_settings.py'
@@ -70,6 +71,8 @@ jobs:
       - if: matrix.platform == 'iOS'
         run: python3 scripts/test_social_native_bridge.py --work-dir "$RUNNER_TEMP/social-native-bridge"
       - run: python3 scripts/test_touch_log.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/touch-log"
+      - if: matrix.platform == 'iOS'
+        run: python3 scripts/test_room_drawer_swipe.py --payload runtime --work-dir "$RUNNER_TEMP/room-drawer-swipe"
       - run: python3 scripts/test_role_voice.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/role-voice"
       - run: python3 scripts/test_interactions.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/interactions"
       - run: python3 scripts/test_skin_settings.py --payload '${{ matrix.payload }}'

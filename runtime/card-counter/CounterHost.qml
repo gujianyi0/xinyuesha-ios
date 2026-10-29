@@ -183,6 +183,38 @@ Item {
       if (view.atYEnd && view.count>0) view.currentIndex=view.count-1;
     });
   }
+  function adaptRoomDrawerSwipe(view) {
+    if (Cpp.os !== "iOS" || view.count !== 3 || view.orientation !== Qt.Horizontal || !view.parent) return;
+    const names = [Lua.tr("Log"), Lua.tr("Chat"), Lua.tr("PlayerList")];
+    const tabs = Array.from(view.parent.children || []).find(item =>
+      String(item).indexOf("ViewSwitcher_QMLTYPE") === 0 && item.model &&
+      [JSON.stringify(names), JSON.stringify(names.slice(1))].indexOf(JSON.stringify(Array.from(item.model))) >= 0);
+    if (!tabs || adaptedControls.indexOf(view) >= 0) return;
+    // Use the existing horizontal SwipeView so nested lists retain vertical
+    // drags. The stock currentIndex binding already handles tab -> page.
+    const sync = roomDrawerSwipeSync.createObject(view, {view:view, tabs:tabs});
+    if (sync) {
+      view.interactive = Qt.binding(function() { return sync.available; });
+      adaptedControls.push(view);
+    }
+  }
+  Component {
+    id: roomDrawerSwipeSync
+    Connections {
+      objectName: "roomDrawerSwipeSync"
+      required property var view
+      required property var tabs
+      // Newer cores also have a two-tab logless mode with a page offset.
+      // Keep its existing navigation until a full three-tab drawer is shown.
+      readonly property bool available: JSON.stringify(Array.from(tabs.model || [])) ===
+        JSON.stringify([Lua.tr("Log"), Lua.tr("Chat"), Lua.tr("PlayerList")])
+      enabled: available
+      target: view
+      function onCurrentIndexChanged() {
+        if (tabs.currentIndex !== view.currentIndex) tabs.currentIndex = view.currentIndex;
+      }
+    }
+  }
   Component {
     id: touchLogGuard
     Item {
@@ -367,6 +399,7 @@ Item {
       seen.add(item);
       if ("model" in item) host.prepareSkinMenu(item.model);
       const type = String(item);
+      if (ios && type.indexOf("SwipeView_QMLTYPE") === 0) host.adaptRoomDrawerSwipe(item);
       if (type.indexOf("PlayerDetail_QMLTYPE") === 0) host.adaptPlayerDetail(item);
       if (type.indexOf("AvatarChatBox_QMLTYPE") === 0 && typeof item.loadSkills === "function")
         host.attachRoleVoices(item);
