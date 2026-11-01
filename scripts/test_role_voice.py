@@ -9,7 +9,7 @@ from PySide6.QtGui import QGuiApplication,QFontDatabase,QFont
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtTest import QTest,QSignalSpy
-p=argparse.ArgumentParser();p.add_argument('--payload',type=Path,default=Path('runtime'));p.add_argument('--work-dir',type=Path,required=True);a=p.parse_args();a.work_dir.mkdir(parents=True,exist_ok=True)
+p=argparse.ArgumentParser();p.add_argument('--payload',type=Path,default=Path('runtime'));p.add_argument('--work-dir',type=Path,required=True);p.add_argument('--xinghun',action='store_true');a=p.parse_args();a.work_dir.mkdir(parents=True,exist_ok=True)
 R=Path(__file__).resolve().parents[1]/'runtime';logs=[]
 qInstallMessageHandler(lambda kind,context,message:logs.append(message));app=QGuiApplication([])
 font_file=Path('C:/Windows/Fonts/msyh.ttc')
@@ -122,6 +122,22 @@ Window {
  function revealUnrelatedInfo(){interactionScene.dataModel={players:[],drawPileNum:12};counter.rememberInfoCards();}
  function revealQuanbian(){infoReveal.visible=false;arrangeModel.accepted.connect(function(){interactionScene.popupItem=null;});Mediator.commandGot(null,"MoveFocus",[[1],"quanbian",10000]);arrangeReveal.visible=true;interactionScene.popupItem=arrangeReveal;}
  function acceptQuanbian(){arrangeModel.accepted();}
+ QtObject {id:starModel;property var origCards:[[41,42],[27]];property var areaNames:["Top","$Hand"];property var result:[[27,41],[42]];signal accepted()}
+ Item {id:starReveal;visible:false;property var dataModel:starModel
+  CardItem {known:true;dataModel:({cardId:41})}
+  CardItem {known:true;dataModel:({cardId:42})}
+  CardItem {known:true;dataModel:({cardId:27})}
+  CardItem {known:false;dataModel:({cardId:99})}
+ }
+ function confirmStarQuickly(){
+  arrangeReveal.visible=false;
+  starModel.accepted.connect(function(){interactionScene.popupItem=null;});
+  Mediator.commandGot(null,"MoveFocus",[[1],"xinghun",10000]);
+  starReveal.visible=true;interactionScene.popupItem=starReveal;
+  counter.adaptRoomPopup();counter.adaptRoomPopup();
+  // The stock accepted listener clears popupItem before the owned listener.
+  starModel.accepted();
+ }
  QtObject {id:deckModel;property var cards:[31,32];property string prompt:"$ViewCards";property string promptText:"请观看卡牌";property int minNum:0;property int maxNum:0}
  Item {id:deckReveal;visible:false;property var dataModel:deckModel
   CardItem {known:true;dataModel:({cardId:31})}
@@ -322,6 +338,13 @@ pump(.2);assert json.loads(invoke('capturedCards'))==eagle_captures,'no idle rev
 call('revealUnrelatedInfo');assert ',"top",' not in json.loads(invoke('capturedCards'))[-1]
 call('revealQuanbian');assert 'remember({31,32},"top",12)' in json.loads(invoke('capturedCards'))[-1]
 call('acceptQuanbian');assert 'remember({32,31},"top",12)' in json.loads(invoke('capturedCards'))[-1]
+if a.xinghun:
+ before_star=json.loads(invoke('capturedCards'))
+ QMetaObject.invokeMethod(win,'confirmStarQuickly',Qt.DirectConnection)
+ star=json.loads(invoke('capturedCards'))
+ assert len(star)==len(before_star)+1 and 'remember({27,42,41})' in star[-1],star
+ assert '99' not in star[-1] and ',"top",' not in star[-1],star[-1]
+ pump(.2);assert json.loads(invoke('capturedCards'))==star,'one capture listener per box; no idle polling'
 
 errors=[m for m in logs if any(x in m for x in ['TypeError','ReferenceError','SyntaxError','Unable to assign','Cannot assign','Binding loop','is not a type'])]
 print(json.dumps({'button_geometry':geometry,'initial':initial,'banned':banned,'final':final,'large':{'checked':large_done['checked'],'with_audio':len(large_done['pool']),'first_batch_checked':large_partial['checked'],'directories':large_done['dirs']},'errors':errors},ensure_ascii=False,indent=2));assert not errors,errors

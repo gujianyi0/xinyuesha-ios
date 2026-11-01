@@ -11,6 +11,7 @@ Item {
   objectName: "fkCounterHost"
   property var currentScene: null
   property string revealFocusSkill: ""
+  property var arrangementBoxes: []
   // Use the stock double-tap signal and the same profile action as long press.
   // Model/photo bindings cover delayed creation and replacement without polling.
   Instantiator {
@@ -593,7 +594,17 @@ Item {
   }
   function rememberArrangement(item) {
     const model=item && item.dataModel;
-    if(!item || !item.visible || !model || revealFocusSkill!=="quanbian" || !model.areaNames ||
+    if(!item || !item.visible || !model)return;
+    if(revealFocusSkill==="xinghun" && model.areaNames && model.areaNames[0]==="Top" &&
+       model.areaNames[1]==="$Hand" && model.origCards && model.result) {
+      // These top cards are temporarily in Processing, not in the draw pile.
+      // Capture the actually shown faces at confirmation too (including a
+      // quick confirmation before the deferred capture), then let visible
+      // Processing/hand -> deck moves establish the confirmed top order.
+      rememberVisible(visibleCardIds(item),null);
+      return;
+    }
+    if(revealFocusSkill!=="quanbian" || !model.areaNames ||
        model.areaNames[0]!=="Top" || model.areaNames[1]!=="toObtain" || !model.result || !model.origCards)return;
     // Quanbian leaves the arranged prefix and removes the chosen card. Place
     // that outgoing card after the remainder, then the move hook removes it.
@@ -605,10 +616,13 @@ Item {
   }
   function adaptRoomPopup() {
     const item = currentScene && currentScene.popupItem;
+    arrangementBoxes=arrangementBoxes.filter(box=>box && box.parent);
     if (item) {
       if(item.dataModel && item.dataModel.origCards && item.dataModel.result &&
-         !Array.from(item.data || []).some(child=>child && child.objectName==="counterArrangementCapture"))
-        arrangementCaptureComponent.createObject(item,{box:item});
+         arrangementBoxes.indexOf(item)<0) {
+        const capture=arrangementCaptureComponent.createObject(item,{box:item});
+        if(capture)arrangementBoxes.push(item);
+      }
       refreshCompatibility(item);
     }
   }

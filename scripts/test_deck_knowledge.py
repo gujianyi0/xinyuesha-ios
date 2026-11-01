@@ -1,7 +1,7 @@
 """Reproduce stock simultaneous-exchange loss and check visibility-safe repairs."""
 import argparse, ctypes, json, os
 from pathlib import Path
-p=argparse.ArgumentParser();p.add_argument('--payload',type=Path,default=Path('runtime'));p.add_argument('--lua-library',required=True);a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--payload',type=Path,default=Path('runtime'));p.add_argument('--lua-library',required=True);p.add_argument('--xinghun',action='store_true');a=p.parse_args()
 directory=os.add_dll_directory(str(Path(a.lua_library).resolve().parent)) if os.name=='nt' else None
 lib=ctypes.CDLL(a.lua_library);lib.luaL_newstate.restype=ctypes.c_void_p
 lib.luaL_openlibs.argtypes=[ctypes.c_void_p];lib.luaL_loadstring.argtypes=[ctypes.c_void_p,ctypes.c_char_p]
@@ -18,7 +18,7 @@ function table.insertTableIfNeed(t,other) for _,v in ipairs(other) do table.inse
 function table.map(t,f) local out={};for i,v in ipairs(t) do out[i]=f(v) end;return out end
 function table.filter(t,f) local out={};for _,v in ipairs(t) do if f(v) then out[#out+1]=v end end;return out end
 Card={PlayerHand=1,PlayerEquip=2,PlayerJudge=3,PlayerSpecial=4,Processing=5,DrawPile=6,DiscardPile=7,Void=8}
-Player={Hand=1,Equip=2,Judge=3,Special=4};fk={ReasonDraw=1}
+Player={Hand=1,Equip=2,Judge=3,Special=4};fk={ReasonDraw=1,ReasonJustMove=2}
 local room={draw_pile={31,32,33,34,35,36,37,38},players={}}
 Fk={currentRoom=function() return room end,boardgames={}}
 local viewer={id=1};Self=viewer;ClientInstance=room
@@ -74,8 +74,48 @@ local obtain={{to=1,toArea=1,moveInfo={{cardId=32,fromArea=6}}}}
 before=M.beforeMoves(room,obtain);actual={33,31,34,35,36,37,38};room.draw_pile=setmetatable({},{__len=function()return #actual end,__index=function()error('hidden identity read')end})
 M.afterMoves(room,obtain,before)
 assert(table.concat(tracker.draw_pile_order,',')=='33,31,-1,-1,-1,-1,38')
-return 'stock Guanxu loss reproduced; exchanged prefix/bottom, subsequent draw, unknown removal and Quanbian passed without hidden identity reads'
 '''
+if a.xinghun:
+ script+=r'''
+-- Stock Xinghun lifts the unknown top five into Processing, privately shows
+-- them, exchanges/sorts with hand cards, and puts each top card back in reverse.
+actual={31,32,33,34,35,36,37,38};tracker.draw_pile_order={-1,-1,-1,-1,-1,-1,-1,38}
+local function poisonDeck() room.draw_pile=setmetatable({},{__len=function()return #actual end,__index=function()error('hidden identity read')end}) end
+local lift={{toArea=5,moveReason=2,skillName='xinghun',moveInfo={}}}
+for _,id in ipairs({31,32,33,34,35}) do table.insert(lift[1].moveInfo,{cardId=id,fromArea=6}) end
+before=M.beforeMoves(room,lift);actual={36,37,38};room.draw_pile=actual;tracker:applyMoveDatas(lift);poisonDeck();M.afterMoves(room,lift,before)
+assert(table.concat(tracker.draw_pile_order,',')=='-1,-1,38','known bottom survives certified top lift')
+-- No face is learned just from the skill name or a hidden Processing move.
+assert(not table.contains(tracker.processing_area.known_cards,31),'private identities must not be inferred')
+local oldGetCards=room.getCardsByArea
+target.player_cards[1]={27,28}
+function room:getCardsByArea(area,player) if area==5 then return {31,32,33,34,35} end;return oldGetCards(self,area,player) end
+function room:getCardArea(id)
+ if id>=31 and id<=35 then return 5 end
+ if id==27 or id==28 then return 1 end
+ return 6
+end
+assert(M.remember({31,32,33,34,35,27,28}))
+assert(table.contains(tracker.processing_area.known_cards,31))
+assert(table.contains(tracker.player_cards[2][1].known_cards,27))
+local returned={}
+for _,id in ipairs({35,34,33,27,31}) do
+ table.insert(returned,{toArea=6,moveReason=2,skillName='xinghun',moveInfo={{cardId=id,fromArea=id==27 and 1 or 5,from=id==27 and 2 or nil}}})
+end
+-- The real movement contract carries from on the move, not inside moveInfo.
+returned[4].from=2
+before=M.beforeMoves(room,returned);actual={31,27,33,34,35,36,37,38}
+room.draw_pile=actual;tracker:applyMoveDatas(returned);poisonDeck();M.afterMoves(room,returned,before)
+assert(table.concat(tracker.draw_pile_order,',')=='31,27,33,34,35,-1,-1,38','confirmed exchanged order and known bottom')
+local nextDraw={{to=2,toArea=1,moveReason=1,moveInfo={{cardId=31,fromArea=6}}}}
+before=M.beforeMoves(room,nextDraw);actual={27,33,34,35,36,37,38};M.afterMoves(room,nextDraw,before)
+assert(table.concat(tracker.draw_pile_order,',')=='27,33,34,35,-1,-1,38')
+-- A different skill's hidden JustMove is not evidence of a top removal.
+local unrelated={{toArea=5,moveReason=2,skillName='unrelated',moveInfo={{cardId=36,fromArea=6}}}}
+before=M.beforeMoves(room,unrelated);actual={27,33,34,35,37,38};M.afterMoves(room,unrelated,before)
+assert(table.concat(tracker.draw_pile_order,',')=='-1,-1,-1,-1,-1,-1')
+'''
+script+="return 'Guanxu, Quanbian and requested Xinghun movement cases passed without hidden identity reads'"
 vm=lib.luaL_newstate()
 try:
  lib.luaL_openlibs(vm);assert lib.luaL_loadstring(vm,script.encode())==0,lib.lua_tolstring(vm,-1,None)

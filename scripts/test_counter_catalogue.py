@@ -15,6 +15,7 @@ parser.add_argument('--payload',type=Path,default=Path(__file__).resolve().paren
 parser.add_argument('--measure-only',action='store_true')
 parser.add_argument('--result',type=Path)
 parser.add_argument('--lua-library')
+parser.add_argument('--player-groups',action='store_true')
 args=parser.parse_args();args.work_dir.mkdir(parents=True,exist_ok=True)
 logs=[];qInstallMessageHandler(lambda kind,ctx,msg:logs.append(msg))
 app=QGuiApplication([])
@@ -80,6 +81,14 @@ Window {
  function normalTab(){counter.scope="unseen";}
  function knownDetails(){return JSON.stringify({count:counter.knowledgeDetails.count,uncertain:counter.knowledgeDetails.uncertain,spade7:counter.pointCount(1,7),heart2:counter.pointCount(3,2),selected:counter.selectedKey,scope:counter.scope});}
  function knownEmpty(){counter.snapshot={knowledge:{hands:[],top:[],bottom:[]}};}
+ function groupedHands(){
+  const rows=[];
+  for(let p=2;p<=9;p++)for(let c=0;c<12;c++)rows.push({token:p+":"+(p*100+c),ownerId:p,id:p*100+c,key:"slash",name:"杀",suit:1,number:7,owner:p<4?"同名玩家":"玩家"+p,position:0,uncertain:c===11});
+  counter.scope="hands";counter.snapshot={knowledge:{hands:rows,top:[],bottom:[]}};
+ }
+ function groupState(){return JSON.stringify({selected:counter.selectedHandOwner,groups:counter.handGroups,rows:counter.knowledgeRows.length,details:counter.knowledgeDetails});}
+ function groupUpdate(){const snap=JSON.parse(JSON.stringify(counter.snapshot));snap.knowledge.hands.forEach(r=>{if(r.ownerId===3)r.owner="更名玩家";});counter.snapshot=snap;}
+ function removeGroup(){const snap=JSON.parse(JSON.stringify(counter.snapshot));snap.knowledge.hands=snap.knowledge.hands.filter(r=>r.ownerId!==3);counter.snapshot=snap;}
  function inputStyle(){const f=counter.testSearch;return JSON.stringify({preedit:f.preeditText,text:f.text,color:f.color.toString(),background:f.background.color.toString(),selected:f.selectedTextColor.toString()});}
  function inputGeometry(){const field=counter.testSearch;const cursor=field.cursorRectangle;return JSON.stringify({y:cursor.y,height:cursor.height,fieldHeight:field.height,topPadding:field.topPadding,bottomPadding:field.bottomPadding});}
  function state(){return JSON.stringify({reads:reads,creates:counter.testCreates,count:counter.rows.length,gridCount:counter.testGrid.count,moving:counter.testGrid.moving,y:counter.testGrid.contentY,topKey:counter.rows[Math.max(0,Math.floor((counter.testGrid.contentY-counter.testGrid.originY)/counter.testGrid.cellHeight))*5]?.key || "",selected:counter.selectedRow?counter.selectedRow.key:"",amount:counter.selectedRow?counter.selectedRow.unseen:-1});}
@@ -151,6 +160,28 @@ Window {
     window.grabWindow().save(str(args.work_dir/'known-cards.png'))
     invoke('knownBottom');pump(.03);assert known.property('count')==0 and details.property('visible')
     invoke('knownEmpty');pump(.03);assert known.property('count')==0
+    if args.player_groups:
+        from PySide6.QtTest import QTest,QSignalSpy
+        from PySide6.QtCore import QPoint,Qt
+        invoke('groupedHands');pump(.05)
+        grouped=json.loads(invoke('groupState'))
+        assert grouped['rows']==96 and len(grouped['groups'])==9,grouped
+        assert grouped['groups'][1]['key']=='2' and grouped['groups'][2]['key']=='3' and grouped['groups'][1]['label']==grouped['groups'][2]['label'],grouped
+        chip=visual_item(window.contentItem(),'counterKnownPlayer-3');assert chip
+        point=chip.mapToScene(chip.boundingRect().center())
+        QTest.mouseClick(window,Qt.LeftButton,Qt.NoModifier,QPoint(round(point.x()),round(point.y())));pump(.03)
+        grouped=json.loads(invoke('groupState'))
+        assert grouped['selected']=='3' and grouped['rows']==12 and grouped['details']['count']==11 and grouped['details']['uncertain']==1,grouped
+        model=known.property('model');resets=QSignalSpy(model.modelReset)
+        known.setProperty('contentY',350);pump(.01);y=known.property('contentY')
+        invoke('groupUpdate');pump(.03);updated_group=json.loads(invoke('groupState'))
+        assert updated_group['selected']=='3' and updated_group['groups'][2]['label']=='更名玩家',updated_group
+        assert abs(known.property('contentY')-y)<1 and resets.count()==0,'live nickname/count updates must preserve scrolling'
+        window.grabWindow().save(str(args.work_dir/'known-player-groups.png'))
+        chips=visual_item(window.contentItem(),'counterKnownPlayers');assert chips.property('contentWidth')>chips.property('width'),'many players must be horizontally scrollable'
+        invoke('removeGroup');pump(.03);removed_group=json.loads(invoke('groupState'))
+        assert removed_group['selected']=='' and removed_group['rows']==84,removed_group
+        result_groups={'separate_same_names':True,'selected_player':grouped,'nickname_update_keeps_scroll':True,'removed_player_falls_back_to_all':True}
     invoke('normalTab');pump(.03);assert state()['gridCount']==300 and details.property('visible')
     window.grabWindow().save(str(args.work_dir/'normal-cards.png'))
     invoke('close');closed=state();pump(.6);assert state()['reads']==closed['reads'],'hidden counter must not poll'
@@ -158,6 +189,7 @@ Window {
       'delegates_created_by_count_updates':updated['creates']-initial['creates'],'snapshots_during_flick':moving['reads']-start['reads'],
       'six_inline_tabs':True,'knowledge_details':{'hands':hands_details,'top':top_details},'details_preserved':True,
       'input_geometry':input_geometry,'input_composing':composing,'input_committed':committed,'qml_errors':[m for m in logs if any(e in m for e in ['TypeError','ReferenceError','SyntaxError','Cannot assign','is not a type'])]}
+    if args.player_groups:result['player_groups']=result_groups
     if not args.measure_only:
         assert not result['qml_errors'],result['qml_errors']
         assert result['delegates_created_by_count_updates']==0,result
@@ -252,6 +284,8 @@ return "counts, selected details and hidden-zone restrictions passed; detail row
 '''
         bootstrap=(args.payload/'card-counter/bootstrap.lua').read_text(encoding='utf8')
         script=script.replace('return "counts, selected details', 'local snapshotResult="counts, selected details')
+        if args.player_groups:
+            script=script.replace('assert(k.hands[1].owner=="target")','assert(k.hands[1].owner=="target" and k.hands[1].ownerId==2)')
         script+='\nlocal install=assert(load('+json.dumps(bootstrap,ensure_ascii=False)+',"bootstrap.lua"))\n'+r'''
 Client={prepareDrawPile=function() end,deserialize=function() end,
  shuffleDrawPile=function(self,ids) self.shuffles=(self.shuffles or 0)+1;self.draw_pile=ids;return "shuffled" end}

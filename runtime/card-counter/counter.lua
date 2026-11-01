@@ -107,7 +107,11 @@ function M.snapshot(room, engine, viewer, detailKey)
       local function append(id, uncertain)
         if seen[id] then return end
         local row = record(id, label, 0, uncertain)
-        if row then row.token = tostring(player.id) .. ":" .. tostring(id); knowledge.hands[#knowledge.hands+1] = row; seen[id] = true end
+        if row then
+          row.ownerId = player.id
+          row.token = tostring(player.id) .. ":" .. tostring(id)
+          knowledge.hands[#knowledge.hands+1] = row; seen[id] = true
+        end
       end
       for _, id in ipairs(knownHand.known_cards or {}) do append(id, false) end
       for _, id in ipairs((player.player_cards or {})[1] or {}) do
@@ -267,8 +271,13 @@ function M.afterMoves(room, moves, before)
         for i, id in ipairs(order) do if id > 0 and id == info.cardId then index = i; break end end
         -- drawPilePosition ordinarily describes the destination, not where an
         -- arbitrary hidden card came from. Only a normal draw certifies top.
-        if not index and move.drawPilePosition == nil and fk and fk.ReasonDraw and
-            move.moveReason == fk.ReasonDraw then index = 1 end
+        local ordinaryDraw = fk and fk.ReasonDraw and move.moveReason == fk.ReasonDraw
+        -- Xinghun's server implementation explicitly lifts the first five
+        -- cards into Processing before its arrange dialog. Preserve the
+        -- remaining known bottom without reading the hidden source deck.
+        local xinghunLift = fk and fk.ReasonJustMove and move.moveReason == fk.ReasonJustMove and
+          move.skillName == "xinghun" and move.toArea == Card.Processing
+        if not index and move.drawPilePosition == nil and (ordinaryDraw or xinghunLift) then index = 1 end
         if index and index > 0 then table.remove(order, index)
         else
           local count = math.max(0, #order - 1)

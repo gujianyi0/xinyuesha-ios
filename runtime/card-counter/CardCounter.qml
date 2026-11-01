@@ -13,7 +13,7 @@ Item {
   visible: expanded
   component KnownButton: T.Button {
     id:action
-    implicitWidth:Math.max(90,label.implicitWidth+24);implicitHeight:36
+    implicitWidth:Math.max(90,contentItem.implicitWidth+24);implicitHeight:36
     leftPadding:12;rightPadding:12;topPadding:6;bottomPadding:6
     contentItem:Text {id:label;text:action.text;color:"#F0E2C6";font.pixelSize:14;verticalAlignment:Text.AlignVCenter;horizontalAlignment:Text.AlignHCenter}
     background:Rectangle {radius:5;color:action.checked ? "#5C5036" : action.down ? "#48615E" : "#2C4449";border.color:action.checked ? "#D5B471" : "#708982"}
@@ -21,7 +21,33 @@ Item {
   property bool expanded: false
   readonly property bool knowledgeOpen: ["hands","top","bottom"].indexOf(scope)>=0
   readonly property string knowledgeScope: scope
-  readonly property var knowledgeRows: ((snapshot.knowledge || {})[scope] || [])
+  property string selectedHandOwner: ""
+  function handOwnerKey(row) {
+    if(row.ownerId!==undefined && row.ownerId!==null)return String(row.ownerId);
+    return row.token && row.token.indexOf(":")>=0 ? row.token.split(":")[0] : "name:"+String(row.owner || "玩家");
+  }
+  function handGroupsFor(rows) {
+    const groups=[{key:"",label:"全部",count:rows.length}], lookup=new Map();
+    for(const row of rows) {
+      const key=handOwnerKey(row);
+      if(!lookup.has(key)) {
+        const group={key:key,label:String(row.owner || "玩家"),count:0};
+        lookup.set(key,group);groups.push(group);
+      }
+      lookup.get(key).count++;
+    }
+    return groups;
+  }
+  readonly property var handGroups: handGroupsFor((snapshot.knowledge || {}).hands || [])
+  onHandGroupsChanged: if(selectedHandOwner && !handGroups.some(g=>g.key===selectedHandOwner)) selectedHandOwner="";
+  readonly property var allKnowledgeRows: ((snapshot.knowledge || {})[scope] || [])
+  readonly property var knowledgeRows: scope==="hands" && selectedHandOwner
+    ? allKnowledgeRows.filter(row=>handOwnerKey(row)===selectedHandOwner) : allKnowledgeRows
+  function handGroupLabel(key) {return (handGroups.find(g=>g.key===key) || {}).label || "玩家";}
+  onSelectedHandOwnerChanged: {
+    syncKnowledge();syncKnownSelection();
+    if(scope==="hands")knownCards.positionViewAtBeginning();
+  }
   readonly property var knowledgeDetails: summarizeKnowledge()
   property string selectedKnownToken: ""
   function summarizeKnowledge() {
@@ -55,7 +81,7 @@ Item {
     if(!knowledgeOpen)return;
     const rows = knowledgeRows;
     for (let i=0;i<rows.length;i++) {
-      const row=rows[i];
+      const row=Object.assign({},rows[i],{ownerGroup:scope==="hands" ? handOwnerKey(rows[i]) : ""});
       let index=-1;
       for(let j=i;j<knownModel.count;j++) if(knownModel.get(j).token===row.token){index=j;break;}
       if(index>=0 && index!==i) knownModel.move(index,i,1);
@@ -312,10 +338,25 @@ Item {
           Text { anchors.centerIn:parent; visible:cards.count===0; text:root.snapshot.ready ? "没有符合条件的牌" : "等待牌局数据"; color:"#A6AF9E"; font.pixelSize:15 }
         }
         Text {
-          visible:root.knowledgeOpen; width:parent.width; height:28; wrapMode:Text.Wrap
+          visible:root.knowledgeOpen && root.scope!=="hands"; width:parent.width; height:28; wrapMode:Text.Wrap
           color:"#AABCB7";font.pixelSize:11
           text:root.scope==="hands" ? "只记录实际展示的手牌；不确定记忆另行标示，不计入右侧确定数量。"
             : "从对应牌堆边缘由近到远排列，遇到未知位置停止。"
+        }
+        ListView {
+          objectName:"counterKnownPlayers"
+          visible:root.scope==="hands";width:parent.width;height:34
+          orientation:ListView.Horizontal;spacing:6;clip:true
+          boundsBehavior:Flickable.StopAtBounds;model:root.handGroups
+          delegate:KnownButton {
+            required property var modelData
+            objectName:"counterKnownPlayer-"+modelData.key
+            width:Math.min(180,implicitWidth);height:34
+            text:modelData.label+" "+modelData.count
+            checked:root.selectedHandOwner===modelData.key
+            onClicked:root.selectedHandOwner=modelData.key
+            contentItem:Text {text:parent.text;font.pixelSize:14;color:root.pale;elide:Text.ElideRight;verticalAlignment:Text.AlignVCenter;horizontalAlignment:Text.AlignHCenter}
+          }
         }
         ListView {
           id:knownCards; objectName:"counterKnownList"
@@ -324,6 +365,16 @@ Item {
           boundsBehavior:Flickable.StopAtBounds
           onMovingChanged:if(!moving && root.expanded)Qt.callLater(root.refresh)
           ScrollBar.vertical:ScrollBar {policy:ScrollBar.AsNeeded}
+          section.property:"ownerGroup"
+          section.criteria:ViewSection.FullString
+          section.delegate:Text {
+            required property string section
+            height:root.scope==="hands" ? 28 : 0
+            visible:root.scope==="hands";width:knownCards.width
+            text:root.handGroupLabel(section);textFormat:Text.PlainText
+            color:root.gold;font.pixelSize:14;font.bold:true;elide:Text.ElideRight
+            verticalAlignment:Text.AlignVCenter
+          }
           delegate:Rectangle {
             required property var model
             width:ListView.view.width;height:76;radius:6
@@ -335,6 +386,11 @@ Item {
             MouseArea {anchors.fill:parent;onClicked:root.chooseKnown(model)}
           }
           Text {anchors.centerIn:parent;visible:knownModel.count===0;color:"#AABCB7";font.pixelSize:15;text:"当前没有可确定的记录"}
+        }
+        Text {
+          visible:root.scope==="hands";y:parent.height-22;width:parent.width
+          text:"按玩家查看实际展示的手牌；不确定记忆另行标示。"
+          color:"#AABCB7";font.pixelSize:11;elide:Text.ElideRight
         }
         Row {
           visible:!root.knowledgeOpen
