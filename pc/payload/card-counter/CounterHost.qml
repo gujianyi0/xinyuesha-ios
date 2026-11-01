@@ -12,6 +12,7 @@ Item {
   objectName: "fkCounterHost"
   property var currentScene: null
   property string revealFocusSkill: ""
+  property var arrangementBoxes: []
   // Use the stock double-tap signal and the same profile action as long press.
   // Model/photo bindings cover delayed creation and replacement without polling.
   Instantiator {
@@ -173,6 +174,57 @@ Item {
     view.movementEnded.connect(function() {
       if (view.atYEnd && view.count>0) view.currentIndex=view.count-1;
     });
+  }
+  function adaptRoomDrawerSwipe(view) {
+    if (view.count !== 3 || view.orientation !== Qt.Horizontal || !view.parent) return;
+    const names = [Lua.tr("Log"), Lua.tr("Chat"), Lua.tr("PlayerList")];
+    const tabs = Array.from(view.parent.children || []).find(item =>
+      String(item).indexOf("ViewSwitcher_QMLTYPE") === 0 && item.model &&
+      [JSON.stringify(names), JSON.stringify(names.slice(1))].indexOf(JSON.stringify(Array.from(item.model))) >= 0);
+    if (!tabs || adaptedControls.indexOf(view) >= 0) return;
+    // Use the existing horizontal SwipeView so nested lists retain vertical
+    // drags. The stock currentIndex binding already handles tab -> page.
+    const sync = roomDrawerSwipeSync.createObject(view, {view:view, tabs:tabs});
+    if (sync) {
+      view.interactive = Qt.binding(function() { return sync.available; });
+      desktopDrawerSlider.createObject(view.parent,{view:view,sync:sync});
+      adaptedControls.push(view);
+    }
+  }
+  Component {
+    id: desktopDrawerSlider
+    Slider {
+      objectName:"desktopDrawerSlider"
+      required property var view
+      required property var sync
+      // A visual child of SwipeView becomes another page. Own this control
+      // from the drawer layout, which is destroyed with the same popup.
+      parent:view.parent
+      Layout.fillWidth:true;Layout.preferredHeight:18;Layout.maximumHeight:18
+      leftPadding:10;rightPadding:10;topPadding:0;bottomPadding:0
+      visible:sync.available;from:0;to:2;stepSize:1;snapMode:Slider.SnapAlways
+      value:sync.tabs.currentIndex
+      onMoved:sync.tabs.currentIndex=Math.round(value)
+      ToolTip.visible:hovered
+      ToolTip.text:"拖动切换战报／聊天／玩家列表"
+    }
+  }
+  Component {
+    id: roomDrawerSwipeSync
+    Connections {
+      objectName: "roomDrawerSwipeSync"
+      required property var view
+      required property var tabs
+      // Newer cores also have a two-tab logless mode with a page offset.
+      // Keep its existing navigation until a full three-tab drawer is shown.
+      readonly property bool available: JSON.stringify(Array.from(tabs.model || [])) ===
+        JSON.stringify([Lua.tr("Log"), Lua.tr("Chat"), Lua.tr("PlayerList")])
+      enabled: available
+      target: view
+      function onCurrentIndexChanged() {
+        if (tabs.currentIndex !== view.currentIndex) tabs.currentIndex = view.currentIndex;
+      }
+    }
   }
   Component {
     id: touchLogGuard
@@ -358,11 +410,11 @@ Item {
       seen.add(item);
       if ("model" in item) host.prepareSkinMenu(item.model);
       const type = String(item);
+      if (type.indexOf("SwipeView_QMLTYPE") === 0) host.adaptRoomDrawerSwipe(item);
       if (type.indexOf("PlayerDetail_QMLTYPE") === 0) host.adaptPlayerDetail(item);
       if (type.indexOf("AvatarChatBox_QMLTYPE") === 0 && typeof item.loadSkills === "function")
         host.attachRoleVoices(item);
-      if ((Cpp.os==="Android" || Cpp.os==="iOS") &&
-          (type.indexOf("LogEdit_QMLTYPE")===0 || type.indexOf("RoomGameLogEdit_QMLTYPE")===0))
+      if (type.indexOf("LogEdit_QMLTYPE")===0 || type.indexOf("RoomGameLogEdit_QMLTYPE")===0)
         host.adaptTouchLog(item);
       serverPage = serverPage || ("selectedServer" in item && "serverListUrl" in item);
       lobbyPage = lobbyPage || ("roomModel" in item && "serverPlayerNum" in item);
@@ -531,7 +583,17 @@ Item {
   }
   function rememberArrangement(item) {
     const model=item && item.dataModel;
-    if(!item || !item.visible || !model || revealFocusSkill!=="quanbian" || !model.areaNames ||
+    if(!item || !item.visible || !model)return;
+    if(revealFocusSkill==="xinghun" && model.areaNames && model.areaNames[0]==="Top" &&
+       model.areaNames[1]==="$Hand" && model.origCards && model.result) {
+      // These top cards are temporarily in Processing, not in the draw pile.
+      // Capture the actually shown faces at confirmation too (including a
+      // quick confirmation before the deferred capture), then let visible
+      // Processing/hand -> deck moves establish the confirmed top order.
+      rememberVisible(visibleCardIds(item),null);
+      return;
+    }
+    if(revealFocusSkill!=="quanbian" || !model.areaNames ||
        model.areaNames[0]!=="Top" || model.areaNames[1]!=="toObtain" || !model.result || !model.origCards)return;
     // Quanbian leaves the arranged prefix and removes the chosen card. Place
     // that outgoing card after the remainder, then the move hook removes it.
@@ -543,10 +605,13 @@ Item {
   }
   function adaptRoomPopup() {
     const item = currentScene && currentScene.popupItem;
+    arrangementBoxes=arrangementBoxes.filter(box=>box && box.parent);
     if (item) {
       if(item.dataModel && item.dataModel.origCards && item.dataModel.result &&
-         !Array.from(item.data || []).some(child=>child && child.objectName==="counterArrangementCapture"))
-        arrangementCaptureComponent.createObject(item,{box:item});
+         arrangementBoxes.indexOf(item)<0) {
+        const capture=arrangementCaptureComponent.createObject(item,{box:item});
+        if(capture)arrangementBoxes.push(item);
+      }
       refreshCompatibility(item);
     }
   }

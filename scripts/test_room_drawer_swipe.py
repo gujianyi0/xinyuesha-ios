@@ -10,7 +10,7 @@ from pathlib import Path
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 os.environ.setdefault('QT_QUICK_BACKEND', 'software')
 os.environ.setdefault('QT_QUICK_CONTROLS_STYLE', 'Material')
-from PySide6.QtCore import QObject, Property, Slot, QUrl, QPoint, Qt, QMetaObject, Q_ARG, Q_RETURN_ARG, QEventLoop, QTimer, qInstallMessageHandler
+from PySide6.QtCore import QObject, Property, Slot, QUrl, QPoint, QPointF, Qt, QMetaObject, Q_ARG, Q_RETURN_ARG, QEventLoop, QTimer, qInstallMessageHandler
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickItem
@@ -19,6 +19,7 @@ from PySide6.QtTest import QTest
 p = argparse.ArgumentParser()
 p.add_argument('--payload', type=Path, default=Path('runtime'))
 p.add_argument('--core', type=Path)
+p.add_argument('--platform', choices=['Android','Windows','iOS'],default='iOS')
 p.add_argument('--work-dir', type=Path, required=True)
 a = p.parse_args()
 a.work_dir.mkdir(parents=True, exist_ok=True)
@@ -67,7 +68,7 @@ QtObject {
  property string roomBg:"";property string lobbyBg:"";property var enabledResourcePacks:[]
  function titleForPlayer(id){return {title:"",style:""};}
 }''')
-    put('Fk/Cpp.qml', 'pragma Singleton\nimport QtQuick\nQtObject {property string os:"iOS";property string path:"/fixture";}')
+    put('Fk/Cpp.qml', 'pragma Singleton\nimport QtQuick\nQtObject {property string os:'+json.dumps(a.platform)+';property string path:"/fixture";}')
     put('Fk/Mediator.qml', 'pragma Singleton\nimport QtQuick\nQtObject {signal commandGot(var sender,string command,var data)}')
     put('Fk/SkinBank.qml', 'pragma Singleton\nimport QtQuick\nQtObject {function getAudioRealPath(){return undefined;}}')
     put('Fk/Backend.qml', '''pragma Singleton
@@ -147,7 +148,7 @@ Window {
         return QMetaObject.invokeMethod(win, name, Q_RETURN_ARG('QVariant'))
     def read():
         return json.loads(invoke('read'))
-    touch = QTest.createTouchDevice()
+    touch = None if a.platform=='Windows' else QTest.createTouchDevice()
     def tap_tab(index):
         point = json.loads(QMetaObject.invokeMethod(win, 'tabPoint', Q_RETURN_ARG('QVariant'), Q_ARG('QVariant', index)))
         position = QPoint(round(point['x']), round(point['y']))
@@ -159,14 +160,14 @@ Window {
         w, h = state['width'], state['height']
         start = QPoint(round(x+w*(.25 if right else .75)) if horizontal else round(x+w*.45), round(y+h*.45))
         finish = QPoint(round(x+w*(.75 if right else .25)) if horizontal else start.x()+2, start.y() if horizontal else round(y+h*.75))
-        QTest.touchEvent(win, touch).press(0, start, win).commit(); pump(hold)
+        QTest.touchEvent(win, touch).press(0, start, win).commit();pump(hold)
         for n in range(1, 9):
             point = start + (finish-start)*n/8
-            QTest.touchEvent(win, touch).move(0, point, win).commit(); pump(30)
-        QTest.touchEvent(win, touch).release(0, finish, win).commit(); pump(450)
+            QTest.touchEvent(win, touch).move(0, point, win).commit();pump(30)
+        QTest.touchEvent(win, touch).release(0, finish, win).commit();pump(450)
         return read()
     invoke('seed'); invoke('openDrawer'); pump(180)
-    baseline = gesture()
+    baseline = read() if a.platform=='Windows' else gesture()
     assert baseline['page'] == 0 and not baseline['interactive'], baseline
     # The old stock bubble sizes itself with contentWidth, which can warn
     # before this feature is installed. Preserve that exact baseline warning;
@@ -174,6 +175,18 @@ Window {
     baseline_warnings = {m for m in logs if 'AvatarChatBox.qml:148:11:' in m and 'Binding loop' in m and '"width"' in m}
     invoke('install'); pump(180)
     assert read()['interactive'], (read(), logs)
+    if a.platform=='Windows':
+        slider=win.findChild(QQuickItem,'desktopDrawerSlider');assert slider
+        def slide(right):
+            start=slider.mapToItem(win.contentItem(),QPointF(slider.width()*(.04 if right else .96),slider.height()/2)).toPoint()
+            end=slider.mapToItem(win.contentItem(),QPointF(slider.width()*(.96 if right else .04),slider.height()/2)).toPoint()
+            QTest.mousePress(win,Qt.LeftButton,Qt.NoModifier,start);pump(30)
+            for n in range(1,9):QTest.mouseMove(win,start+(end-start)*n/8);pump(30)
+            QTest.mouseRelease(win,Qt.LeftButton,Qt.NoModifier,end);pump(350)
+        slide(True);assert read()['page']==read()['tab']==2,(read(),slider.width(),slider.height(),slider.mapToItem(win.contentItem(),QPointF(0,0)),slider.property('visible'),slider.property('value'))
+        slide(False);assert read()['page']==read()['tab']==0,(read(),slider.property('pressed'),slider.property('value'))
+        win.grabWindow().save(str(a.work_dir/'desktop-drawer-slider.png'))
+        touch=QTest.createTouchDevice()
     observations = []
     for name in ['normal', 'scaled']:
         if name == 'scaled':
@@ -216,7 +229,7 @@ Window {
     assert client.sent == [('Chat', {'type':2, 'msg':'hello'})], client.sent
     errors = [m for m in logs if m not in baseline_warnings and any(word in m for word in ['TypeError', 'ReferenceError', 'SyntaxError', 'Binding loop', 'Cannot assign', 'Unable to assign'])]
     assert not errors, errors
-    result = {'baseline':baseline,'gestures':observations,'chat_sent':True,'duplicate_connections':False,'baseline_stock_warnings':list(baseline_warnings),'errors':errors,'core':str(stock)}
+    result = {'platform':a.platform,'baseline':baseline,'gestures':observations,'chat_sent':True,'duplicate_connections':False,'baseline_stock_warnings':list(baseline_warnings),'errors':errors,'core':str(stock)}
     (a.work_dir / 'result.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf8')
     print(json.dumps(result, ensure_ascii=False, indent=2))
     win.close(); engine.deleteLater(); pump(30)
