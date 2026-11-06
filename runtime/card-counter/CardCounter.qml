@@ -95,7 +95,10 @@ Item {
   property string scope: "unseen"
   property int category: 0
   property string filterText: ""
-  property bool hideZero: false
+  // Keep the large card catalogue focused on cards that are currently
+  // present. Players can still untick this in the panel when they need the
+  // complete catalogue.
+  property bool hideZero: true
   property string selectedKey: "slash"
   property string lastPayload: ""
   property var rowLookup: ({})

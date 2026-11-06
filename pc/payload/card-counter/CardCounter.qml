@@ -95,7 +95,7 @@ Item {
   property string scope: "unseen"
   property int category: 0
   property string filterText: ""
-  property bool hideZero: false
+  property bool hideZero: true
   property string selectedKey: "slash"
   property string lastPayload: ""
   property var rowLookup: ({})
