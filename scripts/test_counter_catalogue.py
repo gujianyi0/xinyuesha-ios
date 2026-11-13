@@ -98,7 +98,12 @@ Window {
     window=engine.rootObjects()[0]
     def invoke(name):return QMetaObject.invokeMethod(window,name,Q_RETURN_ARG('QVariant'))
     def state():return json.loads(invoke('state'))
-    invoke('open');pump(.08);invoke('scrollMiddle');pump(.08);initial=state();assert initial['count']==300,initial
+    invoke('open');pump(.08)
+    # The shipped default hides the fixture's single zero-count card.
+    # Catalogue/scroll stress below deliberately exercises the show-all mode.
+    default_visible=state();assert default_visible['count']==299,default_visible
+    invoke('showZero');pump(.02)
+    invoke('scrollMiddle');pump(.08);initial=state();assert initial['count']==300,initial
     for _ in range(20):invoke('change');pump(.01)
     updated=state()
     assert initial['y']>500,initial
