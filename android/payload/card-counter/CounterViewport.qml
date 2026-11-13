@@ -7,7 +7,10 @@ Item {
   anchors.fill: parent
   readonly property real logicalWidth: Math.max(1200, 540 * width / Math.max(height, 1))
   readonly property real logicalHeight: Math.max(540, 1200 * height / Math.max(width, 1))
-  readonly property real contentScale: Math.max(width / logicalWidth, height / logicalHeight)
+  // Fit the complete fixed-design canvas inside the current Android surface.
+  // Game-space/display modes can make the usable aspect ratio narrower than
+  // 1200:540; using max() in that case crops the sides outside the screen.
+  readonly property real contentScale: Math.min(width / logicalWidth, height / logicalHeight)
   default property alias contentData: canvas.data
   readonly property alias contentItem: canvas
   property Item canvasItem: Item {

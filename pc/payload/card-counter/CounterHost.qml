@@ -22,6 +22,8 @@ Item {
       readonly property var photo: modelData && modelData.photoItem || null
       target: photo
       ignoreUnknownSignals: true
+      function onPhotoChanged() { Qt.callLater(host.syncKnownHandBadges); }
+      function onVisibleChanged() { Qt.callLater(host.syncKnownHandBadges); }
       function onDoubleClicked(card) {
         if (photo && photo.visible && typeof photo.rightClicked === "function") photo.rightClicked();
       }
@@ -118,6 +120,10 @@ Item {
   property bool preferencesLoaded: false
   property var titleBadges: []
   property var adaptedControls: []
+  property var knownHandBadges: []
+  property var knownHandCounts: ({})
+  property string knownHandPayload: ""
+  property var guanNingSkinStates: []
   property alias roleVoiceCache: roleVoiceCacheState
   QtObject {id:roleVoiceCacheState;property var entries:({})}
   Connections {
@@ -144,6 +150,128 @@ Item {
     const payload = JSON.stringify({hideTitles: !!value});
     if (!preferencesLoaded || !Backend.writeFileToAssets("client-ui.json", payload)) return false;
     hideTitles = !!value; refreshCompatibility(); return true;
+  }
+  Component {
+    id: knownHandBadgeComponent
+    Rectangle {
+      objectName: "knownHandBadge"
+      required property var photo
+      property int knownCount: 0
+      width: Math.max(52, badgeText.implicitWidth + 16)
+      height: 22
+      radius: 11
+      z: 10000
+      color: "#D4232D2F"
+      border.width: 1
+      border.color: "#D5B471"
+      visible: knownCount > 0 && photo && photo.visible
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.top: parent.bottom
+      anchors.topMargin: -3
+      Text {
+        id: badgeText
+        anchors.centerIn: parent
+        text: "明牌 " + parent.knownCount
+        color: "#F8E7B6"
+        font.pixelSize: 12
+        font.bold: true
+      }
+    }
+  }
+  function knownHandKey(model) {
+    if (!model) return "";
+    const id = model.playerid !== undefined ? model.playerid : model.id;
+    return id === undefined || id === null ? "" : String(id);
+  }
+  function readKnownHandCounts() {
+    if (typeof ClientInstance === "undefined" || !ClientInstance) return {};
+    try {
+      const value = Lua.ev('(function() if not FkCardCounterV2 then FkCardCounterV2 = dofile("card-counter/counter.lua") end return FkCardCounterV2.current("slash") end)()');
+      const counts = ({}), rows = value && value.knowledge && value.knowledge.hands || [];
+      for (const row of rows) {
+        if (!row || row.uncertain === true) continue;
+        const key = row.ownerId === undefined || row.ownerId === null ? "" : String(row.ownerId);
+        if (key) counts[key] = (counts[key] || 0) + 1;
+      }
+      return counts;
+    } catch (_) { return {}; }
+  }
+  function syncKnownHandBadges() {
+    const scene = currentScene;
+    const players = scene && scene.dataModel && scene.dataModel.players || [];
+    const counts = readKnownHandCounts();
+    const payload = JSON.stringify(counts);
+    knownHandPayload = payload;
+    knownHandCounts = counts;
+    knownHandBadges = knownHandBadges.filter(b => b && b.photo && b.parent);
+    for (const model of Array.from(players)) {
+      const photo = model && model.photoItem;
+      if (!photo) continue;
+      let badge = knownHandBadges.find(b => b.photo === photo);
+      if (!badge) {
+        badge = knownHandBadgeComponent.createObject(photo, {photo: photo});
+        if (badge) knownHandBadges.push(badge);
+      }
+      if (badge) badge.knownCount = counts[knownHandKey(model)] || 0;
+    }
+    triggerGuanNingSkinEffects(players);
+  }
+  function triggerGuanNingSkinEffects(players) {
+    const states = guanNingSkinStates.filter(s => s && s.photo && s.photo.parent);
+    const active = [];
+    for (const model of Array.from(players || [])) {
+      const photo = model && model.photoItem;
+      if (!photo) continue;
+      const general = String(photo.general || model.general || "");
+      // Only Guan Ning is in scope; Gan Ning is a different general.
+      if (!/^(guanning|guan_ning|guan-ning|管宁)$/i.test(general)) continue;
+      const source = photo.skinSource;
+      const skin = source && (source.name || source.skinName || "");
+      if (!skin) continue;
+      const signature = general + ":" + String(skin);
+      const old = states.find(s => s.photo === photo);
+      if (old && old.signature === signature) { active.push(old); continue; }
+      let areas = [];
+      const pending = [photo], seen = new Set();
+      while (pending.length) {
+        const item = pending.pop();
+        if (!item || seen.has(item)) continue;
+        seen.add(item);
+        if ("skelData" in item && item.skelData) {
+          const nodes = [], nested = [item];
+          for (let ni = 0; ni < nested.length; ni++) {
+            const child = nested[ni];
+            if (!child) continue;
+            if (typeof child.setAnimation === "function") nodes.push(child);
+            if (child.children) nested.push(...Array.from(child.children));
+            if (child.item) nested.push(child.item);
+          }
+          areas.push({data:item.skelData, nodes:nodes});
+        }
+        if (item.children) pending.push(...Array.from(item.children));
+        if (item.item) pending.push(item.item);
+      }
+      let triggered = false;
+      for (const area of areas) {
+        const data = area.data, nodes = area.nodes;
+        for (let i = 0; i < nodes.length; i++) {
+          const animation = i === 0 && data.bgShownAnim ? data.bgShownAnim : data.bodyShownAnim;
+          if (!animation) continue;
+          try {
+            nodes[i].setAnimation(0, animation, false);
+            const normal = i === 0 ? data.bgNormalAnim : data.bodyNormalAnim;
+            if (normal) nodes[i].addAnimation(0, normal, true);
+            triggered = true;
+          } catch (_) { /* a skin may unload between discovery and replay */ }
+        }
+      }
+      // Wait for the loader to expose the Spine nodes before remembering the
+      // signature; the next room tick will then replay the effect after load.
+      if (!areas.some(area => area.nodes.length)) continue;
+      active.push({photo: photo, signature: signature});
+      if (triggered) console.log("[CardCounter] replayed Guan Ning skin entrance effect");
+    }
+    guanNingSkinStates = active;
   }
   function chatIcon(kind) {
     const shapes = {
@@ -305,10 +433,51 @@ Item {
   }
   // Adapt only the newly opened stock profile. Never intercept a general's
   // rightClicked signal: that belongs to the original player-detail page.
+  // FB-0DX3XM: adapt only the stock four-area player profile.
+  // Keep the server/core files intact and the original vertical Flickables.
+  function adaptPlayerDetailSwipe(profile) {
+    if (!profile) return;
+    const names = [Lua.tr("skill"), Lua.tr("$Equip"), Lua.tr("$Judge"), Lua.tr("$Hand")];
+    const pending = Array.from(profile.children || []);
+    while (pending.length) {
+      const item = pending.pop();
+      if (!item) continue;
+      if (String(item).indexOf("SwipeView_QMLTYPE") === 0 && item.count === 4 &&
+          item.orientation === Qt.Horizontal && item.parent) {
+        const tabs = Array.from(item.parent.children || []).find(c =>
+          String(c).indexOf("ViewSwitcher_QMLTYPE") === 0 && c.model &&
+          JSON.stringify(Array.from(c.model)) === JSON.stringify(names));
+        if (tabs && !Array.from(profile.children || []).some(c => c && c.objectName === "playerDetailSwipeSync" && c.view === item)) {
+          const sync = playerDetailSwipeSync.createObject(profile, {view:item, tabs:tabs});
+          if (sync) item.interactive = true;
+        }
+      } else if (item.children) {
+        pending.push(...Array.from(item.children));
+      }
+    }
+  }
+  Component {
+    id: playerDetailSwipeSync
+    Item {
+      id: profileSwipe
+      objectName: "playerDetailSwipeSync"
+      required property var view
+      required property var tabs
+      visible: false
+      Connections {
+        target: profileSwipe.view
+        function onCurrentIndexChanged() {
+          if (profileSwipe.tabs.currentIndex !== profileSwipe.view.currentIndex)
+            profileSwipe.tabs.currentIndex = profileSwipe.view.currentIndex;
+        }
+      }
+    }
+  }
   function adaptPlayerDetail(item) {
     if (!item) item = detailPopup && detailPopup.item;
     if (!item || !("dataModel" in item) || !("finish" in item) ||
         !item.children) return;
+    adaptPlayerDetailSwipe(item);
     const row = Array.from(item.children).find(c => c.children &&
       Array.from(c.children).some(b => b.text === Lua.tr("Give Flower")) &&
       Array.from(c.children).some(b => b.text === Lua.tr("Give Egg")));
@@ -657,6 +826,181 @@ Item {
   }
   // Stay outside native notification call stacks: a queued context change and
   // timer install the host only after the native client has finished creation.
+  // BEGIN AUTO LUCK CARD: only answer the stock server-issued luck-card request.
+  property var luckPanel: null
+  Connections {
+    target: host
+    function onCurrentSceneChanged() {
+      if (host.luckPanel) { host.luckPanel.stopAuto("已离开房间"); host.luckPanel.destroy(); host.luckPanel=null; }
+    }
+  }
+  Connections {
+    target: Mediator
+    function onCommandGot(sender, command, data) { host.handleLuckCommand(command, data); }
+  }
+  function handleLuckCommand(command, data) {
+    if (command === "AskForSkillInvoke" && data && data[0] === "AskForLuckCard") {
+      if (!currentScene || !currentScene.dataModel || Config.observing || Config.replaying) return;
+      if (!luckPanel) luckPanel = luckCardPanel.createObject(currentScene, {scene:currentScene});
+      if (luckPanel) luckPanel.receiveRequest(data);
+    } else if (luckPanel) {
+      if (command === "ReplyToServer" && !luckPanel.sending) luckPanel.stopAuto("已转为手动操作");
+      else if (["AskForSkillInvoke","PlayCard","AskForUseCard","AskForResponseCard","AskForUseActiveSkill","AskForChoices","GameOver","BackToStart","EnterLobby","EnterRoom","CancelRequest"].indexOf(command)>=0)
+        luckPanel.endRequest();
+    }
+  }
+  Component {
+    id: luckCardPanel
+    Control {
+      id: luck
+      objectName: "autoLuckCardPanel"
+      required property var scene
+      readonly property var model: scene && scene.dataModel
+      width: parent ? Math.min(440, parent.width-24) : 440
+      height: 315
+      x: 12; y: 50; z: 1100
+      background: Rectangle {radius:9;color:"#f0213439";border.color:"#c6ac73"}
+      font.pixelSize: 14
+      palette.windowText: "#e5ded0"; palette.text: "#e5ded0"
+      palette.buttonText: "#e5ded0"; palette.button: "#315054"
+      palette.base: "#20383e"; palette.highlight: "#9f8757"; palette.highlightedText: "#fff5dc"
+      visible: false
+      property bool running: false
+      property bool sending: false
+      property bool waiting: false
+      property string requestKey: ""
+      property string consumedKey: ""
+      property string expectedPrompt: ""
+      property var requestMeta: ({})
+      property var goals: []
+      property int used: 0
+      property int remaining: -1
+      property string statusText: "选择目标后点击开始"
+      function canonical(s) {
+        s=String(s || "").trim().toLowerCase();
+        return ({"ak":"crossbow","连弩":"crossbow","诸葛连弩":"crossbow","丈八":"spear","丈八蛇矛":"spear","杀":"slash"})[s] || s;
+      }
+      function parseGoals(text) {
+        const parts=String(text).split(/[,，]/);
+        if (!parts.length || parts.length>6) return null;
+        const out=[];
+        for (const part of parts) {
+          const m=part.trim().match(/^([^:：×*]+?)(?:[:：×*]\s*(\d+))?$/);
+          if (!m) return null;
+          const names=m[1].split("/").map(n=>canonical(n));
+          const count=m[2]===undefined ? 1 : Number(m[2]);
+          if (names.some(n=>!n) || !Number.isInteger(count) || count<1 || count>99) return null;
+          out.push({names:names,count:count});
+        }
+        return out;
+      }
+      function matches(cards, rules) {
+        return rules.length>0 && rules.every(rule=>cards.filter(card=> {
+          const base=String(card.trueName || card.name || "").split("__").pop();
+          const names=[canonical(base),canonical(card.name),canonical(Lua.tr(card.name))];
+          if (base === "slash" || /_slash$/.test(base)) names.push("slash");
+          return rule.names.some(n=>names.indexOf(n)>=0);
+        }).length>=rule.count);
+      }
+      function stopAuto(message) {
+        action.stop(); watchdog.stop(); running=false; waiting=false;
+        if (message) statusText=message;
+      }
+      function endRequest() { stopAuto("手气卡询问已结束"); requestKey=""; visible=false; }
+      function currentRequestValid() {
+        if (!model || scene!==host.currentScene || !scene.visible || Config.observing || Config.replaying ||
+            !luck.Window.window || !luck.Window.window.active || !luck.Window.window.visible || !Lua.selfPlayer ||
+            model.dashboardId!==Lua.selfPlayer.id || model.prompt!==expectedPrompt || !requestKey) return false;
+        const meta=Backend.getRequestData();
+        return String(meta.id)+"|"+String(meta.timestamp)+"|"+expectedPrompt===requestKey &&
+          Number(meta.timeout)>0 && Date.now()<Number(meta.timestamp)+Number(meta.timeout)*1000;
+      }
+      function receiveRequest(data) {
+        const meta=Backend.getRequestData();
+        const prompt=String(data[1] || "");
+        const key=String(meta.id)+"|"+String(meta.timestamp)+"|"+prompt;
+        if (key===requestKey) return;
+        watchdog.stop(); waiting=false; requestMeta=meta;
+        requestKey=key; expectedPrompt=prompt;
+        const m=prompt.match(/^#AskForLuckCard:::(\d+)$/);
+        remaining=m ? Number(m[1]) : -1;
+        visible=true;
+        if (running) action.restart();
+      }
+      function startAuto() {
+        goals=parseGoals(goalInput.text);
+        if (!goals) {statusText="目标格式：连弩，杀:2；斜线表示任选一种";return;}
+        if (!currentRequestValid() || !model.okEnabled || !model.cancelEnabled) {
+          statusText="当前没有可操作的手气卡询问"; return;
+        }
+        used=0; running=true; waiting=false; statusText="正在检查当前手牌"; action.restart();
+      }
+      function act() {
+        if (!running || waiting) return;
+        if (!currentRequestValid() || !model.okEnabled || !model.cancelEnabled) {
+          stopAuto("询问或操作状态已变化，自动刷牌停止"); return;
+        }
+        if (requestKey===consumedKey) {stopAuto("本次手气卡已处理");return;}
+        const cards=Array.from(model.dashboard && model.dashboard.handcards || []);
+        if (!cards.length || cards.some(c=>!c || !c.known || !(c.cardId>0))) {
+          stopAuto("手牌尚未同步，已暂停；请重试或手动操作");return;
+        }
+        const hit=matches(cards,goals);
+        if (!hit && remaining===0) {stopAuto("服务器手气卡次数已用完");return;}
+        consumedKey=requestKey; sending=true; waiting=!hit;
+        if (hit) {running=false;statusText="已满足目标，保留当前手牌";}
+        else {used++;statusText="已换牌 "+used+" 次，等待服务器发牌";watchdog.restart();}
+        try { Lua.updateRequestUI("Button", hit ? "Cancel" : "OK"); }
+        catch (_) {stopAuto("操作未完成，已停止，请手动确认");}
+        finally {sending=false;}
+      }
+      Timer {id:action;interval:300;onTriggered:luck.act()}
+      Timer {id:watchdog;interval:8000;onTriggered:luck.stopAuto("服务器未继续手气卡询问，已停止")}
+      Connections {
+        target: luck.Window.window
+        function onActiveChanged() { if (!luck.Window.window.active) luck.stopAuto("已暂停，可返回后手动开始"); }
+        function onVisibleChanged() { if (!luck.Window.window.visible) luck.stopAuto("已暂停，可返回后手动开始"); }
+      }
+      Connections {
+        target: luck.scene
+        function onVisibleChanged() { if (!luck.scene.visible) luck.endRequest(); }
+      }
+      Connections {
+        target: Config
+        ignoreUnknownSignals: true
+        function onObservingChanged() { if (Config.observing) luck.endRequest(); }
+        function onReplayingChanged() { if (Config.replaying) luck.endRequest(); }
+      }
+      ColumnLayout {
+        anchors.fill: parent; anchors.margins: 12; spacing: 6
+        RowLayout {
+          Layout.fillWidth: true
+          Label {text:"自动手气卡";color:"#f3dfb0";font.pixelSize:18;Layout.fillWidth:true}
+          Button {text:"×";implicitWidth:36;implicitHeight:32;onClicked:{luck.stopAuto("已关闭");luck.visible=false;}}
+        }
+        ComboBox {
+          objectName:"autoLuckPresets";Layout.fillWidth:true;enabled:!luck.running
+          model:["连弩或丈八","连弩＋至少一张杀","连弩＋至少两张杀","丈八＋至少两张杀","自定义目标"]
+          onActivated: {
+            const presets=["诸葛连弩/丈八蛇矛","诸葛连弩，杀:1","诸葛连弩，杀:2","丈八蛇矛，杀:2"];
+            if (currentIndex<presets.length) goalInput.text=presets[currentIndex];
+          }
+        }
+        TextField {
+          id:goalInput;objectName:"autoLuckGoals";Layout.fillWidth:true;enabled:!luck.running
+          text:"诸葛连弩/丈八蛇矛";placeholderText:"例：连弩，杀:2";font.pixelSize:15;maximumLength:160
+        }
+        Label {Layout.fillWidth:true;text:"逗号表示同时满足，/ 表示任选；牌名:张数";color:"#d6d2bd";font.pixelSize:12;wrapMode:Text.Wrap}
+        RowLayout {
+          Button {objectName:"autoLuckStart";text:"开始自动刷牌";enabled:!luck.running;Layout.fillWidth:true;onClicked:luck.startAuto()}
+          Button {objectName:"autoLuckStop";text:"停止";enabled:luck.running;onClicked:luck.stopAuto("已停止，可手动选择")}
+        }
+        Label {objectName:"autoLuckStatus";Layout.fillWidth:true;text:luck.statusText;color:"#efd49c";font.pixelSize:13;wrapMode:Text.Wrap}
+        Label {Layout.fillWidth:true;text:luck.remaining>=0 ? "服务器剩余次数："+luck.remaining : "换牌次数和倒计时以服务器为准";color:"#bdc8c6";font.pixelSize:12}
+      }
+    }
+  }
+  // END AUTO LUCK CARD
   function findDeck(item) {
     if (!item) return null;
     if (item.source !== undefined && String(item.source).indexOf("card-back")>=0 && Math.abs(item.width-32)<1 && Math.abs(item.height-42)<1) return item;
@@ -705,6 +1049,7 @@ Item {
         host.fallbackButton=fallbackComponent.createObject(scene,{counter:host.popup});
         host.deckItem=null;host.deckHit=null;host.deckSearchTicks=0;
         host.refreshCompatibility(scene); // Adapt once when a new table is created.
+        host.syncKnownHandBadges();
         console.log("[CardCounter] standalone UI attached");
       }
       host.linkDeck();
@@ -730,5 +1075,10 @@ Item {
     interval:500;repeat:true
     running:host.clientContext!==null && host.currentScene!==null && !host.deckHit && host.deckSearchTicks<3
     onTriggered:{host.deckSearchTicks++;host.linkDeck();}
+  }
+  Timer {
+    interval: 500; repeat: true
+    running: host.currentScene !== null && !!host.Window.window && host.Window.window.visible
+    onTriggered: host.syncKnownHandBadges()
   }
 }

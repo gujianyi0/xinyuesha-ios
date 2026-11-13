@@ -105,7 +105,7 @@ Window{id:win;width:1000;height:650;visible:true
     assert state()['syncs']==1,state();checks.append('repeated adaptation installs exactly one connection')
     call('narrow');pump();call('setTab',0);pump(450);swipe(-260);assert state()['page']==1 and state()['tab']==1,state();checks.append('narrow resized panel')
     call('reset');pump();call('install');pump();assert state()['syncs']==1,state();swipe(-260);assert state()['page']==1,state();checks.append('close and reopen creates a fresh working adapter')
-    call('reset');pump();call('desktop');call('install');pump();assert not state()['interactive'] and state()['syncs']==0,state();checks.append('non-iOS unchanged')
+    call('reset');pump();call('desktop');call('install');pump();assert state()['interactive'] and state()['syncs']==1,state();checks.append('Windows profile is synchronized too')
     errors=[s for s in logs if any(t in s for t in ['TypeError','ReferenceError','Binding loop','Cannot assign','Unable to assign'])]
     assert not errors,errors
     result={'checks':checks,'errors':errors,'qt':__import__('PySide6').__version__,'real_device':False}
