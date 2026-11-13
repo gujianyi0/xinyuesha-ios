@@ -16,6 +16,7 @@ on:
       - 'scripts/test_social_native_bridge.py'
       - 'scripts/test_touch_log.py'
       - 'scripts/test_room_drawer_swipe.py'
+      - 'scripts/test_player_detail_swipe.py'
       - 'scripts/test_role_voice.py'
       - 'scripts/test_interactions.py'
       - 'scripts/test_skin_settings.py'
@@ -44,6 +45,10 @@ jobs:
       QT_QUICK_BACKEND: software
     steps:
       - uses: actions/checkout@v4
+      # Qt 6.8.3 / 6.10.0 wheels do not support the runner's Python 3.14.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
       - name: Install test runtime dependencies
         run: |
           install_deps() {
@@ -60,6 +65,10 @@ jobs:
             timeout 180s bash -c install_deps
           fi
       - run: python3 -m pip install 'PySide6==${{ matrix.qt }}'
+      - if: matrix.platform == 'iOS'
+        run: |
+          python3 scripts/test_player_detail_swipe.py --work-dir "$RUNNER_TEMP/profile-swipe-baseline" --baseline
+          python3 scripts/test_player_detail_swipe.py --work-dir "$RUNNER_TEMP/profile-swipe"
       - run: python3 android/tools/test_gameplay_work.py --work-dir "$RUNNER_TEMP/client-gameplay" --payload '${{ matrix.payload }}' --platform '${{ matrix.platform }}' --cycles 60 --overview --result "$RUNNER_TEMP/client-gameplay/result.json"
       - run: |
           sudo apt-get install -y liblua5.4-0
