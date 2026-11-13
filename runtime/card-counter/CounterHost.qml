@@ -295,10 +295,51 @@ Item {
   }
   // Adapt only the newly opened stock profile. Never intercept a general's
   // rightClicked signal: that belongs to the original player-detail page.
+  // FB-0DX3XM: adapt only the stock four-area player profile on iOS.
+  // Keep the server/core files intact and the original vertical Flickables.
+  function adaptPlayerDetailSwipe(profile) {
+    if (Cpp.os !== "iOS" || !profile) return;
+    const names = [Lua.tr("skill"), Lua.tr("$Equip"), Lua.tr("$Judge"), Lua.tr("$Hand")];
+    const pending = Array.from(profile.children || []);
+    while (pending.length) {
+      const item = pending.pop();
+      if (!item) continue;
+      if (String(item).indexOf("SwipeView_QMLTYPE") === 0 && item.count === 4 &&
+          item.orientation === Qt.Horizontal && item.parent) {
+        const tabs = Array.from(item.parent.children || []).find(c =>
+          String(c).indexOf("ViewSwitcher_QMLTYPE") === 0 && c.model &&
+          JSON.stringify(Array.from(c.model)) === JSON.stringify(names));
+        if (tabs && !Array.from(profile.children || []).some(c => c && c.objectName === "playerDetailSwipeSync" && c.view === item)) {
+          const sync = playerDetailSwipeSync.createObject(profile, {view:item, tabs:tabs});
+          if (sync) item.interactive = true;
+        }
+      } else if (item.children) {
+        pending.push(...Array.from(item.children));
+      }
+    }
+  }
+  Component {
+    id: playerDetailSwipeSync
+    Item {
+      id: profileSwipe
+      objectName: "playerDetailSwipeSync"
+      required property var view
+      required property var tabs
+      visible: false
+      Connections {
+        target: profileSwipe.view
+        function onCurrentIndexChanged() {
+          if (profileSwipe.tabs.currentIndex !== profileSwipe.view.currentIndex)
+            profileSwipe.tabs.currentIndex = profileSwipe.view.currentIndex;
+        }
+      }
+    }
+  }
   function adaptPlayerDetail(item) {
     if (!item) item = detailPopup && detailPopup.item;
     if (!item || !("dataModel" in item) || !("finish" in item) ||
         !item.children) return;
+    adaptPlayerDetailSwipe(item);
     const row = Array.from(item.children).find(c => c.children &&
       Array.from(c.children).some(b => b.text === Lua.tr("Give Flower")) &&
       Array.from(c.children).some(b => b.text === Lua.tr("Give Egg")));
