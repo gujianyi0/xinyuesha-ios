@@ -6,17 +6,19 @@ Android、Windows PC、iOS 三端客户端，基于 [FreeKill / 新月杀](https
 
 ## 下载与安装
 
-[安卓最新测试版](https://github.com/gujianyi0/xinyuesha-ios/releases/tag/test-0.5.25-20261019-r3) · [iOS 最新测试版](https://github.com/gujianyi0/xinyuesha-ios/releases/tag/test-0.5.25-20261019-r2) · [SHA256 校验清单](downloads/SHA256SUMS.txt)
+[三端最新测试版 20261113.2](https://preview.gujianyi-web-preview.pages.dev/projects/moonless-kill-mod/#latest-downloads) · [本版 SHA256 校验清单](downloads/SHA256SUMS-20261113.2.txt)
 
 | 平台 | 安装包 | 要求与安装方式 |
 | --- | --- | --- |
-| Android | [下载 APK](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019-r3/xinyuesha-test-android-20261019.apk) | Android 9+、ARM64；已有同签名测试版可直接覆盖安装，保留应用数据。 |
-| Windows PC | [下载完整包](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019/xinyuesha-test-windows-20261019.7z) · [已有版本更新补丁](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019/xinyuesha-test-windows-patch-20261019.zip) | 64 位 Windows；完整解压后运行“启动新月杀测试版.cmd”；更新前关闭游戏。 |
-| iOS | [下载独立 IPA](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019-r2/xinyuesha-test-ios-20261019-unsigned.ipa) · [含工具的安装整合包](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019-r2/xinyuesha-test-ios-bundle-20261019.zip) | 游戏最低 iOS 16.0；IPA 未签名，需要兼容的签名或安装工具。覆盖安装沿用旧版应用标识与签名身份。 |
+| Android | [下载 APK](https://preview.gujianyi-web-preview.pages.dev/download/xinyuesha/20261113-2-r1/android.apk) | Android 9+、ARM64；已有同签名测试版可直接覆盖安装，保留应用数据。 |
+| Windows PC | [下载完整包](https://preview.gujianyi-web-preview.pages.dev/download/xinyuesha/20261113-2-r1/pc.7z) · [已有版本更新补丁](https://preview.gujianyi-web-preview.pages.dev/download/xinyuesha/20261113-2-r1/pc-patch.zip) | 64 位 Windows；完整解压后运行“启动新月杀测试版.cmd”；更新前关闭游戏。 |
+| iOS | [下载独立 IPA](https://preview.gujianyi-web-preview.pages.dev/download/xinyuesha/20261113-2-r1/ios.ipa) · [旧版工具整合包（内含旧 IPA）](https://github.com/gujianyi0/xinyuesha-ios/releases/download/test-0.5.25-20261019-r2/xinyuesha-test-ios-bundle-20261019.zip) | 游戏最低 iOS 16.0；IPA 未签名，需要兼容的签名或安装工具。覆盖安装沿用旧版应用标识与签名身份。 |
 
 安装游戏请下载上表对应文件。GitHub 的 **Code → Download ZIP** 是工程源码，不是完整的安装包。
 
-**2026-11-01 最新更新：Android／PC／iOS 统一为 20261101.1。** 通用操作已同步：战报／聊天／玩家列表左右滑动，PC 底部滑块切页，已知手牌按玩家筛选分组，以及神姜维「星魂」记录修正。文件名沿用 `20261019`，按 [SHA256 清单](downloads/SHA256SUMS.txt) 区分。
+**2026-11-13 最新更新：Android／PC／iOS 统一为 20261113.2。** 自动手气卡与武将资料四区横滑已同步，包含已确认明牌数量、管宁已有动皮动作重放及默认隐藏零数量牌。旧整合工具包需配合上方新版独立 IPA。详见 [本版说明与验证](docs/三端手气卡与操作同步-20261113.md)。
+
+开局出现原生手气卡询问时，选择目标后点击“开始自动刷牌”；命中后保留手牌，随时可停止或手动接管。支持“连弩或丈八”“连弩＋至少一／两张杀”；自定义例 `连弩，杀:2`（同时满足）、`AK/丈八`（任选），逗号分组、`/` 任选、`牌名:张数` 指定最低数量。次数和时限遵循服务器规则；仅匹配自己当前已知初始手牌，观战、录像、后台和离房不运行。
 
 ## 2026-11-01 Android／PC 操作功能同步
 
