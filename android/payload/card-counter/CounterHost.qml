@@ -2,6 +2,7 @@
 import QtQuick
 import QtQml.Models
 import QtQuick.Controls
+import QtQuick.Controls.Material
 import QtQuick.Layouts
 import QtQuick.Window
 import QtQuick.Dialogs
@@ -857,6 +858,10 @@ Item {
       x: 12; y: 50; z: 1100
       background: Rectangle {radius:9;color:"#f0213439";border.color:"#c6ac73"}
       font.pixelSize: 14
+      Material.theme: Material.Dark
+      Material.foreground: "#e5ded0"
+      Material.background: "#315054"
+      Material.accent: "#d9bd83"
       palette.windowText: "#e5ded0"; palette.text: "#e5ded0"
       palette.buttonText: "#e5ded0"; palette.button: "#315054"
       palette.base: "#20383e"; palette.highlight: "#9f8757"; palette.highlightedText: "#fff5dc"

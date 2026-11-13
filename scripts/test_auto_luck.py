@@ -35,6 +35,7 @@ QtObject{property int requestId:0;property double stamp:0;property real timeout:
  put('Fk/Mediator.qml','pragma Singleton\nimport QtQuick\nQtObject{signal commandGot(var sender,string command,var data)}')
  put('Main.qml','''import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.Material
 import QtQuick.Layouts
 import QtQuick.Window
 import Fk
