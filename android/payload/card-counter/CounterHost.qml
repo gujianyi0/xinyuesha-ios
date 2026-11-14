@@ -498,19 +498,19 @@ Item {
   property int presentRestSeconds: 0
   function cancelPresentQueue() {
     if (presentQueue.length) { presentRestSeconds=10; presentRest.restart(); }
-    presentSendTimer.stop(); presentQueue=[]; presentQueueScene=null;
+    presentQueue=[]; presentQueueScene=null;
   }
   function sendNextPresent() {
-    if (!currentScene || currentScene !== presentQueueScene || Config.replaying || !clientContext ||
-        !currentScene.visible || (host.Window.window && !host.Window.window.active)) { cancelPresentQueue(); return; }
-    const valid = actionTargets().map(p => p.playerid);
-    const queue = presentQueue.slice();
-    let id = null;
-    while (queue.length) { const next = queue.shift(); if (valid.indexOf(next) >= 0) { id=next; break; } }
-    presentQueue=queue;
-    if (id !== null) clientContext.notifyServer("Chat",{type:2,msg:"$@"+presentQueueKind+":"+id});
-    if (!queue.length) { cancelPresentQueue(); presentRestSeconds=10; presentRest.restart(); }
-    else presentSendTimer.restart();
+    // Send the finite click snapshot in the same UI turn. The stock Chat
+    // protocol broadcasts each present; there is no artificial 1.6s queue.
+    while (presentQueue.length) {
+      if (!currentScene || currentScene!==presentQueueScene || Config.replaying || !clientContext ||
+          !currentScene.visible || (host.Window.window && !host.Window.window.active)) { cancelPresentQueue(); return; }
+      const valid=actionTargets().map(p=>p.playerid);
+      const pending=presentQueue.slice(); const id=pending.shift(); presentQueue=pending;
+      if (valid.indexOf(id)>=0) clientContext.notifyServer("Chat",{type:2,msg:"$@"+presentQueueKind+":"+id});
+    }
+    presentQueueScene=null;
   }
   function sendPresent(kind) {
     if (presentRestSeconds > 0 || presentQueue.length || !currentScene || Config.replaying || !clientContext ||
@@ -524,11 +524,9 @@ Item {
     }
     if (!ids.length) return false;
     presentQueue=ids; presentQueueScene=currentScene; presentQueueKind=kind;
+    presentRestSeconds=10; presentRest.restart();
     sendNextPresent(); return true;
   }
-  // Preserve the server's per-message rate limit rather than flooding all ids
-  // in one frame. Only a finite click snapshot is sent; room changes cancel it.
-  Timer {id:presentSendTimer;interval:1600;onTriggered:host.sendNextPresent()}
   Timer {id:presentRest;interval:1000;repeat:true;onTriggered:{
     host.presentRestSeconds--; if (host.presentRestSeconds <= 0) stop();
   }}
@@ -544,8 +542,8 @@ Item {
     contentItem: Text {text:parent.text;font:parent.font;color:"#E8D5B0";horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter}
     ToolTip.visible: hovered || down
     ToolTip.text: host.presentRestSeconds>0 ? "冷却中："+host.presentRestSeconds+" 秒" :
-      host.presentQueue.length ? "正在依次发送，剩余 "+host.presentQueue.length+" 人" :
-      "点按向全员发送，砸蛋排除自己；发送完成后共用 10 秒冷却"
+      host.presentQueue.length ? "正在同批发送" :
+      "点按向全员同批发送，砸蛋排除自己；共用 10 秒冷却"
     onClicked: host.sendPresent(presentKind)
   }
   function refreshCompatibility(rootItem) {
@@ -841,8 +839,10 @@ Item {
       if (!luckPanel) luckPanel = luckCardPanel.createObject(currentScene, {scene:currentScene});
       if (luckPanel) luckPanel.receiveRequest(data);
     } else if (luckPanel) {
-      if (command === "ReplyToServer" && !luckPanel.sending) luckPanel.stopAuto("已转为手动操作");
-      else if (["AskForSkillInvoke","PlayCard","AskForUseCard","AskForResponseCard","AskForUseActiveSkill","AskForChoices","GameOver","BackToStart","EnterLobby","EnterRoom","CancelRequest"].indexOf(command)>=0)
+      if (command === "ReplyToServer") {
+        if (!luckPanel.consumeOwnReply(data)) luckPanel.stopAuto("已转为手动操作");
+      } else if (command === "CancelRequest") luckPanel.prepareRequestChange();
+      else if (["AskForSkillInvoke","PlayCard","AskForUseCard","AskForResponseCard","AskForUseActiveSkill","AskForChoices","GameOver","BackToStart","EnterLobby","EnterRoom"].indexOf(command)>=0)
         luckPanel.endRequest();
     }
   }
@@ -867,7 +867,8 @@ Item {
       palette.base: "#20383e"; palette.highlight: "#9f8757"; palette.highlightedText: "#fff5dc"
       visible: false
       property bool running: false
-      property bool sending: false
+      property bool dismissed: false
+      property string pendingOwnReply: ""
       property bool waiting: false
       property string requestKey: ""
       property string consumedKey: ""
@@ -904,10 +905,18 @@ Item {
         }).length>=rule.count);
       }
       function stopAuto(message) {
-        action.stop(); watchdog.stop(); running=false; waiting=false;
+        action.stop(); watchdog.stop(); running=false; waiting=false; pendingOwnReply="";
         if (message) statusText=message;
       }
-      function endRequest() { stopAuto("手气卡询问已结束"); requestKey=""; visible=false; }
+      function endRequest() { cancelProbe.stop(); stopAuto("手气卡询问已结束"); requestKey=""; visible=false; dismissed=false; }
+      // ClientCallback emits CancelRequest before EVERY AskFor request, including
+      // the next luck-card reroll. Wait briefly for its queued replacement.
+      function prepareRequestChange() { action.stop(); cancelProbe.restart(); }
+      function consumeOwnReply(data) {
+        if (pendingOwnReply && String(data)===pendingOwnReply) { pendingOwnReply=""; return true; }
+        return false;
+      }
+      function dismiss() { dismissed=true; stopAuto("已关闭，本轮不再弹出"); visible=false; }
       function currentRequestValid() {
         if (!model || scene!==host.currentScene || !scene.visible || Config.observing || Config.replaying ||
             !luck.Window.window || !luck.Window.window.active || !luck.Window.window.visible || !Lua.selfPlayer ||
@@ -920,15 +929,17 @@ Item {
         const meta=Backend.getRequestData();
         const prompt=String(data[1] || "");
         const key=String(meta.id)+"|"+String(meta.timestamp)+"|"+prompt;
+        cancelProbe.stop();
         if (key===requestKey) return;
-        watchdog.stop(); waiting=false; requestMeta=meta;
+        watchdog.stop(); waiting=false; pendingOwnReply=""; requestMeta=meta;
         requestKey=key; expectedPrompt=prompt;
         const m=prompt.match(/^#AskForLuckCard:::(\d+)$/);
         remaining=m ? Number(m[1]) : -1;
-        visible=true;
-        if (running) action.restart();
+        visible=!dismissed;
+        if (running && !dismissed) action.restart();
       }
       function startAuto() {
+        if (dismissed) return;
         goals=parseGoals(goalInput.text);
         if (!goals) {statusText="目标格式：连弩，杀:2；斜线表示任选一种";return;}
         if (!currentRequestValid() || !model.okEnabled || !model.cancelEnabled) {
@@ -937,7 +948,7 @@ Item {
         used=0; running=true; waiting=false; statusText="正在检查当前手牌"; action.restart();
       }
       function act() {
-        if (!running || waiting) return;
+        if (!running || waiting || dismissed) return;
         if (!currentRequestValid() || !model.okEnabled || !model.cancelEnabled) {
           stopAuto("询问或操作状态已变化，自动刷牌停止"); return;
         }
@@ -948,14 +959,14 @@ Item {
         }
         const hit=matches(cards,goals);
         if (!hit && remaining===0) {stopAuto("服务器手气卡次数已用完");return;}
-        consumedKey=requestKey; sending=true; waiting=!hit;
+        consumedKey=requestKey; pendingOwnReply=hit ? "__cancel" : "1"; waiting=!hit;
         if (hit) {running=false;statusText="已满足目标，保留当前手牌";}
         else {used++;statusText="已换牌 "+used+" 次，等待服务器发牌";watchdog.restart();}
         try { Lua.updateRequestUI("Button", hit ? "Cancel" : "OK"); }
         catch (_) {stopAuto("操作未完成，已停止，请手动确认");}
-        finally {sending=false;}
       }
       Timer {id:action;interval:300;onTriggered:luck.act()}
+      Timer {id:cancelProbe;interval:100;onTriggered:luck.endRequest()}
       Timer {id:watchdog;interval:8000;onTriggered:luck.stopAuto("服务器未继续手气卡询问，已停止")}
       Connections {
         target: luck.Window.window
@@ -977,7 +988,7 @@ Item {
         RowLayout {
           Layout.fillWidth: true
           Label {text:"自动手气卡";color:"#f3dfb0";font.pixelSize:18;Layout.fillWidth:true}
-          Button {text:"×";implicitWidth:36;implicitHeight:32;onClicked:{luck.stopAuto("已关闭");luck.visible=false;}}
+          Button {objectName:"autoLuckClose";text:"关闭";flat:true;Layout.preferredWidth:52;Layout.preferredHeight:36;leftPadding:2;rightPadding:2;topInset:0;bottomInset:0;font.pixelSize:13;onClicked:luck.dismiss()}
         }
         ComboBox {
           objectName:"autoLuckPresets";Layout.fillWidth:true;enabled:!luck.running

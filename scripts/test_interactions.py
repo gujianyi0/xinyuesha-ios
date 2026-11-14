@@ -59,10 +59,10 @@ import LunarLtk
 import "card-counter" as Counter
 Window {
  id:win;width:800;height:500;visible:true
- property var sent:[];property int stockOpens:0;property int stockCloses:0;property int singleClicks:0
+ property var sent:[];property int stockOpens:0;property int stockCloses:0;property int singleClicks:0;property bool leaveDuringSend:false
  property alias endpoint:client;property alias selfObject:selfPlayer
  QtObject{id:selfPlayer;property int id:1}
- QtObject{id:client;function notifyServer(command,data){win.sent=win.sent.concat([{command:command,data:data,time:Date.now()}]);}}
+ QtObject{id:client;function notifyServer(command,data){win.sent=win.sent.concat([{command:command,data:data,time:Date.now()}]);if(win.leaveDuringSend){win.leaveDuringSend=false;win.leave();}}}
  Counter.CounterHost{id:counter}
  QtObject{id:target;property int playerid:2;property string screenName:"测试玩家";property int seatNumber:2;property var photoItem:null}
  QtObject{id:extra;property int playerid:3;property string screenName:"新增玩家";property int seatNumber:3;property var photoItem:null}
@@ -97,7 +97,8 @@ Window {
  QtObject{id:duplicate;property int playerid:2;property string screenName:"重复";property int seatNumber:2;property var photoItem:null}
  QtObject{id:invalid;property int playerid:-1;property string screenName:"旁观";property int seatNumber:0;property var photoItem:null}
  function allPlayers(){room.players=[target,extra,own,duplicate,invalid];}
- function resetSent(){sent=[];}
+ function resetSent(){sent=[];leaveDuringSend=false;}
+ function leaveOnFirst(){leaveDuringSend=true;}
  function forcePresent(){counter.sendPresent("Flower",true);}
  function state(){return JSON.stringify({rest:("presentRestSeconds" in counter ? counter.presentRestSeconds : 0),sent:sent,stockOpens:stockOpens,stockCloses:stockCloses,singleClicks:singleClicks,selected:target.photoItem && target.photoItem.selected,profileId:profilePopup.item ? profilePopup.item.dataModel.playerid : 0});}
 }''')
@@ -153,23 +154,27 @@ Window {
  QTest.mousePress(win,Qt.LeftButton,Qt.NoModifier,center(egg));pump(1900)
  assert not state()['sent'], 'Hold must not fire a burst'
  QTest.mouseRelease(win,Qt.LeftButton,Qt.NoModifier,center(egg));pump(100)
- assert [x['data']['msg'] for x in state()['sent']]==['$@Egg:2']
- click(flower);pump(1700)
+ assert [x['data']['msg'] for x in state()['sent']]==['$@Egg:2','$@Egg:3']
+ click(flower);pump(150)
  egg_sends=state()['sent'];assert [x['data']['msg'] for x in egg_sends]==['$@Egg:2','$@Egg:3'],egg_sends
- assert egg_sends[1]['time']-egg_sends[0]['time'] >= 1500
+ assert egg_sends[1]['time']-egg_sends[0]['time'] < 250,'same-turn batch must not wait 1.6s per player'
  assert state()['rest']>0 and not flower.property('enabled')
  call('closeMenu');call('menu');flower=win.findChild(QObject,'presentFlowerButton');call('forcePresent');assert state()['sent']==egg_sends,'reopening cannot bypass cooldown'
  wait_rest();call('resetSent')
  device=QTest.createTouchDevice();point=center(flower)
  QTest.touchEvent(win,device).press(0,point,win).commit();pump(80)
  assert not state()['sent']
- QTest.touchEvent(win,device).release(0,point,win).commit();pump(3400)
+ QTest.touchEvent(win,device).release(0,point,win).commit();pump(150)
  flowers=state()['sent'];assert [x['data']['msg'] for x in flowers]==['$@Flower:2','$@Flower:3','$@Flower:1'],flowers
+ assert flowers[-1]['time']-flowers[0]['time'] < 250
  assert state()['rest']>0
  wait_rest();egg=win.findChild(QObject,'presentEggButton');call('resetSent');click(egg);call('leave');left=state()['sent'];pump(1800)
- assert len(left)==1 and state()['sent']==left and not actions.property('visible'),'room leave cancels remaining recipients'
+ assert len(left)==2 and state()['sent']==left and not actions.property('visible'),'completed batch has no late queued recipients'
  call('enter');call('menu');flower=win.findChild(QObject,'presentFlowerButton');wait_rest();call('resetSent');click(flower);call('switchTargetId');pump(3400)
  assert all(x['data']['msg']!='$@Flower:9' for x in state()['sent']), 'queue must not retarget a changed id'
+ wait_rest();call('resetSent');call('leaveOnFirst');call('forcePresent');pump(200)
+ assert len(state()['sent'])==1,'synchronous room exit during dispatch stops remaining recipients'
+ call('enter');call('menu')
  call('restoreTargetId');call('replacePhoto');call('menu');call('closeMenu')
  QTest.mousePress(win,Qt.LeftButton,Qt.NoModifier,QPoint(700,250));pump(950);QTest.mouseRelease(win,Qt.LeftButton,Qt.NoModifier,QPoint(700,250));pump(100)
  assert actions.property('visible'),('replacement photo entry remains usable',state(),messages)
@@ -182,7 +187,7 @@ Window {
  call('menu');call('replay');assert not win.findChild(QObject,'presentEggButton').property('enabled')
  errors=[m for m in messages if any(t in m for t in ['TypeError','ReferenceError','Cannot assign','Unable to assign','Binding loop','is not a type'])]
  assert not errors,errors
- result={'tap_all':True,'eggs_exclude_self':True,'flowers_include_self':True,'duplicate_and_observer_ids_filtered':True,'mouse_hold_does_not_repeat':True,'touch_click':True,'minimum_interval_ms':egg_sends[1]['time']-egg_sends[0]['time'],'shared_cooldown_seconds':10,'leave_cancels_queue':True,'changed_ids_not_retargeted':True,'delayed_and_replacement_photo':True,'stock_profile_preserved':True,'single_gifts_preserved':True,'wrapped_action_row':True,'extra_dialog_removed':True,'errors':errors}
+ result={'tap_all':True,'eggs_exclude_self':True,'flowers_include_self':True,'duplicate_and_observer_ids_filtered':True,'mouse_hold_does_not_repeat':True,'touch_click':True,'same_turn_batch':True,'batch_span_ms':flowers[-1]['time']-flowers[0]['time'],'shared_cooldown_seconds':10,'room_exit_during_dispatch_stops_remainder':True,'no_late_queue':True,'changed_ids_not_retargeted':True,'delayed_and_replacement_photo':True,'stock_profile_preserved':True,'single_gifts_preserved':True,'wrapped_action_row':True,'extra_dialog_removed':True,'errors':errors}
  result.update(mouse_double_tap_profile=True,touch_double_tap_added_player=True,replacement_photo_double_tap=True,single_click_selection_preserved=True,opening_profile_sends_nothing=True)
  (a.work_dir/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf8');print(json.dumps(result,ensure_ascii=False,indent=2))
  win.close();engine.deleteLater();pump(30)

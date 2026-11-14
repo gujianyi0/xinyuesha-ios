@@ -45,9 +45,13 @@ Window{id:win;width:1000;height:650;visible:true
  }
  QtObject{id:room;property int dashboardId:1;property string prompt:"";property bool okEnabled:true;property bool cancelEnabled:true;property var dashboard:({handcards:[]})}
  Item{id:scene;width:1000;height:650;property var dataModel:room}
- Connections{target:Lua;function onUsed(button){room.prompt="";room.okEnabled=false;room.cancelEnabled=false;Mediator.commandGot(null,"ReplyToServer",button==="OK"?"1":"__cancel");}}
+ Connections{target:Lua;function onUsed(button){Qt.callLater(function(){room.prompt="";room.okEnabled=false;room.cancelEnabled=false;Mediator.commandGot(null,"ReplyToServer",button==="OK"?"1":"__cancel");});}}
  function hand(names){room.dashboard={handcards:names.map((n,i)=>({cardId:i+1,name:n,trueName:n.split("__").pop(),known:true}))};}
- function request(left){Backend.requestId++;Backend.stamp=Date.now();room.prompt="#AskForLuckCard:::"+left;room.okEnabled=true;room.cancelEnabled=true;Mediator.commandGot(null,"AskForSkillInvoke",["AskForLuckCard",room.prompt]);}
+ function request(left){Backend.requestId++;Backend.stamp=Date.now();nativeRequest(left);}
+ function nativeRequest(left){Mediator.commandGot(null,"CancelRequest",null);room.prompt="";room.okEnabled=false;room.cancelEnabled=false;room.prompt="#AskForLuckCard:::"+left;room.okEnabled=true;room.cancelEnabled=true;Mediator.commandGot(null,"AskForSkillInvoke",["AskForLuckCard",room.prompt]);}
+ function cancelOnly(){room.prompt="";room.okEnabled=false;room.cancelEnabled=false;Mediator.commandGot(null,"CancelRequest",null);}
+ function queuedNativeRequest(left){room.prompt="";room.okEnabled=false;room.cancelEnabled=false;Mediator.commandGot(null,"CancelRequest",null);deferredRequest.left=left;deferredRequest.restart();}
+ Timer{id:deferredRequest;property int left:0;interval:30;onTriggered:win.nativeRequest(left)}
  function duplicate(){room.prompt=host.luckPanel.expectedPrompt;room.okEnabled=true;room.cancelEnabled=true;Mediator.commandGot(null,"AskForSkillInvoke",["AskForLuckCard",room.prompt]);}
  function otherSkill(){Mediator.commandGot(null,"AskForSkillInvoke",["skill","#AskForSkillInvoke:::skill"]);}
  function phase(){Mediator.commandGot(null,"PlayCard",[]);}
@@ -76,9 +80,23 @@ Window{id:win;width:1000;height:650;visible:true
  checks=[]
  call('otherSkill');assert not state()['exists'];checks.append('unrelated skills ignored')
  setup(['jink','peach']);pump(400);assert state()['replies']==[],state();checks.append('requires an explicit start click')
- click('autoLuckStart');pump(350);assert state()['replies']==['OK'] and state()['waiting'],state()
+ click('autoLuckStart');pump(350);assert state()['replies']==['OK'] and state()['waiting'] and state()['running'],state()
  call('duplicate');pump(400);assert state()['replies']==['OK'],state();checks.append('one normal OK per server request, duplicates ignored')
  call('hand',['crossbow','slash']);call('request',9);pump(400);assert state()['replies']==['OK','Cancel'] and not state()['running'],state();checks.append('matching weapon keeps hand using normal Cancel')
+ setup(['jink']);click('autoLuckStart');pump(350)
+ for left in [9,8]:
+  call('queuedNativeRequest',left);pump(400)
+  assert state()['running'] and state()['waiting'],state()
+ call('hand',['spear']);call('queuedNativeRequest',7);pump(400)
+ assert state()['replies']==['OK','OK','OK','Cancel'],state();checks.append('native CancelRequest preludes, queued own replies and shared request metadata continue across three rerolls')
+ setup(['jink']);click('autoLuckClose');call('request',9);pump(400)
+ assert not state()['visible'] and not state()['running'] and not state()['replies'],state()
+ call('nativeRequest',8);pump(400)
+ assert not state()['visible'] and not state()['replies'],state();checks.append('manual close stays dismissed across later native rerolls')
+ call('phase');call('request',10);pump(80)
+ assert state()['visible'] and not state()['running'],state();checks.append('new luck phase can show controls again without auto starting')
+ setup(['jink']);click('autoLuckStart');call('cancelOnly');pump(400)
+ assert not state()['visible'] and not state()['replies'],state();checks.append('terminal native cancel stops the pending action')
  setup(['crossbow','slash','jink'],goal='连弩，杀:2');click('autoLuckStart');pump(350);assert state()['replies']==['OK'],state()
  call('hand',['crossbow','fire_slash','thunder_slash']);call('request',9);pump(400);assert state()['replies']==['OK','Cancel'],state();checks.append('AND combination with minimum count and elemental slash')
  setup(['spear','jink']);click('autoLuckStart');pump(350);assert state()['replies']==['Cancel'],state();checks.append('OR alternative matches spear')
