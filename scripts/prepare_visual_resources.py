@@ -24,7 +24,7 @@ def prepare(catalog_path,archives,target):
         manifest=next(r['path'] for r in pack['files'] if r['path'].endswith('/manifest.json'))
         result.append({'id':pack['id'],'requiredFile':manifest,'archiveSha256':pack['sha256']})
     marker=Path(target)/'card-counter/included-visual-packs.json';marker.parent.mkdir(parents=True,exist_ok=True)
-    marker.write_text(json.dumps({'schema':1,'bundleId':catalog['bundleId'],'packs':result},ensure_ascii=False,indent=2)+'\n',encoding='utf8')
+    marker.write_text(json.dumps({'schema':1,'bundleId':catalog['bundleId'],'packs':result},ensure_ascii=False,indent=2)+'\n',encoding='utf8',newline='\n')
     return {'packs':len(result),'files':sum(len(r['files']) for r in catalog['packs']),'resourceBundleId':catalog['bundleId']}
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--catalog',type=Path,required=True);p.add_argument('--archives',type=Path,required=True);p.add_argument('--target',type=Path,required=True);a=p.parse_args()
