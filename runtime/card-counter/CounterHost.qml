@@ -732,7 +732,9 @@ Item {
     const shapes = {
       sound: '<path d="M3 4h18v13H11l-5 4v-4H3z" fill="white" stroke="#161616" stroke-width="1.3"/>',
       emoji: '<circle cx="12" cy="12" r="10" fill="#ffd348" stroke="#ba8822"/><ellipse cx="8.5" cy="9" rx="1.4" ry="2" fill="#35271b"/><ellipse cx="15.5" cy="9" rx="1.4" ry="2" fill="#35271b"/><path d="M6.5 14h11c-1 6-10 6-11 0" fill="#513824"/><path d="M8 14h8v2H8z" fill="white"/>',
-      send: '<path d="M4 12l5 6L21 4" fill="none" stroke="#91a9bc" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>'
+      send: '<path d="M4 12l5 6L21 4" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>',
+      expand: '<path d="M2 3h13v11H9l-5 4v-4H2z" fill="white"/><path d="M20 13v9m-4-4h8" stroke="white" stroke-width="2"/>',
+      collapse: '<path d="M2 3h13v11H9l-5 4v-4H2z" fill="white"/><path d="M16 18h8" stroke="white" stroke-width="2"/>'
     };
     return "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">'+shapes[kind]+'</svg>');
   }

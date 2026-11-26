@@ -40,7 +40,8 @@ import QtQuick.Layouts
 import QtQuick.Window
 import Fk
 Window{id:win;width:1000;height:650;visible:true
- Item{id:host;property var currentScene:scene
+ Item{id:host;property var currentScene:scene;property bool directionalLuckEnabled:true
+ function disposeRoomItem(item){if(item)item.destroy();}
  FRAGMENT
  }
  QtObject{id:room;property int dashboardId:1;property string prompt:"";property bool okEnabled:true;property bool cancelEnabled:true;property var dashboard:({handcards:[]})}
