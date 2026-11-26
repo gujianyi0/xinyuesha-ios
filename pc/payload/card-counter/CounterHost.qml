@@ -1068,7 +1068,7 @@ Item {
   function refreshCompatibility(rootItem) {
     // Never walk the entire animated table from a periodic UI-thread callback.
     // Android room popups are adapted through popupItemChanged, in isolation.
-    if (Cpp.os === "Android" && activeRoomScene && !rootItem) return;
+    if (activeRoomScene && !rootItem) return;
     const window = host.Window.window;
     if (!window) return;
     // Cache surviving controls so bindings are installed once per instance.

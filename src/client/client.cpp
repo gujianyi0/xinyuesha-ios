@@ -78,6 +78,7 @@ QByteArray Client::pubEncrypt(const QByteArray &key, const QByteArray &data) {
   RSA_free(p_ptr->rsa);
   p_ptr->rsa = PEM_read_bio_RSAPublicKey(keyio, NULL, NULL, NULL);
   BIO_free_all(keyio);
+  if (!p_ptr->rsa) return {};
 
   auto rand_generator = QRandomGenerator::securelySeeded();
   QByteArray aes_key_;
@@ -93,11 +94,14 @@ QByteArray Client::pubEncrypt(const QByteArray &key, const QByteArray &data) {
   auto data_bytes = data;
   data_bytes.prepend(aes_key_);
 
-  unsigned char buf[RSA_size(p_ptr->rsa)];
-  RSA_public_encrypt(data.length() + 32,
-                     (const unsigned char *)data_bytes.constData(), buf, p_ptr->rsa,
-                     RSA_PKCS1_PADDING);
-  return QByteArray { (const char *)buf, RSA_size(p_ptr->rsa) };
+  QByteArray result(RSA_size(p_ptr->rsa), Qt::Uninitialized);
+  const int written = RSA_public_encrypt(data_bytes.size(),
+      reinterpret_cast<const unsigned char *>(data_bytes.constData()),
+      reinterpret_cast<unsigned char *>(result.data()), p_ptr->rsa,
+      RSA_PKCS1_PADDING);
+  if (written < 0) return {};
+  result.resize(written);
+  return result;
 }
 
 void Client::sendSetupPacket(const QString &pubkey) {

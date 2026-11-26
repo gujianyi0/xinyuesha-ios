@@ -21,11 +21,10 @@ public:
 
 %native(GetMicroSecond) int GetMicroSecond(lua_State *L);
 %{
-#include <sys/time.h>
+#include <chrono>
 static int GetMicroSecond(lua_State *L) {
-  struct timeval tv;
-  gettimeofday(&tv, nullptr);
-  long long microsecond = (long long)tv.tv_sec * 1000000 + tv.tv_usec;
+  const auto microsecond = std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::system_clock::now().time_since_epoch()).count();
   lua_pushnumber(L, microsecond);
   return 1;
 }

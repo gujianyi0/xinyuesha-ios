@@ -262,13 +262,20 @@ assert(#k.hands==1 and k.hands[1].uncertain and #k.top==0 and #k.bottom==0)
 Card={PlayerHand=1,Processing=5,DrawPile=6}
 Self=viewer;ClientInstance=room
 local remembered={}
+function table.insertIfNeed(t,v) for _,x in ipairs(t) do if x==v then return end end;table.insert(t,v) end
+function table.removeOne(t,v) for i,x in ipairs(t) do if x==v then table.remove(t,i);return end end end
+viewer.card_tracker.draw_pile={known_cards={},uncertain_cards={32}}
+function viewer.card_tracker:getKnownCardsByArea(area)
+ assert(area==Card.DrawPile);return self.draw_pile
+end
 function room:getCardArea(id) return ({[27]=1,[31]=5,[32]=6,[33]=4})[id] end
 function room:getCardOwner(id) return id==27 and target or nil end
 function viewer.card_tracker:setCardKnown(id,owner,area)
  remembered[#remembered+1]={id=id,owner=owner,area=area}
 end
 assert(M.remember({27,31,32,33,-1}))
-assert(#remembered==3 and remembered[1].owner==target and remembered[3].area==6)
+assert(#remembered==2 and remembered[1].owner==target and remembered[2].area==5)
+assert(viewer.card_tracker.draw_pile.known_cards[1]==32 and #viewer.card_tracker.draw_pile.uncertain_cards==0)
 -- Read-only top/bottom dialogs do not move cards. Seed their shown order
 -- using only a public count; the poisoned hidden deck must never be read.
 function room:getCardArea(id) return id>=31 and id<=34 and 6 or 1 end

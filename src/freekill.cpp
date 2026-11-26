@@ -310,7 +310,7 @@ RET:
 }
 
 // FreeKill 的程序主入口。整个程序就是从这里开始执行的。
-int freekill_main(int argc, char *argv[]) {
+int freekill_main(int argc, char **argv) {
   // 初始化一下各种杂项信息
   QThread::currentThread()->setObjectName("Main");
 
@@ -646,11 +646,16 @@ int freekill_main(int argc, char *argv[]) {
     engine->addImportPath(QDir::currentPath() + "/packages/freekill-core");
   engine->load("card-counter/client-shell/main.qml");
 #else
-  // 加载GUI了，如果core有的话用core的
-  if (Pacman->shouldUseCore() &&
-      QFile::exists("packages/freekill-core/Fk")) {
+  // Resolve the stock UI against its matching core while keeping the managed
+  // shell outside packages, just like the mobile clients' checksum boundary.
+  engine->addImportPath(QDir::currentPath());
+  const bool coreUi = Pacman->shouldUseCore() &&
+      QFile::exists("packages/freekill-core/Fk");
+  if (coreUi) engine->addImportPath(QDir::currentPath() + "/packages/freekill-core");
+  if (QFile::exists("card-counter/client-shell/main.qml")) {
+    engine->load("card-counter/client-shell/main.qml");
+  } else if (coreUi) {
     // FIXME: 客户端更新core后提示重启
-    engine->addImportPath("packages/freekill-core");
     engine->load("packages/freekill-core/Fk/main.qml");
   } else {
     engine->addImportPath(QDir::currentPath());
