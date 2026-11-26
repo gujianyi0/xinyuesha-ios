@@ -21,6 +21,15 @@ Window {
 
   Counter.CounterHost { id: counterHost; navigationRoot: gamePage.item; photoLocations: StandardPaths.standardLocations(StandardPaths.PicturesLocation) }
 
+  Loader {
+    id:packDownload
+    readonly property var page:counterHost.navigationPage
+    active:!!page && typeof page.rebuildListModels==="function" && typeof page.moveEnabledToTop==="function" && "fullAvailableList" in page
+    parent:active?page:root.contentItem
+    width:0;height:0
+    sourceComponent:Counter.ResourcePackDownload{managerPage:packDownload.page;client:counterHost.resourcePackDownloads}
+  }
+
   onXChanged: if (!skinDebuggerMode && !androidMode) Config.winX = x;
   onYChanged: if (!skinDebuggerMode && !androidMode) Config.winY = y;
   onWidthChanged: if (!skinDebuggerMode) Config.winWidth = width;

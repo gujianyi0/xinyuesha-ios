@@ -23,12 +23,12 @@ Window {
   Loader {
     id: packDownload
     readonly property var page: counterHost.navigationPage
-    active: root.androidMode && !!page && typeof page.rebuildListModels === "function"
+    active: !!page && typeof page.rebuildListModels === "function"
       && typeof page.moveEnabledToTop === "function" && "fullAvailableList" in page
     parent: active ? page : root.contentItem
     width: 0
     height: 0
-    sourceComponent: Counter.ResourcePackDownload { managerPage: packDownload.page }
+    sourceComponent: Counter.ResourcePackDownload { managerPage: packDownload.page;client:counterHost.resourcePackDownloads }
   }
 
   onXChanged: if (!skinDebuggerMode && !androidMode) Config.winX = x;

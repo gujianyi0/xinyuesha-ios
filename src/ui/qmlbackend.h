@@ -3,6 +3,8 @@
 #ifndef _QMLBACKEND_H
 #define _QMLBACKEND_H
 
+class ResourcePackService;
+
 class Replayer;
 class IosFriendTransport;
 
@@ -125,6 +127,9 @@ private slots:
   void readPendingDatagrams();
 
 private:
+#ifndef Q_OS_ANDROID
+  ResourcePackService *m_resourcePacks = nullptr;
+#endif
   Q_PROPERTY(qreal volume READ volume WRITE setVolume NOTIFY volumeChanged)
 
   QQmlApplicationEngine *engine;

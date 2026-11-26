@@ -34,7 +34,7 @@ public class ExtractorProbe {
  }
 }''',encoding='utf8')
     subprocess.run([str(jdk/'javac.exe'),'-encoding','UTF-8','-classpath',str(android),'-d',str(classes),
-                    *[str(root/'android/java/org/notify/FreeKill'/f'{n}.java') for n in ('CounterResourcePacks','CounterEmbeddedPacks','BundledPackInstaller')],str(source)],check=True)
+                    *[str(root/'android/java/org/notify/FreeKill'/f'{n}.java') for n in ('CounterResourcePacks','CounterEmbeddedPacks','BundledPackInstaller','ResourcePackInstaller')],str(source)],check=True)
     def run(archive,dest):
         p=subprocess.run([str(jdk/'java.exe'),'-Xmx48m','-cp',str(classes)+os.pathsep+str(android),
                           'org.notify.FreeKill.ExtractorProbe',str(archive),str(dest)],capture_output=True,timeout=45)

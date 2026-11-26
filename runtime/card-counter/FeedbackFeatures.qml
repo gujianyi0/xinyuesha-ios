@@ -137,6 +137,11 @@ Item {
           text:features.hapticsSupported ? "仅自己受伤、失去体力或回合开始时提醒；默认关闭，遵循系统触感设置。" : "此版本暂不支持震动提醒。"
           Layout.fillWidth:true;Layout.leftMargin:16;Layout.rightMargin:16;wrapMode:Text.Wrap
         }
+        Button {
+          text:"奶杀动皮"
+          visible:typeof features.owner.openNaishaSettings === "function"
+          onClicked:features.owner.openNaishaSettings()
+        }
         Label {text:features.settingsError;visible:text!=="";color:"#c54040";Layout.margins:16}
         Label {text:"functionSettingsError" in features.owner ? features.owner.functionSettingsError : "";visible:text!=="";color:"#c54040";Layout.margins:16}
       }

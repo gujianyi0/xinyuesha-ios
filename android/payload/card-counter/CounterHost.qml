@@ -12,6 +12,10 @@ Item {
   id: host
   objectName: "fkCounterHost"
   FeedbackFeatures { id: feedbackFeatures; objectName: "feedbackFeatures"; owner: host }
+  ResourcePackClient {id:resourcePackClient;owner:host}
+  readonly property var resourcePackDownloads:resourcePackClient
+  NaishaSkins {id:naishaSkins;owner:host}
+  function openNaishaSettings() {naishaSkins.openSettings();}
   property var currentScene: null
   property string revealFocusSkill: ""
   property var arrangementBoxes: []

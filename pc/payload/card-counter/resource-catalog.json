@@ -1,0 +1,151 @@
+{
+  "schema": 2,
+  "minimumClient": "20261126.35",
+  "packs": [
+    {
+      "id": "手杀武将特效-v1",
+      "title": "手杀武将特效（原始专属演出）",
+      "version": "20261120.20",
+      "bytes": 147425189,
+      "expandedBytes": 153901152,
+      "fileCount": 285,
+      "parts": [
+        {
+          "archive": "xinyuesha-shousha-v1-20261120-20-7acf02e064f3.zip",
+          "bytes": 147425189,
+          "sha256": "7acf02e064f34a0dcf838a18b95608ccf8281bc317e976ce57ca0bd6837f320f",
+          "expandedBytes": 153901152,
+          "fileCount": 285
+        }
+      ]
+    },
+    {
+      "id": "指向线特效-v1",
+      "title": "指向线特效（OL 原始金龙慢放）",
+      "version": "20261121.26",
+      "bytes": 210001,
+      "expandedBytes": 213293,
+      "fileCount": 5,
+      "parts": [
+        {
+          "archive": "xinyuesha-target-line-ol-v1-20261121-26-5908d0caaae8.zip",
+          "bytes": 210001,
+          "sha256": "5908d0caaae872ec2a1116878a2164f51604cf8d88d9ff05ccfdc7166449b617",
+          "expandedBytes": 213293,
+          "fileCount": 5
+        }
+      ]
+    },
+    {
+      "id": "十周年特效-v1",
+      "title": "十周年特效（原始连招与管宁）",
+      "version": "20261120.18",
+      "bytes": 33887598,
+      "expandedBytes": 34855612,
+      "fileCount": 32,
+      "parts": [
+        {
+          "archive": "xinyuesha-tenyear-v1-20261120-18-afcac3400f4a.zip",
+          "bytes": 33887598,
+          "sha256": "afcac3400f4a6abf08f0956bc123a856fc2c94d66a6faaf642d0db6c0b3b3b6c",
+          "expandedBytes": 34855612,
+          "fileCount": 32
+        }
+      ]
+    },
+    {
+      "id": "奶杀动皮-v1",
+      "title": "奶杀动皮（244款）",
+      "version": "20261126.35",
+      "bytes": 1311839017,
+      "expandedBytes": 1447906505,
+      "fileCount": 1840,
+      "parts": [
+        {
+          "archive": "xinyuesha-naisha-v1-20261126-35-part-01-5af411a829fe.zip",
+          "bytes": 114077619,
+          "sha256": "5af411a829fe420d665c8ea4358fdb770899bbdb70ac66051c2cae56031b58d0",
+          "expandedBytes": 125209682,
+          "fileCount": 165
+        },
+        {
+          "archive": "xinyuesha-naisha-v1-20261126-35-part-02-d60b73d9a769.zip",
+          "bytes": 115198435,
+          "sha256": "d60b73d9a7694326557abae6f25c80a91f848218f78fd8e16f33d9f743eb7f82",
+          "expandedBytes": 125807301,
+          "fileCount": 178
+        },
+        {
+          "archive": "xinyuesha-naisha-v1-20261126-35-part-03-94e5e8fbe82d.zip",
+          "bytes": 114988998,
+          "sha256": "94e5e8fbe82d161de2d8b6e51cfa2cc5f2efa2fd474b58559f0673e2045c5bd4",
+          "expandedBytes": 125761175,
+          "fileCount": 134
+        },
+        {
+          "archive": "xinyuesha-naisha-v1-20261126-35-part-04-3cfe388a1c4e.zip",
+          "bytes": 113094330,
+          "sha256": "3cfe388a1c4e6cbd739a3506e1170034b9f850f4ee85c12b35bed7d751de31ed",
+          "expandedBytes": 124035139,
+          "fileCount": 160
+        },
+        {
+          "archive": "xinyuesha-naisha-v1-20261126-35-part-05-9928796e1fc5.zip",
+          "bytes": 115519944,
+          "sha256": "9928796e1fc5e413379d8e9d585626b2b02fd3c9767aa8add8a8843654304686",
+          "expandedBytes": 125804173,
+          "fileCount": 139
+        },
+        {
+          "archive": "xinyuesha-naisha-v1-20261126-35-part-06-e52996cf88e3.zip",
+          "bytes": 110664094,
+          "sha256": "e52996cf88e3448e626542f343d4d79d58633e6139d81f0260d70564b21d0dbe",
+          "expandedBytes": 123889788,
+          "fileCount": 184
+        },
+        {
+          "archive": "xinyuesha-naisha-v1-20261126-35-part-07-41491e161d8b.zip",
+          "bytes": 112272081,
+          "sha256": "41491e161d8b36033aae4c558fbe1d554a4a2ae95729945d284c2064d5dae5d5",
+          "expandedBytes": 125539965,
+          "fileCount": 189
+        },
+        {
+          "archive": "xinyuesha-naisha-v1-20261126-35-part-08-7fd27d9784bc.zip",
+          "bytes": 116033474,
+          "sha256": "7fd27d9784bcd9083cee49ad4b3a255989cd8796f21f81f0710f1ccbfdc2ad89",
+          "expandedBytes": 125774901,
+          "fileCount": 167
+        },
+        {
+          "archive": "xinyuesha-naisha-v1-20261126-35-part-09-1fddc53becb4.zip",
+          "bytes": 109618055,
+          "sha256": "1fddc53becb413dfa218fcf86979237238d549b10b30c729beacf43586165e37",
+          "expandedBytes": 125659956,
+          "fileCount": 144
+        },
+        {
+          "archive": "xinyuesha-naisha-v1-20261126-35-part-10-2e635aea5e3e.zip",
+          "bytes": 113639718,
+          "sha256": "2e635aea5e3eec614e0160b799e6541d9445177ff99a1e061bacfc617a675d8b",
+          "expandedBytes": 125729870,
+          "fileCount": 141
+        },
+        {
+          "archive": "xinyuesha-naisha-v1-20261126-35-part-11-7c5024eae4f7.zip",
+          "bytes": 111446964,
+          "sha256": "7c5024eae4f750d8cc5a586c2c65d73687efdd1f87ad1035c5a5d7d3bc62c309",
+          "expandedBytes": 122425461,
+          "fileCount": 137
+        },
+        {
+          "archive": "xinyuesha-naisha-v1-20261126-35-part-12-e355e2b21820.zip",
+          "bytes": 65285305,
+          "sha256": "e355e2b218201454805051681cbb19ea009d696b25cab282c18f18077d3d829b",
+          "expandedBytes": 72269094,
+          "fileCount": 102
+        }
+      ]
+    }
+  ]
+}

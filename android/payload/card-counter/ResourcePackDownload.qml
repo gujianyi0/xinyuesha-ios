@@ -10,13 +10,12 @@ import Fk
 Item {
   id: entry
   required property Item managerPage
-  readonly property string bridge: "resource-pack-download/"
-  property string requestId: ""
-  property string operation: ""
-  property string installing: ""
-  property double deadline: 0
-  property string status: ""
-  property var packs: []
+  required property var client
+  readonly property string requestId:client.requestId
+  readonly property string operation:client.operation
+  readonly property string installing:client.installing
+  readonly property string status:client.status
+  readonly property var packs:client.packs
   property var availableView: null
   property var searchField: null
   property var enabledModel: null
@@ -239,7 +238,7 @@ Item {
         model: entry.offers
         delegate: ItemDelegate {
           required property var modelData
-          width: parent.width
+          width: parent ? parent.width : 0
           height: 64
           enabled: entry.requestId === ""
           contentItem: RowLayout {
@@ -250,21 +249,27 @@ Item {
               spacing: 1
               Label { text: modelData.title; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
               Label {
-                text: entry.installing === modelData.id && entry.requestId !== "" ? "正在下载并校验…" : modelData.version + " · 点击下载并启用"
+                text: entry.installing === modelData.id && entry.requestId !== "" ? "正在下载并校验…" : modelData.version + " · " + (Number(modelData.bytes)/1048576).toFixed(0) + " MB · 下载并启用"
                 elide: Text.ElideRight
                 font.pixelSize: 12
                 Layout.fillWidth: true
               }
             }
           }
-          onClicked: { entry.installing = modelData.id; entry.request("install", modelData.id); }
+          onClicked: { entry.request("install", modelData.id); }
         }
       }
       Label {
-        width: parent.width
+        width: parent ? parent.width : 0
         visible: entry.status !== ""
         text: entry.status
         wrapMode: Text.WordWrap
+      }
+      ToolButton {
+        visible:entry.requestId!=="" && entry.operation==="install"
+        text:entry.client.cancelling?"正在取消…":"取消下载"
+        enabled:!entry.client.cancelling
+        onClicked:entry.client.cancel()
       }
       ToolButton {
         visible: entry.requestId === "" && entry.status !== ""
@@ -273,66 +278,22 @@ Item {
       }
     }
   }
-  function request(action, pack) {
-    const id = Date.now().toString() + "_" + Math.floor(Math.random() * 1000000);
-    if (!Backend.writeFileToAssets(bridge + "request.json",
-        JSON.stringify({ id: id, operation: action, pack: pack }))) {
-      status = "无法写入下载请求";
-      return;
-    }
-    operation = action;
-    requestId = id;
-    const metadata = packs.find(row => row.id === pack);
-    // Large original-animation packs need longer than the former three-minute
-    // UI deadline on a mobile connection; transfers remain bounded by bytes,
-    // checksums, read timeouts and an overall frontend deadline.
-    const installMs = Math.max(180000, Math.min(1800000,
-      Number(metadata && metadata.bytes || 0) / (128 * 1024) * 1000 + 60000));
-    deadline = Date.now() + (action === "install" ? installMs : 35000);
-    status = action === "install" ? "正在下载并校验…" : action === "uninstall" ? "正在删除…" : "正在读取资源列表…";
+  function request(action,pack){client.request(action,pack);}
+  function syncInstalled(pack) {
+    const page=managerPage;
+    page.fullAvailableList=page.fullAvailableList.filter(name=>name!==pack);
+    if(!page.fullEnabledList.includes(pack))page.fullEnabledList=[pack].concat(page.fullEnabledList);
+    page.rebuildListModels();
   }
-
-  Timer {
-    interval: 400
-    repeat: true
-    running: entry.requestId !== ""
-    onTriggered: {
-      const file = entry.bridge + "reply.json";
-      let reply;
-      if (Backend.existsInAssets(file)) {
-        try { reply = JSON.parse(Backend.readFileFromAssets(file)); } catch (_) {}
-      }
-      if (!reply || reply.id !== entry.requestId) {
-        if (Date.now() > entry.deadline) {
-          entry.status = "请求超时，请刷新重试";
-          entry.requestId = "";
-        }
-        return;
-      }
-      entry.requestId = "";
-      if (!reply.ok) {
-        entry.status = reply.error || "下载失败";
-      } else if (entry.operation === "catalog") {
-        entry.packs = reply.packs || [];
-        const retired = ["轻特效v1-20261119-1", "轻特效v1-20261119-2", "轻特效v1-20261120-3"];
-        entry.managerPage.fullAvailableList = entry.managerPage.fullAvailableList.filter(name => !retired.includes(name));
-        entry.managerPage.fullEnabledList = entry.managerPage.fullEnabledList.filter(name => !retired.includes(name));
-        entry.managerPage.rebuildListModels();
-        entry.status = "";
-      } else if (entry.operation === "uninstall") {
-        const page = entry.managerPage;
-        page.fullAvailableList = page.fullAvailableList.filter(name => name !== reply.pack);
-        page.rebuildListModels();
-        entry.status = "";
-      } else {
-        const page = entry.managerPage;
-        page.fullAvailableList = page.fullAvailableList.filter(name => name !== reply.pack);
-        if (!page.fullEnabledList.includes(reply.pack))
-          page.fullEnabledList = [reply.pack].concat(page.fullEnabledList);
-        page.rebuildListModels();
-        entry.status = "";
-      }
+  Connections {
+    target:entry.client
+    function onInstalled(pack){entry.syncInstalled(pack);}
+    function onRemoved(pack){entry.managerPage.fullAvailableList=entry.managerPage.fullAvailableList.filter(name=>name!==pack);entry.managerPage.rebuildListModels();}
+    function onPacksChanged(){
+      const retired=["轻特效v1-20261119-1","轻特效v1-20261119-2","轻特效v1-20261120-3"];
+      entry.managerPage.fullAvailableList=entry.managerPage.fullAvailableList.filter(name=>!retired.includes(name));
+      entry.managerPage.fullEnabledList=entry.managerPage.fullEnabledList.filter(name=>!retired.includes(name));
+      entry.managerPage.rebuildListModels();
     }
   }
-
 }

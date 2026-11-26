@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.22)
+project(ResourcePackNativeTest LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+find_package(Qt6 REQUIRED COMPONENTS Core Network)
+add_executable(ResourcePackNativeTest main.cpp "${PROJECT_ROOT}/src/platform/resourcepackservice.cpp")
+target_include_directories(ResourcePackNativeTest PRIVATE "${PROJECT_ROOT}/src/platform")
+target_link_libraries(ResourcePackNativeTest PRIVATE Qt6::Core Qt6::Network)

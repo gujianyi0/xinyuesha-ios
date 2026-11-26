@@ -32,7 +32,8 @@ public final class CounterStartup {
         "card-counter/bootstrap.lua", "card-counter/counter.lua", "card-counter/CounterViewport.qml", "card-counter/EmbeddedPackGate.qml",
         "card-counter/SocialClient.qml", "card-counter/SocialHost.qml", "card-counter/SocialAuth.js",
         "card-counter/known-hand.png", "card-counter/guanning/GuanNingActions.qml", "card-counter/guanning/GuanNingTrail.qml", "card-counter/guanning/GuanNingPreview.qml",
-        "card-counter/FeedbackFeatures.qml", "card-counter/EffectLayer.qml", "card-counter/LightTargetLine.qml", "card-counter/TenyearCombo.qml", "card-counter/HandkillPerformance.qml", "card-counter/HandkillRouter.qml", "card-counter/ResourcePackDownload.qml", "card-counter/client-shell/main.qml", "Fk/main.qml",
+        "card-counter/NaishaLayer.qml", "card-counter/NaishaPortrait.qml", "card-counter/NaishaSkins.qml",
+        "card-counter/FeedbackFeatures.qml", "card-counter/EffectLayer.qml", "card-counter/LightTargetLine.qml", "card-counter/TenyearCombo.qml", "card-counter/HandkillPerformance.qml", "card-counter/HandkillRouter.qml", "card-counter/ResourcePackDownload.qml", "card-counter/ResourcePackClient.qml", "card-counter/resource-catalog.json", "card-counter/client-shell/main.qml", "Fk/main.qml",
     };
     public static void run(Activity activity) {
         CounterRepoRepair.run(activity);

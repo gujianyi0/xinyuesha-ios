@@ -235,6 +235,14 @@ jobs:
           cmake --build "$RUNNER_TEMP/native-friend-test" --parallel 2
           "$RUNNER_TEMP/native-friend-test/test-ios-friends"
 
+      - name: Test native resource downloads with the shipped Qt version
+        run: |
+          cmake -S scripts/resource-pack-native-test -B "$RUNNER_TEMP/resource-pack-test" \
+            -DPROJECT_ROOT="$PWD" -DCMAKE_PREFIX_PATH="$HOME/Qt/6.8.3/macos" -DCMAKE_BUILD_TYPE=Release
+          cmake --build "$RUNNER_TEMP/resource-pack-test" --parallel 2
+          python3 scripts/test_resource_pack_download.py --native "$RUNNER_TEMP/resource-pack-test/ResourcePackNativeTest" \
+            --skip-java --output "$RUNNER_TEMP/resource-pack-network"
+
       - name: Build Lua / OpenSSL / libgit2
         run: |
           # This cache key pins Qt / OpenSSL / libgit2 versions. Reuse complete

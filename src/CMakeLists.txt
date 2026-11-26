@@ -69,6 +69,9 @@ if (IOS)
 endif()
 
 if (NOT DEFINED FK_SERVER_ONLY)
+  if (NOT ANDROID)
+    list(APPEND freekill_SRCS "platform/resourcepackservice.cpp")
+  endif()
   list(APPEND freekill_SRCS
     "client/replayer.cpp"
     # "ui/mod.cpp"

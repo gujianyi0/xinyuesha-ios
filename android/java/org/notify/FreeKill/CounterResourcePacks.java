@@ -20,17 +20,19 @@ import javax.net.ssl.HttpsURLConnection;
 
 /** Installs visual resources in the stock resource-pack directory. */
 final class CounterResourcePacks {
-    private static final String HOST = "https://preview.gujianyi-web-preview.pages.dev";
-    private static final String CATALOG = HOST + "/xinyuesha/resource-packs/v1/catalog.json";
+    private static final String HOST = "https://gujianyi-xinyuesha-resources.pages.dev";
+    private static final String CATALOG = HOST + "/catalog.json";
     private static final long MAX_ARCHIVE = 192L * 1024 * 1024;
     private static final long MAX_UNPACKED = 256L * 1024 * 1024;
     private static final int MAX_CATALOG = 64 * 1024;
     private static ScheduledExecutorService worker;
+    private static android.content.Context context;
 
     private CounterResourcePacks() {}
 
     static synchronized void start(Activity activity) {
         if (worker != null) return;
+        context=activity.getApplicationContext();
         File external = activity.getExternalFilesDir(null);
         Path internal = activity.getFilesDir().toPath();
         worker = Executors.newSingleThreadScheduledExecutor();
@@ -62,76 +64,53 @@ final class CounterResourcePacks {
                 Files.move(old, retired);
             }
         }
-        Path request = bridge.resolve("request.json");
-        if (!Files.isRegularFile(request, LinkOption.NOFOLLOW_LINKS) || Files.size(request) > 1024) return;
+        Path request=bridge.resolve("request.json"), active=bridge.resolve("active.json");
+        Path inputFile=Files.isRegularFile(active,LinkOption.NOFOLLOW_LINKS)?active:request;
+        if(!Files.isRegularFile(inputFile,LinkOption.NOFOLLOW_LINKS)||Files.size(inputFile)>1024)return;
         JSONObject input;
+        try{input=new JSONObject(new String(Files.readAllBytes(inputFile),StandardCharsets.UTF_8));}catch(org.json.JSONException unfinished){return;}
+        String id=input.getString("id"),operation=input.getString("operation");
+        if(!id.matches("[0-9_-]{1,48}")){Files.deleteIfExists(inputFile);return;}
+        if(operation.equals("install"))BundledPackInstaller.writeJson(active,input);
+        if(inputFile.equals(request))Files.deleteIfExists(request);
+        JSONObject reply=new JSONObject().put("id",id).put("operation",operation).put("ok",false);
         try {
-            input = new JSONObject(new String(Files.readAllBytes(request), StandardCharsets.UTF_8));
-        } catch (org.json.JSONException unfinishedWrite) {
-            return;
-        }
-        String id = input.getString("id");
-        Files.deleteIfExists(request);
-        if (!id.matches("[0-9_-]{1,48}")) return;
-        JSONObject reply = new JSONObject().put("id", id).put("ok", false);
-        try {
-            String operation = input.getString("operation");
-            JSONArray packs = operation.equals("uninstall") ? new JSONArray() : catalog();
-            switch (input.getString("operation")) {
-                case "uninstall":
-                    String removed = input.getString("pack");
-                    uninstall(root, removed);
-                    reply.put("pack", removed);
-                    break;
-                case "catalog":
-                    reply.put("packs", packs);
-                    break;
-                case "install":
-                    JSONObject pack = find(packs, input.getString("pack"));
-                    install(root, bridge, pack);
-                    reply.put("pack", pack.getString("id"));
-                    break;
-                default:
-                    throw new IOException("Invalid request");
-            }
-            reply.put("ok", true);
-        } catch (Exception error) {
-            reply.put("error", "资源包请求失败，请检查网络后重试。");
-            Log.w("ResourcePacks", "Catalog or download failed", error);
-        }
-        Path stagedReply = Files.createTempFile(bridge, "reply-", ".json");
-        try {
-            Files.write(stagedReply, reply.toString().getBytes(StandardCharsets.UTF_8));
-            Files.move(stagedReply, bridge.resolve("reply.json"),
-                    StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } finally {
-            Files.deleteIfExists(stagedReply);
-        }
+            if(operation.equals("catalog"))reply.put("packs",catalog());
+            else if(operation.equals("uninstall")){uninstall(root,input.getString("pack"));reply.put("pack",input.getString("pack"));}
+            else if(operation.equals("install")) {
+                JSONObject pack=find(catalog(),input.getString("pack"));
+                ResourcePackInstaller installer=new ResourcePackInstaller(root,HOST,id,(stage,done,total,part,parts)->
+                    BundledPackInstaller.writeJson(bridge.resolve("progress.json"),new JSONObject().put("id",id).put("stage",stage).put("done",done).put("total",total).put("part",part).put("parts",parts)));
+                installer.install(pack,pack.optBoolean("bundled",false)?(part,path)->CounterEmbeddedPacks.copy(pack,path):null);
+                reply.put("pack",pack.getString("id"));
+            }else throw new IOException("Invalid request");
+            reply.put("ok",true);
+        }catch(ResourcePackInstaller.Cancelled cancelled){reply.put("cancelled",true).put("error",cancelled.getMessage());}
+        catch(Exception error){if(Thread.currentThread().isInterrupted())return;reply.put("error","资源包请求失败："+error.getMessage());Log.w("ResourcePacks","Resource request failed",error);}
+        BundledPackInstaller.writeJson(bridge.resolve("reply.json"),reply);
+        if(operation.equals("install"))Files.deleteIfExists(active);
     }
 
-    private static JSONArray catalog() throws Exception {
-        JSONArray embedded=CounterEmbeddedPacks.catalog();
-        if(embedded!=null)return embedded;
-        HttpsURLConnection connection = connect(CATALOG);
-        try (InputStream input = connection.getInputStream(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-            copy(input, output, MAX_CATALOG);
-            JSONObject catalog = new JSONObject(new String(output.toByteArray(), StandardCharsets.UTF_8));
-            if (catalog.getInt("schema") != 1) throw new IOException("Unsupported resource catalog schema");
-            JSONArray packs = catalog.getJSONArray("packs");
-            if (packs.length() > 32) throw new IOException("Too many resource packs");
-            for (int index = 0; index < packs.length(); index++) {
-                JSONObject pack = packs.getJSONObject(index);
-                if (!pack.getString("id").matches("[A-Za-z0-9_\\-\\p{IsHan}]{1,64}")
-                        || !pack.getString("archive").matches("[A-Za-z0-9_-]{1,96}\\.zip")
-                        || !pack.getString("sha256").matches("[a-f0-9]{64}")
-                        || pack.getLong("bytes") <= 0 || pack.getLong("bytes") > MAX_ARCHIVE
-                        || pack.getString("title").length() > 80 || pack.getString("version").length() > 32)
-                    throw new IOException("Invalid resource pack metadata");
+    static JSONArray catalog() throws Exception {
+        JSONObject data;
+        try {
+            HttpsURLConnection connection=connect(CATALOG);
+            try(InputStream input=connection.getInputStream();ByteArrayOutputStream output=new ByteArrayOutputStream()) {
+                copy(input,output,MAX_CATALOG);data=new JSONObject(new String(output.toByteArray(),StandardCharsets.UTF_8));
+            }finally{connection.disconnect();}
+            ResourcePackInstaller.validate(data);
+        }catch(Exception unavailable) {
+            try(InputStream input=context.getAssets().open("res/card-counter/resource-catalog.json");ByteArrayOutputStream output=new ByteArrayOutputStream()) {
+                copy(input,output,MAX_CATALOG);data=new JSONObject(new String(output.toByteArray(),StandardCharsets.UTF_8));
             }
-            return packs;
-        } finally {
-            connection.disconnect();
         }
+        JSONArray packs=ResourcePackInstaller.validate(data),embedded=CounterEmbeddedPacks.catalog();
+        // Local copies replace downloads only for the exact same immutable data.
+        if(embedded!=null)for(int i=0;i<packs.length();i++) {
+            JSONObject row=packs.getJSONObject(i);JSONArray parts=row.getJSONArray("parts");if(parts.length()!=1)continue;
+            for(int j=0;j<embedded.length();j++){JSONObject local=embedded.getJSONObject(j);if(local.getString("id").equals(row.getString("id"))&&local.getString("sha256").equals(parts.getJSONObject(0).getString("sha256")))row.put("bundled",true);}
+        }
+        return packs;
     }
 
     private static JSONObject find(JSONArray packs, String id) throws Exception {
@@ -140,27 +119,6 @@ final class CounterResourcePacks {
             if (pack.getString("id").equals(id)) return pack;
         }
         throw new IOException("Resource pack unavailable");
-    }
-
-    private static void install(Path root, Path bridge, JSONObject pack) throws Exception {
-        Path packs = root.resolve("resource_pak");
-        Files.createDirectories(packs);
-        Path destination = packs.resolve(pack.getString("id"));
-        if (Files.isDirectory(destination, LinkOption.NOFOLLOW_LINKS)) return;
-
-        Path temporary = Files.createTempDirectory(bridge, "install-");
-        try {
-            Path archive = temporary.resolve("resource.zip");
-            download(pack, archive);
-            Path extracted = Files.createDirectory(temporary.resolve("pack"));
-            extract(archive, extracted);
-            Files.move(extracted, destination, StandardCopyOption.ATOMIC_MOVE);
-        } finally {
-            try (java.util.stream.Stream<Path> paths = Files.walk(temporary)) {
-                for (Path path : (Iterable<Path>) paths.sorted(Comparator.reverseOrder())::iterator)
-                    Files.deleteIfExists(path);
-            }
-        }
     }
 
     private static void uninstall(Path root, String id) throws Exception {
@@ -182,22 +140,6 @@ final class CounterResourcePacks {
             for (Path path : (Iterable<Path>) paths.sorted(Comparator.reverseOrder())::iterator)
                 Files.delete(path);
         }
-    }
-
-    private static void download(JSONObject pack, Path archive) throws Exception {
-        if(pack.optBoolean("bundled",false)){CounterEmbeddedPacks.copy(pack,archive);return;}
-        long bytes = pack.getLong("bytes");
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        HttpsURLConnection connection = connect(HOST + "/download/xinyuesha/resource-packs/" + pack.getString("archive"));
-        try (InputStream input = new DigestInputStream(connection.getInputStream(), digest);
-             OutputStream output = Files.newOutputStream(archive, StandardOpenOption.CREATE_NEW)) {
-            if (copy(input, output, bytes) != bytes) throw new IOException("Incomplete resource pack");
-        } finally {
-            connection.disconnect();
-        }
-        StringBuilder hash = new StringBuilder();
-        for (byte value : digest.digest()) hash.append(String.format(Locale.ROOT, "%02x", value & 255));
-        if (!hash.toString().equals(pack.getString("sha256"))) throw new IOException("Resource checksum differs");
     }
 
     static void extract(Path archive, Path destination) throws IOException {

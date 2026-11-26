@@ -11,6 +11,9 @@
 #include <QUrl>
 #include "core/socialaccountkey.h"
 #include "platform/localfileurl.h"
+#if !defined(Q_OS_ANDROID) && !defined(FK_SERVER_ONLY)
+#include "platform/resourcepackservice.h"
+#endif
 #ifdef Q_OS_IOS
 #include "platform/iosfriendtransport.h"
 #include "platform/iosbackgroundpicker.h"
@@ -92,6 +95,11 @@ QmlBackend::QmlBackend(QObject *parent) : QObject(parent) {
   // 尽早静默 FFmpeg 的控制台刷屏日志（Input #0, mov,mp4...）
   silenceFfmpegLogs();
   engine = nullptr;
+#ifndef Q_OS_ANDROID
+  m_resourcePacks = new ResourcePackService(QDir::currentPath(),this);
+  connect(qApp,&QCoreApplication::aboutToQuit,m_resourcePacks,&QThread::requestInterruption);
+  m_resourcePacks->start();
+#endif
   replayer = nullptr;
   udpSocket = new QUdpSocket(this);
   udpSocket->bind(0);
@@ -106,6 +114,9 @@ QmlBackend::QmlBackend(QObject *parent) : QObject(parent) {
 }
 
 QmlBackend::~QmlBackend() {
+#if !defined(Q_OS_ANDROID) && !defined(FK_SERVER_ONLY)
+  delete m_resourcePacks;
+#endif
   SoloudPlayer::shutdown();
   Backend = nullptr;
 }
