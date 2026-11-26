@@ -69,6 +69,7 @@ final class ResourcePackInstaller {
         if(offset==expected)return;
         HttpURLConnection connection=(HttpURLConnection)new URL(origin+"/download/"+part.getString("archive")).openConnection();
         connection.setInstanceFollowRedirects(false);connection.setConnectTimeout(12000);connection.setReadTimeout(18000);connection.setRequestProperty("Accept-Encoding","identity");
+        connection.setRequestProperty("User-Agent","FreeKill Resource Download");
         if(offset>0)connection.setRequestProperty("Range","bytes="+offset+"-");
         try {
             int status=connection.getResponseCode();

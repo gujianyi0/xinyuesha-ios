@@ -243,6 +243,19 @@ jobs:
           python3 scripts/test_resource_pack_download.py --native "$RUNNER_TEMP/resource-pack-test/ResourcePackNativeTest" \
             --skip-java --output "$RUNNER_TEMP/resource-pack-network"
 
+      - name: Verify public resource objects and native large-pack installation
+        run: |
+          python3 scripts/verify_public_resource_service.py --native "$RUNNER_TEMP/resource-pack-test/ResourcePackNativeTest" \
+            --output "$RUNNER_TEMP/public-resource-validation"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-resource-validation
+          path: |
+            ${{ runner.temp }}/public-resource-validation/*.json
+            ${{ runner.temp }}/public-resource-validation/*.log
+            ${{ runner.temp }}/resource-pack-network/result.json
+
       - name: Build Lua / OpenSSL / libgit2
         run: |
           # This cache key pins Qt / OpenSSL / libgit2 versions. Reuse complete

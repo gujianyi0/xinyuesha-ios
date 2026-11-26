@@ -174,6 +174,7 @@ final class CounterResourcePacks {
     private static HttpsURLConnection connect(String url) throws IOException {
         HttpsURLConnection connection = (HttpsURLConnection) new URL(url).openConnection();
         connection.setInstanceFollowRedirects(false);
+        connection.setRequestProperty("User-Agent","FreeKill Resource Download");
         connection.setConnectTimeout(12000);
         connection.setReadTimeout(18000);
         if (connection.getResponseCode() != 200) {

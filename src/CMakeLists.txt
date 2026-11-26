@@ -383,6 +383,9 @@ target_link_libraries(libFreeKill PRIVATE
   ${FK_ZLIB}
   ${FK_ICONV}
 )
+if(WIN32 AND NOT DEFINED FK_SERVER_ONLY)
+  target_link_libraries(libFreeKill PRIVATE winhttp)
+endif()
 
 if (${CMAKE_BUILD_TYPE}0 STREQUAL "Debug0")
   target_compile_definitions(libFreeKill PRIVATE QT_QML_DEBUG)

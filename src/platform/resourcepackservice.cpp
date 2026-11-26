@@ -14,6 +14,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QNetworkProxy>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QSet>
@@ -23,6 +24,14 @@
 #include <cmath>
 #include <array>
 #include <stdexcept>
+#include <memory>
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <winhttp.h>
+#endif
 
 namespace {
 constexpr qint64 MiB=1024*1024, MaxPart=192*MiB, MaxPack=2048*MiB;
@@ -79,6 +88,9 @@ QJsonArray validate(const QJsonObject &catalog) {
 }
 struct Job {
     QString root,bridge,id;QUrl origin;QThread *thread;
+#ifndef Q_OS_WIN
+    QNetworkAccessManager network{nullptr};
+#endif
     qint64 before=0,total=0,lastProgress=0;int part=0,parts=0;
     void cancel() {
         if(thread->isInterruptionRequested())throw Failure("Download paused");
@@ -93,9 +105,48 @@ struct Job {
         qint64 offset=checksum.isEmpty()?0:QFileInfo(path).size();if(offset>expected){QFile::remove(path);offset=0;}
         if(!checksum.isEmpty()&&offset==expected)return;
         QFile output(path);require(output.open(QIODevice::ReadWrite),"无法写入下载缓存");require(output.seek(offset),"缓存定位失败");
-        QNetworkAccessManager manager;QNetworkRequest request(url);request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,QNetworkRequest::ManualRedirectPolicy);request.setRawHeader("Accept-Encoding","identity");
+#ifdef Q_OS_WIN
+        // WinHTTP keeps Windows proxy/TLS/timer handling outside the Qt worker
+        // event loop, including failed CDN responses and cancelled transfers.
+        struct Internet {HINTERNET handle;~Internet(){if(handle)WinHttpCloseHandle(handle);}};
+        const bool local=url.host()=="127.0.0.1"||url.host()=="localhost";
+        auto configured=qEnvironmentVariable(url.scheme()=="https"?"HTTPS_PROXY":"HTTP_PROXY");if(configured.isEmpty())configured=qEnvironmentVariable(url.scheme()=="https"?"https_proxy":"http_proxy");
+        const QUrl proxy(configured);QString proxyServer;
+        if(!local&&proxy.scheme()=="http"&&!proxy.host().isEmpty())proxyServer=proxy.host()+":"+QString::number(proxy.port(80));
+        const auto proxyW=proxyServer.toStdWString();
+        Internet session{WinHttpOpen(L"FreeKill Resource Download",local?WINHTTP_ACCESS_TYPE_NO_PROXY:proxyServer.isEmpty()?WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY:WINHTTP_ACCESS_TYPE_NAMED_PROXY,proxyServer.isEmpty()?WINHTTP_NO_PROXY_NAME:proxyW.c_str(),WINHTTP_NO_PROXY_BYPASS,0)};
+        require(session.handle,"无法启动系统下载器");WinHttpSetTimeouts(session.handle,12000,12000,18000,18000);
+        const auto host=url.host().toStdWString();const bool tls=url.scheme()=="https";
+        Internet connection{WinHttpConnect(session.handle,host.c_str(),INTERNET_PORT(url.port(tls?443:80)),0)};require(connection.handle,"无法连接资源服务器");
+        auto resource=url.path(QUrl::FullyEncoded);if(!url.query().isEmpty())resource+='?'+url.query(QUrl::FullyEncoded);const auto resourceW=resource.toStdWString();
+        Internet request{WinHttpOpenRequest(connection.handle,L"GET",resourceW.c_str(),nullptr,WINHTTP_NO_REFERER,WINHTTP_DEFAULT_ACCEPT_TYPES,tls?WINHTTP_FLAG_SECURE:0)};require(request.handle,"无法创建下载请求");
+        DWORD policy=WINHTTP_OPTION_REDIRECT_POLICY_NEVER;require(WinHttpSetOption(request.handle,WINHTTP_OPTION_REDIRECT_POLICY,&policy,sizeof(policy)),"无法设置下载策略");
+        QString headers="Accept-Encoding: identity\r\n";if(offset>0)headers+="Range: bytes="+QString::number(offset)+"-\r\n";const auto headersW=headers.toStdWString();
+        const bool connected=WinHttpSendRequest(request.handle,headersW.c_str(),DWORD(headersW.size()),WINHTTP_NO_REQUEST_DATA,0,0,0)&&WinHttpReceiveResponse(request.handle,nullptr);
+        require(connected,QString("下载连接中断（%1），请重试。").arg(connected?0:GetLastError()));
+        DWORD status=0,size=sizeof(status);require(WinHttpQueryHeaders(request.handle,WINHTTP_QUERY_STATUS_CODE|WINHTTP_QUERY_FLAG_NUMBER,WINHTTP_HEADER_NAME_BY_INDEX,&status,&size,WINHTTP_NO_HEADER_INDEX),"无法读取下载状态");
+        if(status==200){offset=0;require(output.resize(0)&&output.seek(0),"缓存重置失败");}
+        else {
+            require(status==206&&offset>0,QString("资源服务返回 %1，请稍后重试。").arg(status));DWORD length=0;
+            WinHttpQueryHeaders(request.handle,WINHTTP_QUERY_CONTENT_RANGE,WINHTTP_HEADER_NAME_BY_INDEX,nullptr,&length,WINHTTP_NO_HEADER_INDEX);std::wstring value(length/sizeof(wchar_t),L'\0');
+            require(length>0&&WinHttpQueryHeaders(request.handle,WINHTTP_QUERY_CONTENT_RANGE,WINHTTP_HEADER_NAME_BY_INDEX,value.data(),&length,WINHTTP_NO_HEADER_INDEX),"下载范围缺失");
+            require(QString::fromWCharArray(value.c_str())==QString("bytes %1-%2/%3").arg(offset).arg(expected-1).arg(expected),"下载范围校验失败");
+        }
+        qint64 received=offset;QElapsedTimer overall;overall.start();char buffer[65536];
+        while(true){cancel();require(overall.elapsed()<1800000,"下载超时，可重试继续。");DWORD count=0;require(WinHttpReadData(request.handle,buffer,sizeof(buffer),&count),"下载中断，可重试继续。");if(!count)break;received+=count;require(received<=expected,"下载大小不匹配");require(output.write(buffer,count)==count,"存储写入失败");if(!checksum.isEmpty())progress("downloading",before+received);}
+        output.close();if(!checksum.isEmpty())require(received==expected,"下载中断，可重试继续。");
+#else
+        auto configured=qEnvironmentVariable(url.scheme()=="https"?"HTTPS_PROXY":"HTTP_PROXY");if(configured.isEmpty())configured=qEnvironmentVariable(url.scheme()=="https"?"https_proxy":"http_proxy");const QUrl proxy(configured);
+        if(url.host()!="127.0.0.1"&&url.host()!="localhost"&&proxy.scheme()=="http"&&!proxy.host().isEmpty())network.setProxy(QNetworkProxy(QNetworkProxy::HttpProxy,proxy.host(),quint16(proxy.port(80))));
+        QNetworkRequest request(url);request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,QNetworkRequest::ManualRedirectPolicy);
+        // Parts use serial HTTP/1.1 transfers.
+        request.setAttribute(QNetworkRequest::Http2AllowedAttribute,false);
+        request.setHeader(QNetworkRequest::UserAgentHeader,"FreeKill Resource Download");
+        request.setRawHeader("Accept-Encoding","identity");
         if(offset>0)request.setRawHeader("Range","bytes="+QByteArray::number(offset)+"-");
-        auto *reply=manager.get(request);QEventLoop loop;QTimer watchdog;QElapsedTimer activity,overall;activity.start();overall.start();QString failure;bool headers=false;qint64 length=offset;
+        auto *reply=network.get(request);
+        const std::unique_ptr<QNetworkReply,void(*)(QNetworkReply*)> cleanup(reply,[](QNetworkReply *r){r->deleteLater();});
+        QEventLoop loop;QTimer watchdog;QElapsedTimer activity,overall;activity.start();overall.start();QString failure;bool headers=false;qint64 length=offset;
         const auto drain=[&]() {
             if(!failure.isEmpty())return;
             if(!headers){const auto status=reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();if(!status)return;
@@ -111,6 +162,7 @@ struct Job {
         loop.exec();drain();const auto error=reply->error();const auto message=reply->errorString();output.close();
         require(failure.isEmpty(),failure);require(error==QNetworkReply::NoError,"下载中断："+message);
         if(!checksum.isEmpty())require(length==expected,"下载中断，请重试，已缓存部分会继续下载。");
+#endif
     }
     QJsonArray catalog() {
         QJsonObject data;const auto temp=bridge+"/catalog.download.json";
