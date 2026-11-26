@@ -40,8 +40,10 @@ class Server : public QObject {
   Q_OBJECT
 
 public:
-  /// 构造Server对象。见于main函数
-  explicit Server(QObject *parent = nullptr);
+  enum class Mode { Dedicated, SinglePlayer };
+
+  explicit Server(QObject *parent = nullptr, Mode mode = Mode::Dedicated);
+  bool isSinglePlayer() const { return mode == Mode::SinglePlayer; }
   ~Server();
 
   /// 监听端口
@@ -112,6 +114,7 @@ public slots:
   void processNewConnection(ClientSocket *client);
 
 private:
+  const Mode mode;
   ServerSocket *server;
 
   Lobby *m_lobby; ///< 大厅

@@ -39,7 +39,11 @@ inline bool refresh(const QString &bundle, const QString &data, QString *error) 
   if (read(data + marker).trimmed() == revision) return true;
   // Never replace downloaded packages, databases, account/friend settings,
   // imported images, or other files in the user's sandbox on a UI update.
-  for (const QString &name : {QString("Fk"), QString("LunarLtk"), QString("card-counter")}) {
+  QStringList managed{QString("Fk"), QString("LunarLtk"), QString("card-counter")};
+  // Only publisher-owned resource directories from this bundle are copied.
+  // Other downloaded packs and user configuration remain outside this tree.
+  if (QDir(bundle + "/resource_pak").exists()) managed.append("resource_pak");
+  for (const QString &name : managed) {
     if (!copyManagedTree(bundle + '/' + name, data + '/' + name)) {
       if (error) *error = "无法更新界面文件：" + name;
       return false;

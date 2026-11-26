@@ -67,6 +67,42 @@ class SpineBackendModern : public SpineBackend {
     AnimationState *mAnimationState = nullptr;
     SpineEventCallback mEventCallback;
     std::vector<float> mVertexBuffer; // 复用顶点缓冲，避免每帧堆分配
+#if defined(SPINE_HAS_CLIPPING) && SPINE_HAS_CLIPPING
+    SP_TYPE(SkeletonClipping) *mClipper = nullptr;
+    struct ClippedGeometry {
+        std::vector<float> vertices, uvs;
+        std::vector<unsigned short> indices;
+    };
+    // Every draw command must retain its own geometry until rendering ends.
+    // The Spine clipper overwrites its scratch arrays for each attachment.
+    std::vector<ClippedGeometry> mClippedGeometry;
+
+    void appendDrawCommand(QVector<SpineDrawCommand> &out, SpineDrawCommand cmd, int slotIndex) {
+        if (SP_FN(SkeletonClipping_isClipping)(mClipper)) {
+            SP_FN(SkeletonClipping_clipTriangles)(mClipper,
+                const_cast<float *>(cmd.vertices), cmd.vertexCount * 2,
+                const_cast<unsigned short *>(cmd.indices), cmd.indexCount,
+                const_cast<float *>(cmd.uvs), 2);
+            if (!mClipper->clippedTriangles->size) return;
+            auto &geometry = mClippedGeometry[slotIndex];
+            geometry.vertices.assign(mClipper->clippedVertices->items,
+                mClipper->clippedVertices->items + mClipper->clippedVertices->size);
+            geometry.uvs.assign(mClipper->clippedUVs->items,
+                mClipper->clippedUVs->items + mClipper->clippedUVs->size);
+            geometry.indices.assign(mClipper->clippedTriangles->items,
+                mClipper->clippedTriangles->items + mClipper->clippedTriangles->size);
+            cmd.vertices = geometry.vertices.data(); cmd.uvs = geometry.uvs.data();
+            cmd.indices = geometry.indices.data();
+            cmd.vertexCount = int(geometry.vertices.size() / 2);
+            cmd.indexCount = int(geometry.indices.size());
+        }
+        out.push_back(cmd);
+    }
+#else
+    void appendDrawCommand(QVector<SpineDrawCommand> &out, SpineDrawCommand cmd, int) {
+        out.push_back(cmd);
+    }
+#endif
 
 #if SPINE_LISTENER_V4
     // 4.x：spXXAnimationStateListener(state, type, entry, event)
@@ -145,6 +181,10 @@ class SpineBackendModern : public SpineBackend {
     }
 
     void disposeInternal() {
+#if defined(SPINE_HAS_CLIPPING) && SPINE_HAS_CLIPPING
+        if (mClipper) SP_FN(SkeletonClipping_dispose)(mClipper);
+        mClipper = nullptr; mClippedGeometry.clear();
+#endif
         if (mAnimationState) {
             SP_FN(AnimationStateData_dispose)(mAnimationState->data);
             SP_FN(AnimationState_dispose)(mAnimationState);
@@ -193,6 +233,9 @@ public:
         }
 
         mSkeleton = SP_FN(Skeleton_create)(data);
+#if defined(SPINE_HAS_CLIPPING) && SPINE_HAS_CLIPPING
+        mClipper = SP_FN(SkeletonClipping_create)();
+#endif
         if (!skin.isEmpty())
             SP_FN(Skeleton_setSkinByName)(mSkeleton, skin.toStdString().c_str());
 
@@ -221,6 +264,10 @@ public:
         out.clear();
         if (!mSkeleton)
             return;
+#if defined(SPINE_HAS_CLIPPING) && SPINE_HAS_CLIPPING
+        SP_FN(SkeletonClipping_clipEnd2)(mClipper);
+        mClippedGeometry.resize(mSkeleton->slotsCount);
+#endif
         // 第一遍：统计顶点总数，一次性 resize 复用缓冲，避免逐条分配
         size_t totalFloats = 0;
         for (int i = 0, n = mSkeleton->slotsCount; i < n; ++i) {
@@ -240,8 +287,19 @@ public:
 
         for (int i = 0, n = mSkeleton->slotsCount; i < n; ++i) {
             Slot *slot = mSkeleton->drawOrder[i];
-            if (!slot || !slot->attachment)
+            if (!slot || !slot->attachment) {
+#if defined(SPINE_HAS_CLIPPING) && SPINE_HAS_CLIPPING
+                if (slot) SP_FN(SkeletonClipping_clipEnd)(mClipper, slot);
+#endif
                 continue;
+            }
+#if defined(SPINE_HAS_CLIPPING) && SPINE_HAS_CLIPPING
+            if (slot->attachment->type == SP_ATTACHMENT_CLIPPING) {
+                SP_FN(SkeletonClipping_clipStart)(mClipper, slot,
+                    (SP_TYPE(ClippingAttachment) *)slot->attachment);
+                continue;
+            }
+#endif
             switch (slot->attachment->type) {
             case SP_ATTACHMENT_REGION: {
                 RegionAttachment *region = (RegionAttachment *)slot->attachment;
@@ -260,7 +318,7 @@ public:
                 cmd.b = SP_C_B(mSkeleton) * SP_C_B(slot) * SP_C_B(region);
                 cmd.a = SP_C_A(mSkeleton) * SP_C_A(slot) * SP_C_A(region);
                 cmd.additiveBlending = SP_IS_ADDITIVE(slot);
-                out.push_back(cmd);
+                appendDrawCommand(out, cmd, i);
                 break;
             }
             case SP_ATTACHMENT_MESH:
@@ -282,13 +340,19 @@ public:
                 cmd.b = SP_C_B(mSkeleton) * SP_C_B(slot) * SP_C_B(mesh);
                 cmd.a = SP_C_A(mSkeleton) * SP_C_A(slot) * SP_C_A(mesh);
                 cmd.additiveBlending = SP_IS_ADDITIVE(slot);
-                out.push_back(cmd);
+                appendDrawCommand(out, cmd, i);
                 break;
             }
             default:
                 break;
             }
+#if defined(SPINE_HAS_CLIPPING) && SPINE_HAS_CLIPPING
+            SP_FN(SkeletonClipping_clipEnd)(mClipper, slot);
+#endif
         }
+#if defined(SPINE_HAS_CLIPPING) && SPINE_HAS_CLIPPING
+        SP_FN(SkeletonClipping_clipEnd2)(mClipper);
+#endif
     }
 
     QRectF bounds() override {

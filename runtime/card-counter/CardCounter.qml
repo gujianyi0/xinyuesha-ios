@@ -11,6 +11,35 @@ Item {
   anchors.fill: parent
   z: 800
   visible: expanded
+  readonly property var scopeOrder: ["unseen","discard","hand","hands","top","bottom"]
+  function swipeScope(dx,dy,width) {
+    if(!expanded || Math.abs(dx)<Math.max(38,width*0.08) || Math.abs(dx)<Math.abs(dy)*1.35)return;
+    const next=scopeOrder.indexOf(scope)+(dx<0 ? 1 : -1);
+    if(next<0 || next>=scopeOrder.length)return false;
+    scope=scopeOrder[next];return true;
+  }
+  component ScopeSwipe: DragHandler {
+    target:null
+    xAxis.enabled:true
+    yAxis.enabled:false
+    acceptedButtons:Qt.LeftButton
+    enabled:root.expanded && parent.visible && !parent.dragging
+    property real travelX:0
+    property real travelY:0
+    onActiveTranslationChanged: if(active) {
+      travelX=activeTranslation.x;
+      travelY=centroid.position.y-centroid.pressPosition.y;
+    }
+    onActiveChanged: {
+      if(active){travelX=0;travelY=0;}
+      else {
+        const changed=root.swipeScope(travelX,travelY,parent.width);
+        travelX=0;travelY=0;
+        // Normal tabs refresh in onScopeChanged; known tabs catch up here.
+        if(root.expanded && !parent.moving && (!changed || ["hands","top","bottom"].indexOf(root.scope)>=0))Qt.callLater(root.refresh);
+      }
+    }
+  }
   component KnownButton: T.Button {
     id:action
     implicitWidth:Math.max(90,contentItem.implicitWidth+24);implicitHeight:36
@@ -152,7 +181,8 @@ Item {
   }
   onCategoryChanged: updateRows()
   onHideZeroChanged: updateRows()
-  onScopeChanged: {if(!knowledgeOpen){updateRows();if(expanded)refresh();}syncKnowledge();syncKnownSelection();}
+  // Read scope directly: knowledgeOpen can still hold its old binding value here.
+  onScopeChanged: {if(["unseen","discard","hand"].indexOf(scope)>=0){updateRows();if(expanded)refresh();}syncKnowledge();syncKnownSelection();}
   onFilterTextChanged: updateRows()
   onSelectedKeyChanged: if (expanded && !knowledgeOpen) refresh()
   readonly property color gold: "#CCAD76"
@@ -204,7 +234,7 @@ Item {
   Keys.onEscapePressed: close()
   // Do not marshal a large Lua snapshot onto the UI thread during a gesture.
   // Counts catch up immediately after dragging/flicking stops.
-  Timer { interval:500; running:root.expanded && !(root.knowledgeOpen ? knownCards.moving : cards.moving); repeat:true; onTriggered:root.refresh() }
+  Timer { interval:500; running:root.expanded && !cardScopeSwipe.active && !knownScopeSwipe.active && !(root.knowledgeOpen ? knownCards.moving : cards.moving); repeat:true; onTriggered:root.refresh() }
   Rectangle { anchors.fill:parent; color:"#9900090D" }
   MouseArea { anchors.fill:parent; onClicked:root.close() }
 
@@ -310,6 +340,7 @@ Item {
           clip:true; cellWidth:width/5; cellHeight:82; model:root.rows
           boundsBehavior:Flickable.StopAtBounds
           reuseItems:true; cacheBuffer:cellHeight*2
+          ScopeSwipe {id:cardScopeSwipe}
           onMovingChanged: if (!moving && root.expanded) Qt.callLater(root.refresh)
           ScrollBar.vertical:ScrollBar { policy:ScrollBar.AsNeeded }
           delegate:Item {
@@ -365,6 +396,7 @@ Item {
           id:knownCards; objectName:"counterKnownList"
           visible:root.knowledgeOpen; y:39; width:parent.width; height:parent.height-66
           clip:true;spacing:6;model:knownModel;reuseItems:true;cacheBuffer:160
+          ScopeSwipe {id:knownScopeSwipe}
           boundsBehavior:Flickable.StopAtBounds
           onMovingChanged:if(!moving && root.expanded)Qt.callLater(root.refresh)
           ScrollBar.vertical:ScrollBar {policy:ScrollBar.AsNeeded}
@@ -481,7 +513,7 @@ Item {
     }
     Rectangle { x:24; y:parent.height-26; width:parent.width-48; height:1; color:"#3E493E" }
     Text { x:24; y:parent.height-19; text:"未见牌包含未知手牌，不等于牌堆内的精确分布。"; font.pixelSize:10; color:"#85977F" }
-    Text { anchors.right:parent.right; anchors.rightMargin:24; y:parent.height-19; text:"点击外侧或 × 关闭"; font.pixelSize:10; color:"#85977F" }
+    Text { anchors.right:parent.right; anchors.rightMargin:24; y:parent.height-19; text:"左右滑动切换牌堆 · 点击外侧或 × 关闭"; font.pixelSize:10; color:"#85977F" }
   }
 
 }

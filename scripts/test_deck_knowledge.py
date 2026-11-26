@@ -32,6 +32,23 @@ function room:getCardOwner(id) return self:getCardArea(id)==1 and target or nil 
 script+='\nlocal Tracker='+load(Path(__file__).parent/'fixtures/known_card_tracker_0_5_25.lua')+'\nlocal M='+load(a.payload/'card-counter/counter.lua')+'\n'+r'''
 viewer.card_tracker=Tracker:new(viewer)
 local tracker=viewer.card_tracker
+-- Guangu's count-choice dialog is not a reveal; only its server-issued
+-- use-real-card request contains the actual exposed expanded-pile cards.
+local guanguRequest={"userealcard_skill","#guangu-use",true,{skillName="guangu",expand_pile={31,32}}}
+local originalDeck, originalArea=room.draw_pile,room.getCardArea
+room.draw_pile=setmetatable({},{__len=function()return 8 end,__index=function()error('hidden identity read')end,__pairs=function()error('hidden enumeration')end})
+function room:getCardArea(id) return id>=31 and id<=38 and Card.DrawPile or Card.PlayerHand end
+assert(M.rememberRevealedRequest(room,guanguRequest))
+assert(table.concat(tracker.draw_pile_order,',')=='31,32,-1,-1,-1,-1,-1,-1')
+assert(M.rememberRevealedRequest(room,{"userealcard_skill","#guangu-use",true,{skillName="guangu",expand_pile={27,28}}}))
+assert(table.contains(tracker.player_cards[2][1].known_cards,27))
+assert(not M.rememberRevealedRequest(room,{"Guangu",{cards={1,2,3,4}}}))
+assert(not M.rememberRevealedRequest(room,{"userealcard_skill","#guangu-use",true,{skillName="other",expand_pile={33}}}))
+assert(not M.rememberRevealedRequest({},guanguRequest))
+assert(not M.rememberRevealedRequest(room,{"userealcard_skill","#guangu-use",true,{skillName="guangu",expand_pile={31,31}}}))
+assert(not table.contains(tracker.draw_pile.known_cards,33),'unexposed deck identity remains unknown')
+room.draw_pile,room.getCardArea=originalDeck,originalArea
+viewer.card_tracker=Tracker:new(viewer);tracker=viewer.card_tracker
 -- Actual Guanxu input: publicly shown top five plus the target's hand.
 assert(M.remember({31,32,33,34,35},'top',8));M.remember({27,28})
 assert(M.remember({38},'bottom',8))
@@ -115,7 +132,7 @@ local unrelated={{toArea=5,moveReason=2,skillName='unrelated',moveInfo={{cardId=
 before=M.beforeMoves(room,unrelated);actual={27,33,34,35,37,38};M.afterMoves(room,unrelated,before)
 assert(table.concat(tracker.draw_pile_order,',')=='-1,-1,-1,-1,-1,-1')
 '''
-script+="return 'Guanxu, Quanbian and requested Xinghun movement cases passed without hidden identity reads'"
+script+="return 'Guangu, Guanxu, Quanbian and requested Xinghun cases passed without hidden identity reads'"
 vm=lib.luaL_newstate()
 try:
  lib.luaL_openlibs(vm);assert lib.luaL_loadstring(vm,script.encode())==0,lib.lua_tolstring(vm,-1,None)

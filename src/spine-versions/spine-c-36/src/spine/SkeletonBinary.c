@@ -93,6 +93,17 @@ void _sp36SkeletonBinary_setError (sp36SkeletonBinary* self, const char* value1,
 	MALLOC_STR(self->error, message);
 }
 
+/* A missing atlas region is a load error, not an attachment. Propagate the
+ * loader's diagnostic before any cast/dereference, including non-default skins. */
+static sp36Attachment* _createAttachmentChecked(sp36SkeletonBinary* self, sp36Skin* skin,
+		sp36AttachmentType type, const char* name, const char* path) {
+	sp36Attachment* attachment = sp36AttachmentLoader_createAttachment(self->attachmentLoader, skin, type, name, path);
+	if (!attachment)
+		_sp36SkeletonBinary_setError(self, self->attachmentLoader->error1 ? self->attachmentLoader->error1 : "Attachment load failed: ",
+			self->attachmentLoader->error2 ? self->attachmentLoader->error2 : name);
+	return attachment;
+}
+
 static unsigned char readByte (_dataInput* input) {
 	return *input->cursor++;
 }
@@ -692,7 +703,8 @@ sp36Attachment* sp36SkeletonBinary_readAttachment(sp36SkeletonBinary* self, _dat
 			sp36Attachment* attachment;
 			sp36RegionAttachment* region;
 			if (!path) MALLOC_STR(path, name);
-			attachment = sp36AttachmentLoader_createAttachment(self->attachmentLoader, skin, type, name, path);
+			attachment = _createAttachmentChecked(self, skin, type, name, path);
+			if (!attachment) { FREE(path); if (freeName) FREE(name); return 0; }
 			region = SUB_CAST(sp36RegionAttachment, attachment);
 			region->path = path;
 			region->rotation = readFloat(input);
@@ -710,7 +722,8 @@ sp36Attachment* sp36SkeletonBinary_readAttachment(sp36SkeletonBinary* self, _dat
 		}
 		case SP_ATTACHMENT_BOUNDING_BOX: {
 			int vertexCount = readVarint(input, 1);
-			sp36Attachment* attachment = sp36AttachmentLoader_createAttachment(self->attachmentLoader, skin, type, name, 0);
+			sp36Attachment* attachment = _createAttachmentChecked(self, skin, type, name, 0);
+			if (!attachment) { if (freeName) FREE(name); return 0; }
 			_readVertices(self, input, SUB_CAST(sp36VertexAttachment, attachment), vertexCount);
 			if (nonessential) readInt(input); /* Skip color. */
 			sp36AttachmentLoader_configureAttachment(self->attachmentLoader, attachment);
@@ -723,7 +736,8 @@ sp36Attachment* sp36SkeletonBinary_readAttachment(sp36SkeletonBinary* self, _dat
 			sp36MeshAttachment* mesh;
 			const char* path = readString(input);
 			if (!path) MALLOC_STR(path, name);
-			attachment = sp36AttachmentLoader_createAttachment(self->attachmentLoader, skin, type, name, path);
+			attachment = _createAttachmentChecked(self, skin, type, name, path);
+			if (!attachment) { FREE(path); if (freeName) FREE(name); return 0; }
 			mesh = SUB_CAST(sp36MeshAttachment, attachment);
 			mesh->path = path;
 			readColor(input, &mesh->color.r, &mesh->color.g, &mesh->color.b, &mesh->color.a);
@@ -753,7 +767,8 @@ sp36Attachment* sp36SkeletonBinary_readAttachment(sp36SkeletonBinary* self, _dat
 			sp36MeshAttachment* mesh;
 			const char* path = readString(input);
 			if (!path) MALLOC_STR(path, name);
-			attachment = sp36AttachmentLoader_createAttachment(self->attachmentLoader, skin, type, name, path);
+			attachment = _createAttachmentChecked(self, skin, type, name, path);
+			if (!attachment) { FREE(path); if (freeName) FREE(name); return 0; }
 			mesh = SUB_CAST(sp36MeshAttachment, attachment);
 			mesh->path = path;
 			readColor(input, &mesh->color.r, &mesh->color.g, &mesh->color.b, &mesh->color.a);
@@ -769,7 +784,8 @@ sp36Attachment* sp36SkeletonBinary_readAttachment(sp36SkeletonBinary* self, _dat
 			return attachment;
 		}
 		case SP_ATTACHMENT_PATH: {
-			sp36Attachment* attachment = sp36AttachmentLoader_createAttachment(self->attachmentLoader, skin, type, name, 0);
+			sp36Attachment* attachment = _createAttachmentChecked(self, skin, type, name, 0);
+			if (!attachment) { if (freeName) FREE(name); return 0; }
 			sp36PathAttachment* path = SUB_CAST(sp36PathAttachment, attachment);
 			int vertexCount = 0;
 			path->closed = readBoolean(input);
@@ -786,7 +802,8 @@ sp36Attachment* sp36SkeletonBinary_readAttachment(sp36SkeletonBinary* self, _dat
 			return attachment;
 		}
 		case SP_ATTACHMENT_POINT: {
-			sp36Attachment* attachment = sp36AttachmentLoader_createAttachment(self->attachmentLoader, skin, type, name, 0);
+			sp36Attachment* attachment = _createAttachmentChecked(self, skin, type, name, 0);
+			if (!attachment) { if (freeName) FREE(name); return 0; }
 			sp36PointAttachment* point = SUB_CAST(sp36PointAttachment, attachment);
 			point->rotation = readFloat(input);
 			point->x = readFloat(input) * self->scale;
@@ -800,7 +817,8 @@ sp36Attachment* sp36SkeletonBinary_readAttachment(sp36SkeletonBinary* self, _dat
 		case SP_ATTACHMENT_CLIPPING: {
 			int endSlotIndex = readVarint(input, 1);
 			int vertexCount = readVarint(input, 1);
-			sp36Attachment* attachment = sp36AttachmentLoader_createAttachment(self->attachmentLoader, skin, type, name, 0);
+			sp36Attachment* attachment = _createAttachmentChecked(self, skin, type, name, 0);
+			if (!attachment) { if (freeName) FREE(name); return 0; }
 			sp36ClippingAttachment* clip = SUB_CAST(sp36ClippingAttachment, attachment);
 			_readVertices(self, input, SUB_CAST(sp36VertexAttachment, attachment), vertexCount);
 			if (nonessential) readInt(input); /* Skip color. */
@@ -828,6 +846,7 @@ sp36Skin* sp36SkeletonBinary_readSkin(sp36SkeletonBinary* self, _dataInput* inpu
 		for (ii = 0, nn = readVarint(input, 1); ii < nn; ++ii) {
 			const char* name = readString(input);
 			sp36Attachment* attachment = sp36SkeletonBinary_readAttachment(self, input, skin, slotIndex, name, skeletonData, nonessential);
+			if (self->error) { FREE(name); sp36Skin_dispose(skin); return 0; }
 			if (attachment) sp36Skin_addAttachment(skin, slotIndex, name, attachment);
 			FREE(name);
 		}
@@ -1020,6 +1039,7 @@ sp36SkeletonData* sp36SkeletonBinary_readSkeletonData (sp36SkeletonBinary* self,
 
 	/* Default skin. */
 	skeletonData->defaultSkin = sp36SkeletonBinary_readSkin(self, input, "default", skeletonData, nonessential);
+	if (self->error) { FREE(input); sp36SkeletonData_dispose(skeletonData); return 0; }
 	skeletonData->skinsCount = readVarint(input, 1);
 
 	if (skeletonData->defaultSkin)
@@ -1036,6 +1056,7 @@ sp36SkeletonData* sp36SkeletonBinary_readSkeletonData (sp36SkeletonBinary* self,
 		/* TODO Avoid copying of skinName */
 		skeletonData->skins[i] = sp36SkeletonBinary_readSkin(self, input, skinName, skeletonData, nonessential);
 		FREE(skinName);
+		if (self->error) { skeletonData->skinsCount = i; FREE(input); sp36SkeletonData_dispose(skeletonData); return 0; }
 	}
 
 	/* Linked meshes. */

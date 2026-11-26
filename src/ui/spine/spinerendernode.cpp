@@ -187,6 +187,7 @@ static QRhiGraphicsPipeline *createTexturePipeline(QRhi *rhi, QRhiShaderResource
                                                    bool additive, QRhiRenderPassDescriptor *rp)
 {
     QRhiGraphicsPipeline *p = rhi->newGraphicsPipeline();
+    p->setFlags(QRhiGraphicsPipeline::UsesScissor);
     p->setTopology(QRhiGraphicsPipeline::Triangles);
     p->setCullMode(QRhiGraphicsPipeline::None);
     p->setDepthTest(false);
@@ -230,6 +231,7 @@ static QRhiGraphicsPipeline *createColorPipeline(QRhi *rhi, QRhiShaderResourceBi
                                                  QRhiRenderPassDescriptor *rp)
 {
     QRhiGraphicsPipeline *p = rhi->newGraphicsPipeline();
+    p->setFlags(QRhiGraphicsPipeline::UsesScissor);
     p->setTopology(topo);
     p->setCullMode(QRhiGraphicsPipeline::None);
     p->setDepthTest(false);
@@ -401,14 +403,12 @@ void SpineRenderNode::render(const RenderState *state)
     cb->setViewport(QRhiViewport(0, 0, float(size.width()), float(size.height())));
 
     // QSGRenderNode 的内容不会被 Qt Quick 自动裁剪，必须自行应用
-    // RenderState 提供的 scissor（设备像素、顶部原点坐标系）。
+    // RenderState 提供的 scissor（设备像素）。在每次绑定管线之后
+    // 再设置，且管线必须声明 UsesScissor，否则 Qt RHI 会关闭裁剪。
     // 否则即使父 QQuickItem 设置了 clip，骨骼仍会画到父区域之外。
-    if (state && state->scissorEnabled()) {
-        const QRect r = state->scissorRect();
-        cb->setScissor(QRhiScissor(r.x(), r.y(), r.width(), r.height()));
-    } else {
-        cb->setScissor(QRhiScissor(0, 0, size.width(), size.height()));
-    }
+    const QRect clipRect = state && state->scissorEnabled()
+        ? state->scissorRect() : QRect(QPoint(0, 0), size);
+    const QRhiScissor scissor(clipRect.x(), clipRect.y(), clipRect.width(), clipRect.height());
 
     QRhiRenderPassDescriptor *rp = renderTarget()->renderPassDescriptor();
 
@@ -451,6 +451,7 @@ void SpineRenderNode::render(const RenderState *state)
                     continue;   // create 失败，本批跳过（已打日志）
             }
             cb->setGraphicsPipeline(pipe);
+            cb->setScissor(scissor);
             cb->setShaderResources(d->textureSrbs[b.textureIndex]);
             QRhiCommandBuffer::VertexInput bindings[] = { { d->triBuffer, 0 } };
             cb->setVertexInput(0, 1, bindings);
@@ -470,6 +471,7 @@ void SpineRenderNode::render(const RenderState *state)
                     return;     // create 失败（已打日志）
             }
             cb->setGraphicsPipeline(d->colorLinePipe);
+            cb->setScissor(scissor);
             cb->setShaderResources(d->colorSrb);
             QRhiCommandBuffer::VertexInput bindings[] = { { d->debugBuffer, 0 } };
             cb->setVertexInput(0, 1, bindings);
@@ -484,6 +486,7 @@ void SpineRenderNode::render(const RenderState *state)
                     return;     // create 失败（已打日志）
             }
             cb->setGraphicsPipeline(d->colorPointPipe);
+            cb->setScissor(scissor);
             cb->setShaderResources(d->colorSrb);
             const int lineBytes = int(d->frame.lines.size()) * int(sizeof(SpineVertex));
             QRhiCommandBuffer::VertexInput bindings[] = { { d->debugBuffer, lineBytes } };

@@ -16,6 +16,7 @@
 #define SPINE_LISTENER_V4 1
 #define SPINE_HAS_SKELETON_UPDATE 1
 #define SPINE_UPDATE_WORLD_PHYSICS 0
+#define SPINE_HAS_CLIPPING 1
 #include "spinebackend_hooks.inc"
 #include "spinebackend_modern.inc"
 

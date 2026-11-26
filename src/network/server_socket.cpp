@@ -17,7 +17,7 @@ ServerSocket::ServerSocket(QObject *parent) : QObject(parent) {
 }
 
 bool ServerSocket::listen(const QHostAddress &address, ushort port) {
-  udpSocket->bind(port);
+  udpSocket->bind(address, port);
   return server->listen(address, port);
 }
 

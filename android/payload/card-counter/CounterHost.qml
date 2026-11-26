@@ -11,6 +11,7 @@ import LunarLtk
 Item {
   id: host
   objectName: "fkCounterHost"
+  FeedbackFeatures { id: feedbackFeatures; objectName: "feedbackFeatures"; owner: host }
   property var currentScene: null
   property string revealFocusSkill: ""
   property var arrangementBoxes: []
@@ -30,7 +31,77 @@ Item {
       }
     }
   }
-  onCurrentSceneChanged: { cancelPresentQueue(); revealFocusSkill=""; Qt.callLater(host.adaptPlayerDetail); }
+  onCurrentSceneChanged: { Qt.callLater(host.setUpLightTargetLine); cancelPresentQueue(); cancelTenyearCombos(); revealFocusSkill=""; releaseGuanNingEffects(); syncBackgroundChatShortcut(); Qt.callLater(host.adaptPlayerDetail); }
+  readonly property var backgroundChatScene: waitingRoomScene && waitingRoomScene.visible ? waitingRoomScene : currentScene
+  onBackgroundChatSceneChanged: syncBackgroundChatShortcut()
+  property var backgroundChatShortcut: null
+  Component {
+    id: backgroundChatComponent
+    MouseArea {
+      objectName: "roomBackgroundChatShortcut"
+      required property var scene
+      anchors.fill: parent
+      // Only input left unhandled by the room's cards and controls reaches us.
+      z: -1
+      acceptedButtons: Qt.LeftButton
+      enabled: scene.visible && !(scene.infoPopup && scene.infoPopup.visible) &&
+        !scene.popupItem && !scene.agItem && !(scene.areaHandler && scene.areaHandler.visible) && !(host.popup && host.popup.visible)
+      property double lastBackgroundTapAt: 0
+      property point lastBackgroundTap: Qt.point(0,0)
+      property bool longPressCommitted: false
+      property bool doubleTapPending: false
+      property bool moved: false
+      property real downX: 0
+      property real downY: 0
+      onPressed: mouse => {
+        longPressCommitted = false; doubleTapPending = false; moved = false;
+        downX = mouse.x; downY = mouse.y;
+      }
+      onDoubleClicked: mouse => {
+        doubleTapPending = lastBackgroundTapAt > 0 &&
+          Date.now()-lastBackgroundTapAt <= Qt.styleHints.mouseDoubleClickInterval &&
+          Math.abs(mouse.x-lastBackgroundTap.x) <= Qt.styleHints.startDragDistance &&
+          Math.abs(mouse.y-lastBackgroundTap.y) <= Qt.styleHints.startDragDistance;
+        moved = false;
+        downX = mouse.x; downY = mouse.y;
+      }
+      onPositionChanged: mouse => {
+        if (Math.abs(mouse.x-downX) > Qt.styleHints.startDragDistance ||
+            Math.abs(mouse.y-downY) > Qt.styleHints.startDragDistance) moved = true;
+      }
+      onPressAndHold: {
+        if (scene !== host.waitingRoomScene || moved) return;
+        longPressCommitted = true; doubleTapPending = false;
+        Mediator.notify(scene, "IWantToChat");
+      }
+      onReleased: {
+        if (doubleTapPending && !moved && !longPressCommitted) Mediator.notify(scene, "IWantToChat");
+        if (!doubleTapPending && !moved && !longPressCommitted) {
+          lastBackgroundTapAt = Date.now(); lastBackgroundTap = Qt.point(downX,downY);
+        } else lastBackgroundTapAt = 0;
+        doubleTapPending = false;
+      }
+      onCanceled: { doubleTapPending = false; lastBackgroundTapAt = 0; }
+      onEnabledChanged: if (!enabled) { doubleTapPending = false; lastBackgroundTapAt = 0; }
+    }
+  }
+  function syncBackgroundChatShortcut() {
+    const scene = backgroundChatScene;
+    const previous = backgroundChatShortcut;
+    backgroundChatShortcut = null;
+    try {
+      if (previous && previous.parent === scene) { backgroundChatShortcut=previous; return; }
+      if (previous) { previous.enabled=false; previous.objectName=""; previous.destroy(); }
+    } catch (_) { /* A destroyed scene can leave a stale QML wrapper. */ }
+    if (!scene) return;
+    if (scene.children.some(c => c.objectName === "roomBackgroundChatShortcut")) return;
+    backgroundChatShortcut = backgroundChatComponent.createObject(scene, {scene:scene});
+  }
+  function disposeRoomItem(item) {
+    try { if (item && typeof item.destroy === "function") item.destroy(); }
+    catch (_) { /* A QML var can retain a wrapper after its native parent dies. */ }
+  }
+  Component.onDestruction: { if (waitingPresentBar) waitingPresentBar.destroy(); cancelTenyearCombos(); disposeRoomItem(backgroundChatShortcut); releaseGuanNingEffects(); disposeRoomItem(guanNingPreview); }
   readonly property var detailPopup: currentScene && currentScene.infoPopup || null
   Connections {
     target: host.detailPopup
@@ -58,7 +129,7 @@ Item {
   Connections {
     target: host.currentScene
     ignoreUnknownSignals: true
-    function onVisibleChanged() { if (!host.currentScene.visible) {host.cancelPresentQueue();} }
+    function onVisibleChanged() { if (!host.currentScene.visible) {host.cancelPresentQueue();host.cancelTenyearCombos();} }
   }
   Connections {
     target: host.Window.window
@@ -68,6 +139,8 @@ Item {
     target: Config
     ignoreUnknownSignals: true
     function onReplayingChanged() { if (Config.replaying) {host.cancelPresentQueue();} }
+    function onEnabledResourcePacksChanged() { host.cancelTenyearCombos(); }
+    function onBanChangeSkinChanged() { if (Config.banChangeSkin) host.cancelTenyearCombos(); }
   }
   readonly property var activeRoomScene: Ltk.roomScene || null
   onActiveRoomSceneChanged: Qt.callLater(host.syncScene)
@@ -92,12 +165,58 @@ Item {
   readonly property var navigationStack: navigationRoot
     ? navigationRoot.children.find(c => c && "currentItem" in c && "depth" in c && typeof c.get === "function") || null : null
   readonly property var navigationPage: navigationStack ? navigationStack.currentItem : null
-  onNavigationRootChanged: requestCompatibility()
+  onNavigationRootChanged: { requestCompatibility(); Qt.callLater(host.installHomeReset); }
   onNavigationPageChanged: requestCompatibility()
+  property var homeResetRoot: null
+  property var pendingHomeResetRoot: null
+  function installHomeReset() {
+    const root = navigationRoot;
+    if (!root || root === homeResetRoot || typeof root.addCallback !== "function" ||
+        typeof root.tryUpdatePackage !== "function" || !navigationStack) return;
+    homeResetRoot = root;
+    root.addCallback("BackToStart", function(sender, data) {
+      if (host.navigationRoot !== root) return;
+      host.pendingHomeResetRoot = root;
+      host.finishHomeReset();
+    });
+    resetDisconnectedHome();
+  }
+  function finishHomeReset() {
+    const root = pendingHomeResetRoot, stack = navigationStack;
+    if (!root || root !== navigationRoot || !stack || stack.busy) return;
+    pendingHomeResetRoot = null;
+    // StackView rejects a pop during another transition. Wait for it to finish,
+    // then do one immediate pop rather than overlapping several animated pops.
+    if (stack.depth > 1) stack.pop(stack.get(0), StackView.Immediate);
+    root.busy = false;
+    resetDisconnectedHome();
+    root.tryUpdatePackage();
+  }
+  function resetDisconnectedHome() {
+    const stack = navigationStack;
+    if (clientContext || !stack || stack.depth !== 1) return;
+    const home = stack.currentItem;
+    if (!home || !("serverDialog" in home)) return;
+    // Init survives while online. Its join-server panel also survives unless
+    // explicitly closed, and intercepts the home buttons after logout.
+    const loader = home.serverDialog;
+    const panel = loader && loader.parent;
+    if (panel && typeof panel.hide === "function") {
+      panel.hide();
+      panel.visible = false;
+    }
+    home.enabled = true;
+    if (navigationRoot) navigationRoot.busy = false;
+    for (const name of ["consoleStartRequested", "observing", "replaying"])
+      if (name in Config) Config[name] = false;
+    // No local account/favorite/package configuration is changed or saved.
+  }
   Connections {
     target: host.navigationStack
     ignoreUnknownSignals: true
-    function onBusyChanged() { if (!host.navigationStack.busy) host.requestCompatibility(); }
+    function onBusyChanged() {
+      if (!host.navigationStack.busy) { host.finishHomeReset(); host.requestCompatibility(); }
+    }
   }
   Connections {
     target: host.Overlay.overlay
@@ -119,6 +238,30 @@ Item {
   property var photoLocations: []
   property bool hideTitles: false
   property bool preferencesLoaded: false
+  property bool directionalLuckEnabled: true
+  property string functionSettingsError: ""
+  function setDirectionalLuckEnabled(enabled) {
+    let features;
+    try {
+      features = JSON.parse(Backend.readFileFromAssets("function-settings.json") || "{}");
+      if (!features || typeof features !== "object" || Array.isArray(features)) throw new Error("Invalid settings");
+    } catch (_) { functionSettingsError = "功能设置读取失败，原文件已保留"; return false; }
+    features.directionalLuck = !!enabled;
+    if (!Backend.writeFileToAssets("function-settings.json", JSON.stringify(features))) {
+      functionSettingsError = "设置保存失败，请重试";
+      return false;
+    }
+    directionalLuckEnabled = !!enabled;
+    functionSettingsError = "";
+    if (!directionalLuckEnabled && luckPanel) {
+      luckPanel.stopAuto("定向刷牌已关闭");
+      disposeRoomItem(luckPanel);
+      luckPanel = null;
+    }
+    return true;
+  }
+  function adaptFunctionSettings(profile) { feedbackFeatures.adaptProfile(profile); }
+
   property var titleBadges: []
   property var adaptedControls: []
   // Public hand knowledge is kept by counter.lua. Mirror only confirmed
@@ -133,6 +276,8 @@ Item {
   Connections {
     target: Mediator
     function onCommandGot(sender, command, data) {
+      handkill.route(command, data);
+      if (!host.routeLightComboBanner(command, data)) host.routeGuanNingAction(command, data);
       if (command === "BackToStart") host.roleVoiceCache.entries = {};
       if (["EnterRoom","EnterLobby","BackToStart"].indexOf(command)>=0) host.revealFocusSkill="";
       if (command === "MoveFocus") {
@@ -146,6 +291,8 @@ Item {
     try {
       const data = JSON.parse(Backend.readFileFromAssets("client-ui.json") || "{}");
       hideTitles = data.hideTitles === true;
+      const features = JSON.parse(Backend.readFileFromAssets("function-settings.json") || "{}");
+      directionalLuckEnabled = features.directionalLuck !== false;
       preferencesLoaded = true;
       requestCompatibility();
     } catch (_) { console.warn("[ClientUI] preferences unreadable; preserving file"); }
@@ -155,30 +302,220 @@ Item {
     if (!preferencesLoaded || !Backend.writeFileToAssets("client-ui.json", payload)) return false;
     hideTitles = !!value; refreshCompatibility(); return true;
   }
+  // Only enabled visual packs can supply images. Code and event routing remain bundled.
+  function visualFileExists(path) {
+    // Fs may retain negative lookups from before an in-session download.
+    // The bundled backend checks the current app directory on each call.
+    if (typeof Backend !== "undefined" && typeof Backend.exists === "function")
+      return Backend.exists(path);
+    return Fs.exists(path);
+  }
+  function lightEffectImage(name) {
+    if (typeof Config === "undefined" || typeof Fs === "undefined") return "";
+    if (name === "known-hand") return Qt.resolvedUrl("known-hand.png");
+    const path = "/packages/freekill-core/image/xinyuesha-light/" + name + ".png";
+    for (const pack of Config.enabledResourcePacks || []) {
+      const candidate = Cpp.path + "/resource_pak/" + pack + path;
+      if (visualFileExists(candidate)) return candidate;
+    }
+    return "";
+  }
+  Component { id: lightTargetLine; LightTargetLine {} }
+  HandkillRouter { id: handkill; owner: host }
+
+  property var tenyearComboComponent: null
+  property var tenyearComboItem: null
+  property var tenyearComboQueue: []
+  property string tenyearComboLastKey: ""
+  property double tenyearComboLastAt: 0
+  function tenyearComboResource(general) {
+    const match = /^ty_wei__(zhangliao|lvbu|machao|mateng)$/.exec(String(general));
+    if (!match) return "";
+    const relative = "/packages/freekill-core/image/xinyuesha-tenyear/combo/wei" + match[1] + "_jineng";
+    for (const pack of Config.enabledResourcePacks || []) {
+      const base = Cpp.path + "/resource_pak/" + pack + relative;
+      if (visualFileExists(base + ".atlas") && visualFileExists(base + ".skel")) return base;
+    }
+    return "";
+  }
+  function cancelTenyearCombos() {
+    tenyearComboQueue = [];
+    tenyearComboLastKey = "";
+    tenyearComboLastAt = 0;
+    const item = tenyearComboItem;
+    tenyearComboItem = null;
+    if (item) { item.visible = false; disposeRoomItem(item); }
+  }
+  function startNextTenyearCombo() {
+    if (tenyearComboItem || !tenyearComboQueue.length) return;
+    if (!currentScene || !currentScene.visible || Config.banChangeSkin) { cancelTenyearCombos(); return; }
+    const request = tenyearComboQueue.shift();
+    const base = tenyearComboResource(request.general);
+    if (!base) { Qt.callLater(host.startNextTenyearCombo); return; }
+    if (!tenyearComboComponent) tenyearComboComponent = Qt.createComponent("TenyearCombo.qml");
+    if (tenyearComboComponent.status !== Component.Ready) {
+      console.warn("[TenyearCombo] player unavailable: " + tenyearComboComponent.errorString());
+      tenyearComboQueue = [];
+      return;
+    }
+    const item = tenyearComboComponent.createObject(currentScene, {
+      resourceBase: base, general: request.general, skillName: request.skill
+    });
+    if (!item) { Qt.callLater(host.startNextTenyearCombo); return; }
+    tenyearComboItem = item;
+    item.finished.connect(function(completed) {
+      if (host.tenyearComboItem !== item) return;
+      host.tenyearComboItem = null;
+      item.destroy();
+      Qt.callLater(host.startNextTenyearCombo);
+    });
+  }
+
+  function routeLightComboBanner(command, data) {
+    const room = currentScene;
+    if (!room || !room.visible || Config.banChangeSkin || command !== "Animate" || !data ||
+        (data.type !== "InvokeSkill" && data.type !== "InvokeUltSkill") || !data.name || data.player == null)
+      return false;
+    const players = room.dataModel && room.dataModel.players || [];
+    const model = Array.from(players).find(p => String(p.playerid !== undefined ? p.playerid : p.id) === String(data.player));
+    const photo = model && model.photoItem;
+    if (!photo || !photo.visible) return false;
+    const main = photo.general || model.general || "";
+    const deputy = photo.deputyGeneral || model.deputyGeneral || "";
+    const generals = data.type === "InvokeUltSkill" ? [data.deputy ? deputy : main] : [main, deputy];
+    const general = generals.find(g => generalOwnsSkill(g, data.name) && tenyearComboResource(g));
+    if (!general) return false;
+    try {
+      const isCombo = Lua.ev('(function() local s=Fk.skills[' + JSON.stringify(String(data.name)) + ']; return s and s:hasTag("Combo", false) == true or false end)()');
+      if (isCombo !== true) return false;
+    } catch (_) { return false; }
+    const key = String(data.player) + ":" + general + ":" + String(data.name);
+    const now = Date.now();
+    if (key === tenyearComboLastKey && now - tenyearComboLastAt < 250) return true;
+    tenyearComboLastKey = key;
+    tenyearComboLastAt = now;
+    if (tenyearComboQueue.length >= 4) return true;
+    tenyearComboQueue.push({general: general, skill: String(data.name)});
+    startNextTenyearCombo();
+    return true;
+  }
+
+  function showLightTargetLine(room, from, targets, artwork) {
+    // The stock dashboard spans the full hand area. Use the real portrait
+    // when present, including the local player's portrait.
+    const origin = feedbackFeatures.indicationPoint(room, from);
+    if (!origin) return;
+    for (const target of targets) {
+      if (target === from) continue;
+      const destination = feedbackFeatures.indicationPoint(room, target);
+      if (!destination) continue;
+      lightTargetLine.createObject(room, {origin: origin, destination: destination, imageSource: artwork,
+        olOriginalFrames: String(artwork).indexOf("/ol-target-line/zhixiangxianlong.png") >= 0,
+        originalFrames: String(artwork).indexOf("gold-head-frames.png") >= 0});
+    }
+  }
+  function targetLineArtwork() {
+    const ol = lightEffectImage("ol-target-line/zhixiangxianlong");
+    if (ol) {
+      const base = String(ol).slice(0, -4);
+      // A partial download must not suppress the stock indication animation.
+      if (visualFileExists(base + ".atlas") && visualFileExists(base + ".skel")) return ol;
+    }
+    return lightEffectImage("gold-head-frames") || lightEffectImage("gold-trail");
+  }
+  function setUpLightTargetLine() { feedbackFeatures.attachIndications(); }
+
   Component {
     id: knownHandBadgeComponent
     Rectangle {
+      id: badge
       objectName: "knownHandBadge"
       required property var photo
-      property int knownCount: 0
-      width: Math.max(52, badgeText.implicitWidth + 16)
-      height: 22
-      radius: 11
-      z: 10000
-      color: "#D4232D2F"
-      border.width: 1
-      border.color: "#D5B471"
-      visible: knownCount > 0 && photo && photo.visible
-      anchors.horizontalCenter: parent.horizontalCenter
-      anchors.top: parent.bottom
-      anchors.topMargin: -3
-      Text {
-        id: badgeText
-        anchors.centerIn: parent
-        text: "明牌 " + parent.knownCount
-        color: "#F8E7B6"
-        font.pixelSize: 12
-        font.bold: true
+      property var knownCards: []
+      property var knownIds: []
+      readonly property var stockViewer: photo && Array.from(photo.children || []).find(
+        item => String(item).indexOf("HandcardViewer_QMLTYPE") === 0) || null
+      // Reuse the native viewer's appearance and full-card popup, without
+      // stacking a second list over the one used by Sun Wukong's 金睛.
+      Binding {
+        target: badge.stockViewer
+        property: "visible"
+        value: false
+        when: badge.visible && badge.stockViewer !== null
+        restoreMode: Binding.RestoreBindingOrValue
+      }
+      readonly property int knownCount: knownCards.length
+      readonly property bool rightSide: photoBounds.x < width + 10
+      property rect photoBounds: Qt.rect(0, 0, 0, 0)
+      function syncPosition() {
+        // mapToItem() does not establish a QML binding on the photo's x/y.
+        // Refresh after layout changes and the normal knowledge update.
+        if (!host.currentScene || !photo) return;
+        const top = photo.mapToItem(host.currentScene, 0, 0);
+        const bottom = photo.mapToItem(host.currentScene, photo.width, photo.height);
+        photoBounds = Qt.rect(Math.min(top.x, bottom.x), Math.min(top.y, bottom.y),
+          Math.abs(bottom.x-top.x), Math.abs(bottom.y-top.y));
+      }
+      width: Math.min(66, Math.max(44, photoBounds.width * 0.38))
+      height: Math.min(photoBounds.height, cardNames.implicitHeight + 10)
+      radius: 6
+      z: 20
+      color: "#CC2E2C27"
+      border.color: "#A6967A"
+      visible: knownCount > 0 && photo && photo.visible && !!host.currentScene && host.currentScene.visible
+      opacity: photo ? photo.opacity : 1
+      // Keep the side list in table coordinates, outside portrait transforms
+      // and clipping. It must not become part of the skin image itself.
+      x: Math.max(0, Math.min(parent.width-width,
+        rightSide ? photoBounds.x+photoBounds.width+5 : photoBounds.x-width-5))
+      y: photoBounds.y + (photoBounds.height-height) / 2
+      Component.onCompleted: syncPosition()
+      Connections {
+        target: badge.photo
+        function onXChanged() { badge.syncPosition(); }
+        function onYChanged() { badge.syncPosition(); }
+        function onWidthChanged() { badge.syncPosition(); }
+        function onHeightChanged() { badge.syncPosition(); }
+        function onScaleChanged() { badge.syncPosition(); }
+      }
+      Flickable {
+        anchors.fill: parent
+        anchors.margins: 5
+        clip: true
+        contentWidth: width
+        contentHeight: cardNames.implicitHeight
+        interactive: contentHeight > height
+        Column {
+          id: cardNames
+          width: parent.width
+          spacing: 2
+          Repeater {
+            model: badge.knownCards.slice(0, 4)
+            delegate: Text {
+              required property string modelData
+              width: cardNames.width
+              text: modelData
+              textFormat: Text.PlainText
+              horizontalAlignment: Text.AlignHCenter
+              wrapMode: Text.WrapAnywhere
+              color: "#E4D5A0"
+              font.pixelSize: 16
+            }
+          }
+          Text {
+            visible: badge.knownCount > 4
+            height: visible ? implicitHeight : 0
+            width: cardNames.width
+            text: "…"
+            color: "#E4D5A0"
+            font.pixelSize: 16
+            horizontalAlignment: Text.AlignHCenter
+          }
+        }
+      }
+      TapHandler {
+        enabled: badge.knownIds.length > 0
+        onTapped: host.openKnownHands(badge.knownIds)
       }
     }
   }
@@ -187,95 +524,201 @@ Item {
     const id = model.playerid !== undefined ? model.playerid : model.id;
     return id === undefined || id === null ? "" : String(id);
   }
-  function readKnownHandCounts() {
+  function readKnownHands() {
     if (typeof ClientInstance === "undefined" || !ClientInstance) return {};
     try {
       const value = Lua.ev('(function() if not FkCardCounterV2 then FkCardCounterV2 = dofile("card-counter/counter.lua") end return FkCardCounterV2.current("slash") end)()');
-      const counts = ({}), rows = value && value.knowledge && value.knowledge.hands || [];
+      const byOwner = ({}), rows = value && value.knowledge && value.knowledge.hands || [];
       for (const row of rows) {
         if (!row || row.uncertain === true) continue;
         const key = row.ownerId === undefined || row.ownerId === null ? "" : String(row.ownerId);
-        if (key) counts[key] = (counts[key] || 0) + 1;
+        if (!key) continue;
+        if (!byOwner[key]) byOwner[key] = [];
+        byOwner[key].push({name:String(row.name || row.key || "明牌"), id:Number(row.id || 0)});
       }
-      return counts;
+      return byOwner;
     } catch (_) { return {}; }
+  }
+  function openKnownHands(ids) {
+    const scene = currentScene;
+    if (!scene || typeof scene.showInfoPopup !== "function") return;
+    const live = readKnownHands();
+    // Revalidate after a move; a stale badge must never reopen expired cards.
+    const confirmed = new Set();
+    for (const owner of Object.keys(live))
+      for (const row of live[owner]) confirmed.add(row.id);
+    const visibleIds = ids.filter(id => id > 0 && confirmed.has(id));
+    if (!visibleIds.length) return;
+    scene.showInfoPopup(Qt.createComponent("LunarLtk.Pages.InfoPopups", "ViewPile"), {
+      name:"hand_card", ids:visibleIds, additional_prop:{selectable:true, markVisible:true}
+    });
   }
   function syncKnownHandBadges() {
     const scene = currentScene;
     const players = scene && scene.dataModel && scene.dataModel.players || [];
-    const counts = readKnownHandCounts();
-    const payload = JSON.stringify(counts);
-    knownHandPayload = payload;
-    knownHandCounts = counts;
-    knownHandBadges = knownHandBadges.filter(b => b && b.photo && b.parent);
+    const hands = readKnownHands();
+    const payload = JSON.stringify(hands);
+    if (knownHandPayload !== payload) {
+      knownHandPayload = payload;
+      const counts = ({});
+      for (const key of Object.keys(hands)) counts[key] = hands[key].length;
+      knownHandCounts = counts;
+    }
+    const livePhotos = Array.from(players).map(model => model && model.photoItem).filter(Boolean);
+    knownHandBadges = knownHandBadges.filter(function(badge) {
+      try {
+        if (badge && badge.parent && livePhotos.indexOf(badge.photo) >= 0) return true;
+      } catch (_) {}
+      disposeRoomItem(badge);
+      return false;
+    });
     for (const model of Array.from(players)) {
       const photo = model && model.photoItem;
       if (!photo) continue;
       let badge = knownHandBadges.find(b => b.photo === photo);
       if (!badge) {
-        badge = knownHandBadgeComponent.createObject(photo, {photo: photo});
+        badge = knownHandBadgeComponent.createObject(scene, {photo: photo});
         if (badge) knownHandBadges.push(badge);
       }
-      if (badge) badge.knownCount = counts[knownHandKey(model)] || 0;
+      const rows = hands[knownHandKey(model)] || [];
+      const cards = rows.map(row => row.name), ids = rows.map(row => row.id).filter(id => id > 0);
+      if (badge) {
+        if (JSON.stringify(badge.knownCards) !== JSON.stringify(cards)) badge.knownCards = cards;
+        if (JSON.stringify(badge.knownIds) !== JSON.stringify(ids)) badge.knownIds = ids;
+      }
+      if (badge) badge.syncPosition();
     }
     triggerGuanNingSkinEffects(players);
   }
+  property var guanNingPluginComponent: null
+  property var guanNingPreview: null
+  property var guanNingSkillOwners: ({})
+  function releaseGuanNingEffects() {
+    for (const state of guanNingSkinStates || []) disposeRoomItem(state.effect);
+    guanNingSkinStates = [];
+    guanNingSkillOwners = ({});
+  }
+  function guanNingPluginUrl(file) {
+    const base = String(Cpp.path || "").replace(/\/$/, "");
+    return base + "/card-counter/guanning/" + file;
+  }
+  function guanNingResourceRoot() {
+    if (typeof Fs === "undefined") return "";
+    for (const pack of Config.enabledResourcePacks || []) {
+      const root = Cpp.path + "/resource_pak/" + pack + "/packages/freekill-core/image/xinyuesha-tenyear/guanning/8195001/";
+      if (visualFileExists(root + "chuchang2.skel")) return root;
+    }
+    return "";
+  }
+  function loadGuanNingPlugin() {
+    if (!guanNingResourceRoot()) return null;
+    if (guanNingPluginComponent && guanNingPluginComponent.status === Component.Ready) return guanNingPluginComponent;
+    if (typeof Fs === "undefined" || !Fs.resolveFile(guanNingPluginUrl("GuanNingActions.qml"))) return null;
+    guanNingPluginComponent = Qt.createComponent(guanNingPluginUrl("GuanNingActions.qml"));
+    if (guanNingPluginComponent.status !== Component.Ready) {
+      console.warn("[GuanNingActions] resource component: " + guanNingPluginComponent.errorString());
+      guanNingPluginComponent = null; return null;
+    }
+    return guanNingPluginComponent;
+  }
+  function findGuanNingStockArea(photo, general, skinName) {
+    const pending = Array.from(photo.children || []), seen = new Set();
+    for (let i=0; i<pending.length && i<128; i++) {
+      const item = pending[i];
+      if (!item || seen.has(item)) continue;
+      seen.add(item);
+      if ("skelData" in item && item.general === general && item.skinName === skinName) return item;
+      if (item.children) pending.push(...Array.from(item.children));
+      if (item.item) pending.push(item.item);
+    }
+    return null;
+  }
   function triggerGuanNingSkinEffects(players) {
-    const states = guanNingSkinStates.filter(s => s && s.photo && s.photo.parent);
+    if (Config.banChangeSkin || !guanNingResourceRoot()) { releaseGuanNingEffects(); return; }
     const active = [];
     for (const model of Array.from(players || [])) {
       const photo = model && model.photoItem;
       if (!photo) continue;
-      const general = String(photo.general || model.general || "");
-      // Only Guan Ning is in scope; Gan Ning is a different general.
-      if (!/^(guanning|guan_ning|guan-ning|管宁)$/i.test(general)) continue;
-      const source = photo.skinSource;
-      const skin = source && (source.name || source.skinName || "");
-      if (!skin) continue;
-      const signature = general + ":" + String(skin);
-      const old = states.find(s => s.photo === photo);
-      if (old && old.signature === signature) { active.push(old); continue; }
-      let areas = [];
-      const pending = [photo], seen = new Set();
-      while (pending.length) {
-        const item = pending.pop();
+      for (const side of ["main", "deputy"]) {
+        const general = String(side === "main" ? photo.general || model.general || "" : photo.deputyGeneral || model.deputyGeneral || "");
+        const skin = side === "main" ? photo.skinSource || model.skin : photo.deputySkinSource || model.deputySkin;
+        const name = String(skin && skin.name || "");
+        if (!isGuanNingGeneral(general) || /\.(jpg|jpeg|png|webp)$/i.test(name) || !/墨韵荷香|guanning_1(?:__daiji)?\.mp4/i.test(name)) continue;
+        const signature = general + ":" + name;
+        const old = guanNingSkinStates.find(s => s.photo === photo && s.signature === signature && s.effect);
+        if (old) { active.push(old); continue; }
+        const component = loadGuanNingPlugin();
+        if (!component) continue;
+        const effect = component.createObject(photo, {photo:photo, scene:currentScene, general:general, skinName:name,
+          stockArea:findGuanNingStockArea(photo,general,name), resourceRoot:guanNingResourceRoot()});
+        if (effect) active.push({photo:photo, signature:signature, effect:effect});
+      }
+    }
+    for (const old of guanNingSkinStates) if (old.effect && !active.some(s => s.effect === old.effect)) disposeRoomItem(old.effect);
+    guanNingSkinStates = active;
+  }
+  function openGuanNingPreview() {
+    if (guanNingPreview) { guanNingPreview.open(); return true; }
+    if (typeof Fs === "undefined" || !Fs.resolveFile(guanNingPluginUrl("GuanNingPreview.qml"))) return false;
+    const component = Qt.createComponent(guanNingPluginUrl("GuanNingPreview.qml"));
+    if (component.status !== Component.Ready) { console.warn(component.errorString()); return false; }
+    const window = host.Window.window;
+    guanNingPreview = component.createObject(window.contentItem,{resourceRoot:guanNingResourceRoot()});
+    if (!guanNingPreview) return false;
+    guanNingPreview.open(); return true;
+  }
+  function isGuanNingGeneral(name) {
+    return /^(guanning|guan_ning|guan-ning|管宁|n_guanning)$|__guanning$/i.test(String(name || ""));
+  }
+  function generalOwnsSkill(general, name) {
+    if (!name) return false;
+    const key=general+":"+String(name);
+    if (guanNingSkillOwners[key]!==undefined)return guanNingSkillOwners[key];
+    let owns=false;
+    try {
+      // Keep table membership on the Lua side: Lua.ev may wrap tables in a
+      // CBOR proxy on shipped clients, so Array.isArray is not a valid gate.
+      owns=Lua.ev('(function() local g=Fk.generals['+JSON.stringify(general)+']; if not g then return false end local ok,n=pcall(function() return g:getSkillNameList(true,true) end); if not ok then return false end for _,s in ipairs(n) do if s=='+JSON.stringify(String(name))+' then return true end end return false end)()')===true;
+    } catch (_) {}
+    guanNingSkillOwners[key]=owns;return owns;
+  }
+  function routeGuanNingAction(command, data) {
+    if (!currentScene || !currentScene.visible || Config.banChangeSkin || !data) return 0;
+    let action = "";
+    if (command === "Fk.GuanNingSkinAction" && data.action === "attack") action = "attack";
+    else if (command === "Animate" && (data.type === "InvokeSkill" || data.type === "InvokeUltSkill")) action = "skill";
+    if (!action || data.player === undefined || data.player === null) return 0;
+    const players = currentScene.dataModel && currentScene.dataModel.players || [];
+    const model = Array.from(players).find(p => String(p.playerid !== undefined ? p.playerid : p.id) === String(data.player));
+    const photo = model && model.photoItem;
+    if (!photo || !photo.visible) return 0;
+    const generals = [String(photo.general || model.general || ""), String(photo.deputyGeneral || model.deputyGeneral || "")]
+      .filter(Boolean);
+    let played = 0;
+    if (generals.some(host.isGuanNingGeneral)) triggerGuanNingSkinEffects(players);
+    for (const general of generals) {
+      if (!isGuanNingGeneral(general)) continue;
+      if (data.type === "InvokeUltSkill" && general !== (data.deputy ? photo.deputyGeneral : photo.general)) continue;
+      if (action === "skill" && !generalOwnsSkill(general,data.name)) continue;
+      const owned = guanNingSkinStates.find(s => s.photo === photo && s.effect && s.effect.general === general);
+      if (owned) { if (owned.effect.playAction(action, {targets:data.targets || [], skillName:data.name || ""})) played++; continue; }
+      if (typeof photo.playSkinAction === "function" && photo.playSkinAction(action, general)) { played++; continue; }
+      // The shipped older frontend has no PhotoBase.playSkinAction. Its skin
+      // adapter exposes the same action protocol without changing checked core files.
+      const pending = Array.from(photo.children || []), seen = new Set();
+      for (let i = 0; i < pending.length && i < 128; i++) {
+        const item = pending[i];
         if (!item || seen.has(item)) continue;
         seen.add(item);
-        if ("skelData" in item && item.skelData) {
-          const nodes = [], nested = [item];
-          for (let ni = 0; ni < nested.length; ni++) {
-            const child = nested[ni];
-            if (!child) continue;
-            if (typeof child.setAnimation === "function") nodes.push(child);
-            if (child.children) nested.push(...Array.from(child.children));
-            if (child.item) nested.push(child.item);
-          }
-          areas.push({data:item.skelData, nodes:nodes});
+        if (String(item.general || "") === general && typeof item.playAction === "function") {
+          if (item.playAction(action)) played++;
+          break;
         }
         if (item.children) pending.push(...Array.from(item.children));
         if (item.item) pending.push(item.item);
       }
-      let triggered = false;
-      for (const area of areas) {
-        const data = area.data, nodes = area.nodes;
-        for (let i = 0; i < nodes.length; i++) {
-          const animation = i === 0 && data.bgShownAnim ? data.bgShownAnim : data.bodyShownAnim;
-          if (!animation) continue;
-          try {
-            nodes[i].setAnimation(0, animation, false);
-            const normal = i === 0 ? data.bgNormalAnim : data.bodyNormalAnim;
-            if (normal) nodes[i].addAnimation(0, normal, true);
-            triggered = true;
-          } catch (_) { /* a skin may unload between discovery and replay */ }
-        }
-      }
-      // Wait for the loader to expose the Spine nodes before remembering the
-      // signature; the next room tick will then replay the effect after load.
-      if (!areas.some(area => area.nodes.length)) continue;
-      active.push({photo: photo, signature: signature});
-      if (triggered) console.log("[CardCounter] replayed Guan Ning skin entrance effect");
     }
-    guanNingSkinStates = active;
+    return played;
   }
   function chatIcon(kind) {
     const shapes = {
@@ -412,7 +855,17 @@ Item {
     }
   }
   function actionTargets() {
-    const room = currentScene && currentScene.dataModel;
+    const scene=presentScene;
+    if (scene && scene===waitingRoomScene) {
+      const players=[];
+      for (let i=0;i<Math.min(scene.playerNum,scene.photoModel.count);i++) {
+        const row=scene.photoModel.get(i), id=row.id;
+        if (Number.isInteger(id) && id!==0 && id!==-1 && row.sealed!==true && row.screenName!=="")
+          players.push({playerid:id});
+      }
+      return players;
+    }
+    const room = scene && scene.dataModel;
     return Array.from(room && room.players || []).filter(model => model &&
       Number.isInteger(model.playerid) && model.playerid !== 0 && model.playerid !== -1);
   }
@@ -492,6 +945,68 @@ Item {
       PresentButton {objectName:"presentFlowerButton";text:"全员送花";presentKind:"Flower"}
     }
   }
+  // FB-PGYSFQ: waiting-room gifts use the stock page and avatar action panel.
+  readonly property var waitingRoomCandidate: navigationPage && "gameContent" in navigationPage ? navigationPage.gameContent : null
+  readonly property var waitingRoomScene: waitingRoomCandidate && "isAllReady" in waitingRoomCandidate &&
+    "photoModel" in waitingRoomCandidate && typeof waitingRoomCandidate.givePresent==="function" ? waitingRoomCandidate : null
+  readonly property var presentScene: waitingRoomScene && waitingRoomScene.visible ? waitingRoomScene : currentScene
+  property var waitingPresentBar: null
+  onPresentSceneChanged: cancelPresentQueue()
+  onWaitingRoomSceneChanged: {
+    if (waitingPresentBar) { waitingPresentBar.destroy(); waitingPresentBar=null; }
+    if (waitingRoomScene) waitingPresentBar=waitingPresentComponent.createObject(waitingRoomScene,{scene:waitingRoomScene});
+  }
+  Connections {
+    target: host.waitingRoomScene
+    ignoreUnknownSignals: true
+    function onVisibleChanged() { if (!host.waitingRoomScene.visible) host.cancelPresentQueue(); }
+  }
+  function waitingGiftPanel(scene) {
+    const panel=scene && scene.areaHandler && scene.areaHandler.tmpItem;
+    if (!panel) return null;
+    const pending=[{item:panel,depth:0}];
+    while (pending.length) {
+      const entry=pending.pop(), item=entry.item;
+      const children=Array.from(item.children || []);
+      if (children.some(c=>c.text===Lua.tr("Give Flower")) && children.some(c=>c.text===Lua.tr("Give Egg"))) return panel;
+      if (entry.depth<4) for (const child of children) pending.push({item:child,depth:entry.depth+1});
+    }
+    return null;
+  }
+  Component {
+    id: waitingPresentComponent
+    Rectangle {
+      id: waitingBar
+      objectName: "waitingRoomPresentActions"
+      required property var scene
+      readonly property var panel: host.waitingGiftPanel(scene)
+      readonly property real panelX: panel ? panel.x : 0
+      readonly property real panelY: panel ? panel.y : 0
+      readonly property var panelParent: panel ? panel.parent : null
+      readonly property point origin: panelParent ? panelParent.mapToItem(scene,panelX,panelY) : Qt.point(0,0)
+      readonly property bool fitsRight: !!panel && origin.x+panel.width+width+12<=scene.width
+      readonly property bool fitsLeft: origin.x>=width+12
+      width: 116; height: actions.implicitHeight+12; radius: 7
+      color: "#2A1F1F"; border.color: "#a68a54"
+      z: scene.areaHandler ? scene.areaHandler.z+2 : 22
+      visible: !!panel && scene.visible && scene.areaHandler.visible && !Config.replaying
+      x: !panel ? 0 : fitsRight ? origin.x+panel.width+6 : fitsLeft ? origin.x-width-6 : Math.max(6,Math.min(scene.width-width-6,origin.x))
+      y: {
+        if (!panel) return 0;
+        const top=fitsRight || fitsLeft ? origin.y :
+          origin.y+panel.height+height+12<=scene.height ? origin.y+panel.height+6 : origin.y-height-6;
+        return Math.max(6,Math.min(scene.height-height-6,top));
+      }
+      Column {
+        id: actions
+        x: 6; y: 6; width: parent.width-12; spacing: 6
+        PresentButton {objectName:"waitingRoomFlowerButton";text:"全员送花";presentKind:"Flower";width:parent.width;height:36;closeWaitingPanel:true}
+        PresentButton {objectName:"waitingRoomEggButton";text:"全员砸蛋";presentKind:"Egg";width:parent.width;height:36;closeWaitingPanel:true}
+      }
+    }
+  }
+  // End FB-PGYSFQ waiting-room adapter.
+
   property var presentQueue: []
   property var presentQueueScene: null
   property string presentQueueKind: ""
@@ -504,8 +1019,8 @@ Item {
     // Send the finite click snapshot in the same UI turn. The stock Chat
     // protocol broadcasts each present; there is no artificial 1.6s queue.
     while (presentQueue.length) {
-      if (!currentScene || currentScene!==presentQueueScene || Config.replaying || !clientContext ||
-          !currentScene.visible || (host.Window.window && !host.Window.window.active)) { cancelPresentQueue(); return; }
+      if (!presentScene || presentScene!==presentQueueScene || Config.replaying || !clientContext ||
+          !presentScene.visible || (host.Window.window && !host.Window.window.active)) { cancelPresentQueue(); return; }
       const valid=actionTargets().map(p=>p.playerid);
       const pending=presentQueue.slice(); const id=pending.shift(); presentQueue=pending;
       if (valid.indexOf(id)>=0) clientContext.notifyServer("Chat",{type:2,msg:"$@"+presentQueueKind+":"+id});
@@ -513,7 +1028,7 @@ Item {
     presentQueueScene=null;
   }
   function sendPresent(kind) {
-    if (presentRestSeconds > 0 || presentQueue.length || !currentScene || Config.replaying || !clientContext ||
+    if (presentRestSeconds > 0 || presentQueue.length || !presentScene || !presentScene.visible || Config.replaying || !clientContext ||
         ["Egg","Flower"].indexOf(kind)<0) return false;
     const selfId = typeof Self !== "undefined" && Self ? Self.id : 0;
     const ids = [];
@@ -523,7 +1038,7 @@ Item {
           (kind !== "Egg" || id !== selfId)) ids.push(id);
     }
     if (!ids.length) return false;
-    presentQueue=ids; presentQueueScene=currentScene; presentQueueKind=kind;
+    presentQueue=ids; presentQueueScene=presentScene; presentQueueKind=kind;
     presentRestSeconds=10; presentRest.restart();
     sendNextPresent(); return true;
   }
@@ -532,10 +1047,11 @@ Item {
   }}
   component PresentButton: Button {
     property string presentKind
+    property bool closeWaitingPanel: false
     width: implicitWidth; height: 40
     font.pixelSize: 16
     leftPadding: 8; rightPadding: 8; topInset: 0; bottomInset: 0
-    enabled: !!host.currentScene && host.currentScene.visible && !Config.replaying && !!host.clientContext &&
+    enabled: !!host.presentScene && host.presentScene.visible && !Config.replaying && !!host.clientContext &&
       host.presentRestSeconds === 0 && !host.presentQueue.length
     autoRepeat: false
     background: Rectangle {radius:6;color:parent.down ? "#5C3D3D" : "#2A1F1F";border.color:"#6B4F3A";opacity:parent.enabled ? 1 : 0.35}
@@ -544,7 +1060,10 @@ Item {
     ToolTip.text: host.presentRestSeconds>0 ? "冷却中："+host.presentRestSeconds+" 秒" :
       host.presentQueue.length ? "正在同批发送" :
       "点按向全员同批发送，砸蛋排除自己；共用 10 秒冷却"
-    onClicked: host.sendPresent(presentKind)
+    onClicked: {
+      if (host.sendPresent(presentKind) && closeWaitingPanel && host.waitingRoomScene && host.waitingRoomScene.areaHandler)
+        host.waitingRoomScene.areaHandler.closeItem();
+    }
   }
   function refreshCompatibility(rootItem) {
     // Never walk the entire animated table from a periodic UI-thread callback.
@@ -563,7 +1082,9 @@ Item {
       seen.add(item);
       if ("model" in item) host.prepareSkinMenu(item.model);
       const type = String(item);
+      if (type.indexOf("ChatBox_QMLTYPE") === 0 || type.indexOf("AvatarChatBox_QMLTYPE") === 0) feedbackFeatures.adaptChat(item);
       if (type.indexOf("SwipeView_QMLTYPE") === 0) host.adaptRoomDrawerSwipe(item);
+      if (type.indexOf("EditProfile_QMLTYPE") === 0) host.adaptFunctionSettings(item);
       if (type.indexOf("PlayerDetail_QMLTYPE") === 0) host.adaptPlayerDetail(item);
       if (type.indexOf("AvatarChatBox_QMLTYPE") === 0 && typeof item.loadSkills === "function")
         host.attachRoleVoices(item);
@@ -780,7 +1301,11 @@ Item {
     }
   }
   property var fallbackButton: null
-  onClientContextChanged: { bootstrapReady = false; if (clientContext) Qt.callLater(host.syncScene); else Qt.callLater(host.releaseScene); }
+  onClientContextChanged: {
+    bootstrapReady = false;
+    if (clientContext) Qt.callLater(host.syncScene);
+    else { Qt.callLater(host.releaseScene); Qt.callLater(host.resetDisconnectedHome); }
+  }
   Connections {
     target: Config
     // Do not save while loadConf is assigning defaults and stored values.
@@ -800,10 +1325,11 @@ Item {
   }
   Timer { id: backgroundSave; interval: 250; onTriggered: Config.saveConf(); }
   function releaseScene() {
-    if (deckHit) deckHit.destroy();
-    if (fallbackButton) fallbackButton.destroy();
-    if (popup) popup.destroy();
+    for (const badge of knownHandBadges) disposeRoomItem(badge);
+    knownHandBadges = []; knownHandCounts = ({}); knownHandPayload = "";
+    const oldDeckHit=deckHit, oldFallback=fallbackButton, oldPopup=popup;
     deckHit = null; deckItem = null; fallbackButton = null; popup = null; currentScene = null;
+    disposeRoomItem(oldDeckHit); disposeRoomItem(oldFallback); disposeRoomItem(oldPopup);
   }
   function ensureBootstrap() {
     // C++ publishes its process-global ClientInstance before its worker thread
@@ -826,7 +1352,9 @@ Item {
   Connections {
     target: host
     function onCurrentSceneChanged() {
-      if (host.luckPanel) { host.luckPanel.stopAuto("已离开房间"); host.luckPanel.destroy(); host.luckPanel=null; }
+      const panel=host.luckPanel; host.luckPanel=null;
+      try { if (panel && typeof panel.stopAuto === "function") panel.stopAuto("已离开房间"); } catch (_) {}
+      host.disposeRoomItem(panel);
     }
   }
   Connections {
@@ -835,7 +1363,7 @@ Item {
   }
   function handleLuckCommand(command, data) {
     if (command === "AskForSkillInvoke" && data && data[0] === "AskForLuckCard") {
-      if (!currentScene || !currentScene.dataModel || Config.observing || Config.replaying) return;
+      if (!directionalLuckEnabled || !currentScene || !currentScene.dataModel || Config.observing || Config.replaying) return;
       if (!luckPanel) luckPanel = luckCardPanel.createObject(currentScene, {scene:currentScene});
       if (luckPanel) luckPanel.receiveRequest(data);
     } else if (luckPanel) {

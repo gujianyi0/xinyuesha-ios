@@ -157,7 +157,8 @@ jobs:
             ${{ runner.temp }}/background-picker.log
   build:
     name: Build iOS arm64
-    needs: [test-core-repair, test-picker]
+    # Build concurrently with the independent regression jobs. A candidate is
+    # accepted only after every job succeeds, including the real picker tests.
     runs-on: macos-14
     timeout-minutes: 120
 
@@ -227,7 +228,12 @@ jobs:
           fi
 
       - name: Build app and package unsigned IPA
-        run: bash scripts/build_ios.sh --qt "$HOME/Qt/6.8.3/ios" --host-qt "$HOME/Qt/6.8.3/macos" --deps "$PWD/ios-deps"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download build-assets-20261126-33 --repo "$GITHUB_REPOSITORY" --pattern '*.zip' --dir "$RUNNER_TEMP/v1-resources"
+          python3 scripts/prepare_visual_resources.py --catalog scripts/assets/v1-visual-catalog.json --archives "$RUNNER_TEMP/v1-resources" --target runtime
+          bash scripts/build_ios.sh --qt "$HOME/Qt/6.8.3/ios" --host-qt "$HOME/Qt/6.8.3/macos" --deps "$PWD/ios-deps"
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4

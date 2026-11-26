@@ -20,6 +20,17 @@ Window {
 
   Counter.CounterHost { id: counterHost; navigationRoot: gamePage.item }
 
+  Loader {
+    id: packDownload
+    readonly property var page: counterHost.navigationPage
+    active: root.androidMode && !!page && typeof page.rebuildListModels === "function"
+      && typeof page.moveEnabledToTop === "function" && "fullAvailableList" in page
+    parent: active ? page : root.contentItem
+    width: 0
+    height: 0
+    sourceComponent: Counter.ResourcePackDownload { managerPage: packDownload.page }
+  }
+
   onXChanged: if (!skinDebuggerMode && !androidMode) Config.winX = x;
   onYChanged: if (!skinDebuggerMode && !androidMode) Config.winY = y;
   onWidthChanged: if (!skinDebuggerMode) Config.winWidth = width;

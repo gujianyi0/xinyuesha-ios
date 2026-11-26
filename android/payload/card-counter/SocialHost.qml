@@ -1206,7 +1206,7 @@ Control {
   }
   SocialDialog {
     id: serviceSettings; objectName: "socialServiceSettings"
-    title: "好友与显示设置 · 20261114.1"; anchors.centerIn: parent; modal: true; exit: Transition {}
+    title: "好友与显示设置 · 20261115.4（管宁 v2 本地测试）"; anchors.centerIn: parent; modal: true; exit: Transition {}
     width: Math.min(host.width - 36, 650)
     contentItem: ColumnLayout {
       spacing: 14
@@ -1217,6 +1217,11 @@ Control {
         checked: host.clientPreferences ? host.clientPreferences.hideTitles : false
         onClicked: {
           if (!host.clientPreferences.setHideTitles(checked)) social.error = "显示设置保存失败，请检查存储空间";
+        }
+      }
+      SocialButton { text: "墨韵荷香动作预览"; enabled: host.clientPreferences !== null
+        onClicked: {
+          if (!host.clientPreferences.openGuanNingPreview()) host.notice = "请先安装独立的墨韵荷香动作资源补丁。";
         }
       }
       Text { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "头像跟随游戏个人资料。隐身只隐藏同游好友服务中的在线和房间信息，不改变主力服的游戏状态。"; color: "#c5d2d4"; font.pixelSize: 14; font.family: host.font.family }

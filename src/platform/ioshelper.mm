@@ -38,3 +38,15 @@ void fkIosExcludeFromBackup(const char *path) {
     }
   }
 }
+
+int fkIosPlayGameHaptic(int kind) {
+  if (kind < 0 || kind > 2 || ![NSThread isMainThread]) return 0;
+  @autoreleasepool {
+    if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) return 0;
+    const UIImpactFeedbackStyle style = kind == 0 ? UIImpactFeedbackStyleMedium : UIImpactFeedbackStyleLight;
+    UIImpactFeedbackGenerator *feedback = [[[UIImpactFeedbackGenerator alloc] initWithStyle:style] autorelease];
+    [feedback prepare];
+    [feedback impactOccurred];
+    return 1;
+  }
+}

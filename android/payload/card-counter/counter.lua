@@ -190,7 +190,13 @@ function M.remember(ids, edge, deckCount)
       local owner = room:getCardOwner(id)
       if area == Card.PlayerHand and owner then
         viewer.card_tracker:setCardKnown(id, owner, Card.PlayerHand)
-      elseif area == Card.Processing or area == Card.DrawPile then
+      elseif area == Card.DrawPile then
+        -- getCardArea already establishes membership. The stock setter scans
+        -- every deck ID to check membership, which read-only reveals do not need.
+        local zone = viewer.card_tracker:getKnownCardsByArea(Card.DrawPile)
+        table.insertIfNeed(zone.known_cards, id)
+        table.removeOne(zone.uncertain_cards, id)
+      elseif area == Card.Processing then
         viewer.card_tracker:setCardKnown(id, nil, area)
       end
     else validEdge = false end
@@ -212,6 +218,27 @@ function M.remember(ids, edge, deckCount)
     viewer.card_tracker.draw_pile_order = order
   end
   return true
+end
+
+-- Guangu reveals cards as an expanded hand in a use-real-card request, rather
+-- than a view popup or a move. Its earlier CustomDialog carries 1..4 counts,
+-- not physical card IDs, and must never be remembered.
+function M.rememberRevealedRequest(room, data)
+  if room ~= ClientInstance or type(data) ~= "table" or
+      data[1] ~= "userealcard_skill" or data[2] ~= "#guangu-use" then return false end
+  local extra = data[4]
+  local ids = type(extra) == "table" and extra.expand_pile
+  if type(extra) ~= "table" or extra.skillName ~= "guangu" or
+      type(ids) ~= "table" or #ids < 1 or #ids > 4 then return false end
+  local allDeck, seen = true, {}
+  for _, id in ipairs(ids) do
+    if type(id) ~= "number" or id % 1 ~= 0 or id <= 0 or seen[id] then return false end
+    seen[id] = true
+    local area = room:getCardArea(id)
+    if area ~= Card.DrawPile and area ~= Card.PlayerHand then return false end
+    if area ~= Card.DrawPile then allDeck = false end
+  end
+  return M.remember(ids, allDeck and "top" or nil, allDeck and #room.draw_pile or nil)
 end
 
 -- Preserve only viewer-known positions across a whole simultaneous move batch.

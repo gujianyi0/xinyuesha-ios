@@ -59,7 +59,9 @@ put("Fk/Widgets/qmldir", "module Fk.Widgets\nTapHandler 1.0 TapHandler.qml\n")
 shutil.copyfile(SOURCE / "Fk/Widgets/TapHandler.qml", base / "Fk/Widgets/TapHandler.qml")
 for source, target in [("Fk/Widgets/PopupItem.qml","PopupItem.qml"), ("LunarLtk/Components/Photo/LimitSkillItem.qml","LimitSkillItem.qml"), ("LunarLtk/Components/Photo/LimitSkillArea.qml","LimitSkillArea.qml"), ("Fk/Components/Common/MetroButton.qml","MetroButton.qml"), ("LunarLtk/Pages/InfoPopups/GeneralDetail.qml","GeneralDetail.qml"), ("LunarLtk/Pages/InfoPopups/ViewPile.qml","ViewPile.qml")]:
     shutil.copyfile(UI / source, base / target)
-shutil.copyfile(SOURCE / "card-counter/CounterHost.qml", base / "CounterHost.qml")
+shutil.copytree(SOURCE / "card-counter", base, dirs_exist_ok=True)
+from qml_spine_stub import install_spine_stub
+install_spine_stub(base)
 photo_source=(UI/"LunarLtk/Models/PhotoModel.qml").read_text(encoding="utf-8")
 skill_method=re.search(r"  function updateLimitSkill\(skill, time\) \{.*?\n  \}",photo_source,re.S).group(0)
 target_method=re.search(r"  function updateTargetTip\(\) \{.*?\n  \}",photo_source,re.S).group(0)

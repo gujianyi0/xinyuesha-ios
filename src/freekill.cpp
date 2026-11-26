@@ -461,7 +461,16 @@ int freekill_main(int argc, char *argv[]) {
 
   // 安卓：先切换到我们安装程序的那个外部存储目录去
   QJniObject::callStaticMethod<void>("org/notify/FreeKill/Helper", "InitView", "()V");
-  QDir::setCurrent("/storage/emulated/0/Android/data/org.notify.FreeKill/files");
+  const QJniObject androidContext = QNativeInterface::QAndroidApplication::context();
+  QJniObject dataDirectory = androidContext.callObjectMethod(
+    "getExternalFilesDir", "(Ljava/lang/String;)Ljava/io/File;", static_cast<jstring>(nullptr));
+  if (!dataDirectory.isValid())
+    dataDirectory = androidContext.callObjectMethod("getFilesDir", "()Ljava/io/File;");
+  const QString dataPath = dataDirectory.isValid()
+    ? dataDirectory.callObjectMethod("getAbsolutePath", "()Ljava/lang/String;").toString()
+    : QString();
+  if (dataPath.isEmpty() || !QDir::setCurrent(dataPath))
+    qFatal("Cannot access this application's data directory");
 
   // 切目录后重新设置log文件路径
   log_file.reset(new QFile("freekill.server.log"));
@@ -629,6 +638,12 @@ int freekill_main(int argc, char *argv[]) {
     QDir::currentPath() + "/assets/ios-ui", &uiError);
   if (uiPath.isEmpty()) qWarning() << "[iOS UI]" << uiError;
   else engine->addImportPath(uiPath);
+  engine->load("card-counter/client-shell/main.qml");
+#elif defined(Q_OS_ANDROID)
+  // Keep the managed frontend outside the checksum-protected core package.
+  engine->addImportPath(QDir::currentPath());
+  if (Pacman->shouldUseCore() && QFile::exists("packages/freekill-core/Fk"))
+    engine->addImportPath(QDir::currentPath() + "/packages/freekill-core");
   engine->load("card-counter/client-shell/main.qml");
 #else
   // 加载GUI了，如果core有的话用core的

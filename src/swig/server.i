@@ -109,6 +109,8 @@ public:
 
 %extend ServerPlayer {
   void emitKick() {
-    emit $self->kicked();
+    // The core uses this binding when accumulated response timeouts reach the idle limit.
+    if (!$self->getServer()->isSinglePlayer())
+      emit $self->kicked();
   }
 }

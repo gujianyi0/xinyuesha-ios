@@ -7,7 +7,9 @@ import sys
 def prepare(runtime):
     runtime=Path(runtime)
     digest=hashlib.sha256()
-    for name in ('Fk','LunarLtk','card-counter'):
+    names=['Fk','LunarLtk','card-counter']
+    if (runtime/'resource_pak').is_dir(): names.append('resource_pak')
+    for name in names:
         root=runtime/name
         if not root.is_dir(): raise ValueError(f'Missing managed directory: {name}')
         for path in sorted(p for p in root.rglob('*') if p.is_file()):

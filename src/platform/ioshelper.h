@@ -14,6 +14,10 @@ void fkIosPrepare(void);
 // contains a cache-like copy of the bundled runtime.
 void fkIosExcludeFromBackup(const char *path);
 
+// Foreground game feedback: 0=damage, 1=HP loss, 2=own turn. A successful
+// request does not guarantee a motor response when system haptics are disabled.
+int fkIosPlayGameHaptic(int kind);
+
 #ifdef __cplusplus
 }
 #endif

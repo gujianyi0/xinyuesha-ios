@@ -1,0 +1,1327 @@
+{
+  "schema": 1,
+  "edition": "v1-effects-sharing",
+  "packs": [
+    {
+      "id": "手杀武将特效-v1",
+      "title": "手杀武将特效（原始专属演出）",
+      "version": "20261120.20",
+      "archive": "xinyuesha-shousha-v1-20261120-20.zip",
+      "bytes": 147425189,
+      "sha256": "7acf02e064f34a0dcf838a18b95608ccf8281bc317e976ce57ca0bd6837f320f",
+      "files": [
+        {
+          "path": "icon.png",
+          "sha256": "4eb7782b78bde40999baa6f21508fc3414d740ce1876cd8b002cbdc1e9e56471"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/manifest.json",
+          "sha256": "81bbcf169340580ef565352a3f6418ddecdeea4dc1a1584883fc27a46f68a203"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/caomaozhengwang/SS_CM_zhenwang.atlas",
+          "sha256": "8bb98a970d46317660b6bacb83267e6195809bf3389d68f9c340d7fa25fca8a6"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/caomaozhengwang/SS_CM_zhenwang.png",
+          "sha256": "c86ce862b580eeacf9499441fffda22f92963faa69a386c36e3f1fc321dd6cfe"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/caomaozhengwang/SS_CM_zhenwang.skel",
+          "sha256": "639e4c694d586a9bf99285506c80b37bfd7038fa72e9bbf379ea806a92d332ba"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/caomaozhengwang/SS_CM_zhenwang2.png",
+          "sha256": "ab864ae662f2d7355a2da8715a276b7f08616129a326b90336619ba391c42274"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/caomaozhengwang/SS_CM_zhenwang3.png",
+          "sha256": "da9c4b80df7c54d3c4a6632a26ae7b39ae947323ec018ff38e59cd0413b4e9d8"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/game/mouWuShuang/SS_MoulvbuSkill.atlas",
+          "sha256": "17f267871d5cc4f828ed1fb2ceac5064596dbc0b88f632ca1658e850ddb849d4"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/game/mouWuShuang/SS_MoulvbuSkill.png",
+          "sha256": "8db979bc91ddd258e0ac2bf4d8faf8feaf67b5bfb489c86e0cc27a9491555634"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/game/mouWuShuang/SS_MoulvbuSkill.skel",
+          "sha256": "0439a531b64819559e9dbe48822c7d833d778a8861382a40de4d22ca6e7772ae"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/game/mouWuShuang/SS_MoulvbuSkill2.png",
+          "sha256": "7b3c53881128b75a489e53d57e2f8665be06f25c979d9d9c5e0cea92defb1159"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_huo.atlas",
+          "sha256": "c2a094d2899a8033b36b41deb3a6920a860db63232fa11d0f47c81379f3bd8a1"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_huo.png",
+          "sha256": "9d48ca0bc4005e3e5bf7157ced943ba8debe168e0d9012698ab0ddc1e2eac3f6"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_huo.skel",
+          "sha256": "e86e0cd6b9831068ae2de6a253e917ce954d03796297ee54dbc2e83bd4573733"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_huo10.png",
+          "sha256": "457c843c85db7ecd4880dbb934a8c149c455e4ffb48a8e6f8de09c1109b7a796"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_huo11.png",
+          "sha256": "6e7cdf008cf59914b13c7ad684b57a99024546c6c0b114b65e66b93422d904d2"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_huo12.png",
+          "sha256": "87d06aee89ed7d3c836c41e3b2aa1e4a0d9eca9115cc3894d983e5d6481dce96"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_huo2.png",
+          "sha256": "5f7eb494dc03139023bef528cc32ce5167bb5f4b7c700310bd19d83944f07f58"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_huo3.png",
+          "sha256": "7ec35d83fbe9e641d0682a7f073d498a6a40aa14bdc5bc58052e3d13006d288c"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_huo4.png",
+          "sha256": "1d98caf3606aa5ba661cf82dc33d423f10d656c97f2cea251f2c66c66ab4bdd8"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_huo5.png",
+          "sha256": "41670329dc996a28146cab07ba901c0f26f41220b4efb340f2220f9904cd26fa"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_huo6.png",
+          "sha256": "efb41fc15aa7980d2af7cd36ba15ba23ba7d1e9922d563c2e368a24cc12cf978"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_huo7.png",
+          "sha256": "5ed2ebfd7ce63fc61140c1b9bce0c2e7747546134adde5b45ff50e9394e9843a"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_huo8.png",
+          "sha256": "4224d6a7e48f50f488967b2e5833b7bc969e50d2e7a613dec8372d3816bf4a40"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_huo9.png",
+          "sha256": "85ca84960417b3606015f35ef3510ce82e5b13526bf1a4e83b361b445149937f"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_shui.atlas",
+          "sha256": "d70b3ec0afd45c54d335077387cac978fbff09888de7609ff94538b7014f689d"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_shui.png",
+          "sha256": "928faf0e64ce640c4b8f92bf7df9bc8dc0f58c26489a7f55409b8ae4ee68f43d"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_shui.skel",
+          "sha256": "f2fbd5d7cd08457f366a4999fb5f2e8109e847d90a66d810bc4401035ab97638"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_shui2.png",
+          "sha256": "3768e21634b2e4605b621ef3105f9cb0c38df9aade534c9df7aa7f184977374c"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_shui3.png",
+          "sha256": "9768b230ddb996ed18548936cb9a72f025526767f04f9230e3b55b6f71ce496d"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_shui4.png",
+          "sha256": "3c8b5269d93fe3c1cd562dbf033cb44f2bf498622e6ec06e5455f651191206d0"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_shui5.png",
+          "sha256": "6e19a26830190ca82b33f2e6b9c7a985c7eed3c744c4d48db7c872174c07087a"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_shui6.png",
+          "sha256": "29d0ddf6c7d120028e5bca80b4e31ba92055506cc0b6ad08a8cb00179c4f72e1"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_shui7.png",
+          "sha256": "ccf676531f006e1a43e4d37decfb90c4eaae5f8602ade5a42c6f2a3f95f45ced"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_shui8.png",
+          "sha256": "b41eeea9568c674ffb989aa0d338413539592a7b46b53f53c9a7d57deca9544a"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/jinlan/SS_szy_jn_shui9.png",
+          "sha256": "d7d630cbf90024b001a3b3babf55bc9008e26274e967994e41b23d5b0a1cf4e9"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmmask.atlas",
+          "sha256": "a1d7d4fd12becfe8f79665cea398f2f01044cb54ff8b27e866d83944c77acf56"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmmask.png",
+          "sha256": "d89e174320200214722d2d880a2a46e1ff42fc040b22ad7dcbb7213067251fb4"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmmask.skel",
+          "sha256": "58ecb1ce73f3034842d51908cc806197043896e0817c171dd5bb9bf7a1cd7a0e"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmmask2.png",
+          "sha256": "80c5b87b5a8b3b3e81bd89ade3ee9313119678df4ac6fb06f69b166f18280283"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmnewmask.atlas",
+          "sha256": "7c23275e856cfbd910c151640ea1ad8857e8307943491341daff4c0f3192f388"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmnewmask.png",
+          "sha256": "d051c52d510f00565aefd2a78cf00b9da3181d2409111072a9a729c3d2139cce"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmnewmask.skel",
+          "sha256": "cc940e4697a0a67560432b50786c358d66c1fd82bcc578b66a87c2d6347861a9"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmnewskill.atlas",
+          "sha256": "b86fe4c5ef477e08e1110da04d8993745cab3e0820a44a06876f5ebc751afff1"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmnewskill.png",
+          "sha256": "ddb4ba5f3426a6bce70baf4bd94b02a8b1cca904a60c75dabf7d4e23ca6b08cc"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmnewskill.skel",
+          "sha256": "fed9824e172288ebdfaa5510f3391b8b266f203f62d485c009abc35f45f5398f"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmnewskill10.png",
+          "sha256": "625186dbbaf50979858dfeffaaa95efeb05dfab877a1c5a34d3d10844850bb39"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmnewskill2.png",
+          "sha256": "c4e2095b02c473ddc9e7dbaa8ea053d6b3b456c3c30c71e8936c598f816e2ff3"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmnewskill3.png",
+          "sha256": "aeb8abbc37aceb6699032b0adb020f80f097f7d45175f7532310186e7a134c32"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmnewskill4.png",
+          "sha256": "267606016ce4679a3ad17ab62a9a0c27661fef502dec29afdb9a060987c9c1f2"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmnewskill5.png",
+          "sha256": "23b757a97b918bfda807fa37a170219060663c9500b5a93da0a4316781fb9892"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmnewskill6.png",
+          "sha256": "162d2cb7b2a39b07ff3a5a54e718647ec42cafaf128be4223190a92d970285e8"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmnewskill7.png",
+          "sha256": "7438fe126aa4b82bf7de8ae9844fd5abf47464389bb8fa0d1fc8f7838062e588"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmnewskill8.png",
+          "sha256": "9a1379c7ee7b8316534c3ec9c5fa672bc0941c8f0f613a91f646d148ffda2e34"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmnewskill9.png",
+          "sha256": "d93d7128fdd3b07ed2009f777d4b0cc96013bbeed1716f5b516291df0fdb9d07"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmskill.atlas",
+          "sha256": "de6adcf4b11f0db0f30d5889713cffc36511c77ebcf88dce3170355569b9c5f2"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmskill.png",
+          "sha256": "be9522828582118bf790b99db4014a8194a903bfeae4cb7d8ebbaf4a37cd4378"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmskill.skel",
+          "sha256": "abf02bea2f81039d266b90dc53047c5b68da15b6b31a8aa9b18d9c569680894a"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmskill2.png",
+          "sha256": "01ed0fa7e8e32fc4cb2ce6aa00f01e290a12e2ce29148c439c18ca969336dba1"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmskill3.png",
+          "sha256": "e4c098dd8d2832410c93ec091f05e38ddded2f5ed08a6591799f6a0ef0d5507a"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmskill4.png",
+          "sha256": "2bd458b20dd23091d6ba506172c466e303062e76f372f9c5850531416400f2f1"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmskill5.png",
+          "sha256": "de7de4f8b28dad9511c995b579e200984b1486f8783b35f02503a61f200f4c7d"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/juejin/SS_cmskill6.png",
+          "sha256": "cf277b016f65ecb440b3466b468e56109566493b54d73c3e6922ff2f404ad481"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/qucheng/SS_CLJ_jineng.atlas",
+          "sha256": "41fd4908d7f10b66907033eb1bc1f2faeb9e9051ddb9178f012a4299075f9593"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/qucheng/SS_CLJ_jineng.png",
+          "sha256": "652e6046ec65e2add9127c9214e818d5ad61a266f5200727893db23884f971b1"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/qucheng/SS_CLJ_jineng.skel",
+          "sha256": "05bdb24e5e5dbbcf79165be5a8e94a2565415b31c73b790f68898fa1734c4368"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_dead.atlas",
+          "sha256": "b71b5e17036ddf4b18cd3b4879c32a6e4e4b8bcc7f1c70ddd0d67c0604fb8bb9"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_dead.png",
+          "sha256": "2d86e750992c437a1874e622580007f513ec834cb90c5f1b0260295db60baeff"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_dead.skel",
+          "sha256": "8a445e4e35247b0c328ee4898769151f560394996d227254b8a07ae91ce3e3dc"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_dead2.png",
+          "sha256": "5ddbc85b400f78a6e13258c4d197f499e84cda4d4ab10ba523b2237fe5c922bd"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_dead3.png",
+          "sha256": "2ea486b5b97373d7224efe69efa07dbd38c8c5494937b6f3340c5522d69c1823"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_dead4.png",
+          "sha256": "87dcc619e9516bcaa26b539441f37a46ebec4eceefab3a9da5dead5e81d3e890"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_mask.atlas",
+          "sha256": "ff7131819d613cec819843edec6c362892be2049a03bb8eb1fc9d23704daa298"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_mask.png",
+          "sha256": "5834c1a5cd6b4f02896c63e69ba9ecea18d39613396df04c566f7a45418442eb"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_mask.skel",
+          "sha256": "d9db1674aa281b5a30ea2786740c0e7afd983bac720fabd984df26f38ce91dd1"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_mask2.png",
+          "sha256": "c75ce2c5df23809d1ad946ebf0cc3d5ddd0aca2b84983607755d4efdc2ada3f6"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_skill1.atlas",
+          "sha256": "d932f90aa82dc61abedf0dbd5f7ea0bf25537c356d86436bf46e30a588f0d786"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_skill1.png",
+          "sha256": "8e6d17c848e5ebd20dc86b6cbe15d118edc47c0f60a9a0d6520ceed1d07ff234"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_skill1.skel",
+          "sha256": "4d3c77a7df87f8fab85023cd2b4078601e8e87db90b1061b1f2a068e4883f061"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_skill12.png",
+          "sha256": "408eab181a8bfe56747567911224aa7262286438df084fbfb3447ae45df657f3"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_skill13.png",
+          "sha256": "8d010b8bd4b7945d812afeed4c84ce5b02821dfcd9946dafb2b0b4b5e367cefb"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_skill14.png",
+          "sha256": "df610582b88607f671366bcd122c6c23fb87b89b12518d972481eb7e340dcdd5"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_skill15.png",
+          "sha256": "d44b17c90306b631dfc232a63724072df2967f7404b26e86d1932b476bd73269"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_skill16.png",
+          "sha256": "8401adbd3e726e84ef3d642bea43c33611eb84bc9e3fd3eb176dba2cf7c902c3"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_skill17.png",
+          "sha256": "1ea00232b70215e6eb54b9c15d6c399a6c1a754d68892da92b84fa51df26b484"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_skill2.atlas",
+          "sha256": "e3227b665a4e92defdc29f8b828c479abb00134a9b361177a99784fecc2d25f1"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_skill2.png",
+          "sha256": "97869b719460d07e7b6c190d602e2ebfebe662af1cd860252c07d381fa80fb7c"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_skill2.skel",
+          "sha256": "b9d66447bc0d4c855a1591b2de09964b3c297c07a0a352f79265a62ec8dda608"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_skill22.png",
+          "sha256": "86f5c6d8d8fa8368ff637504348bd9a5e38954edbe9c748461929734587fa647"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_skill23.png",
+          "sha256": "b8e1871b9f8fb3c7f2c2d98da18ff7e46c9938e19b0380fa269b8cb501ade1fa"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_Sjw_skill24.png",
+          "sha256": "5f221da71db7de24884dabffe655ffe67b0b0d3d32dca95c69b473000d577326"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_sjw2026_jiangweizhisi.atlas",
+          "sha256": "51701277cfe5b7843ab974c753e5f6fe79101f61aa819ecacd94fc058df7a553"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_sjw2026_jiangweizhisi.png",
+          "sha256": "8593b09494b79c0628246a0de03546985c82e839a445b3b3c4c5b3f6c413dd1d"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_sjw2026_jiangweizhisi.skel",
+          "sha256": "3d591df08ddd841b947b88b773940c72564ce51122c4d5b3a39b69411050c332"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_sjw2026_jiangweizhisi2.png",
+          "sha256": "0006738bb490effe1c2a50dc10da772567c4c6cf1e3e289caf85aa7cdc9e82de"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_sjw2026_jiangweizhisi3.png",
+          "sha256": "8cecf021ee4c2d59642a2493a7845804eefb5e096504da0ca09bc5e21be4383b"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_sjw2026_jiangweizhisi4.png",
+          "sha256": "3cf3195dc11ba4fd0dcb45ab9b900675cd9c8a6acf92b124891c1e0f1d39d7dd"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_sjw2026_jiangweizhisi5.png",
+          "sha256": "64012e67afce848b2f02b26c4902d4c47032fe084a8bbc83794ac70b63e08043"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shenJiangWei/SS_sjw2026_jiangweizhisi6.png",
+          "sha256": "78eee238ec0d992bcd7a8aa5e6187cd74f681ba529839067d236a937a95c05db"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng.atlas",
+          "sha256": "936df9d44a2356f84de3c4820694dc37dca0e7aaf540975943b913846bec2cd3"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng.png",
+          "sha256": "92536c6113fed2be6a66a1f1f7c3aaeedc4274f59e36dd4ab2724bf41b307a9d"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng.skel",
+          "sha256": "a7295efe3f8d11a5421e2f8e54e05014d1c452a49392d7f404d8f2a83576e800"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng10.png",
+          "sha256": "020093b2d3e84f032cb7a3d590d455e268abf69933c5bb20592161c2f17b6ab9"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng11.png",
+          "sha256": "80751fc7db08e2c90d8a8f34532307a097157df42371a828a7599aaebaad910e"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng12.png",
+          "sha256": "5ac4923f75a3571fefbf730db627abdf38b8468c9600cb00c391201da7766e23"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng13.png",
+          "sha256": "a5897fa3fda7ebed1087f2c958e45e3793af69596827bab5421fd413713ba839"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng14.png",
+          "sha256": "37afdf459f7377b9fc18323e6da682d4160660c9907b303aa56e0b188eec9574"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng15.png",
+          "sha256": "5dcff62307b4796448384a44922094cf281970c094b08a1d679e9cd9804f29e1"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng16.png",
+          "sha256": "c2ed9b3fcce018ea1360d48ddf65f5b1b3319c2e97e8c25e4498a9a8510b995c"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng17.png",
+          "sha256": "b09f8d5ba8e52cfcd3ee9196755f74e4c73f01b72d4c8a2061c2a461d977b3cb"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng18.png",
+          "sha256": "0f12444cdb026fa7a5f9e8fc37c01c58cc858327cf64807245830953deaaba50"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng2.png",
+          "sha256": "c350352e72beb1323e76ee773d576f511dc86eaa1cc9e922be33de29beed1c4a"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng3.png",
+          "sha256": "6f36750291b102d0a5c3be7d0b0e816ec2e971044916db40dad66730bc1ddbb3"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng4.png",
+          "sha256": "5a00d58d42f1ba21aba7b8e2b0185129f007d4fdb47db0193d2849b5abc75aa4"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng5.png",
+          "sha256": "cc6e371a00e7ccac8cc3acdef6f2e585a9c11f3872525d95b0f3250a3544f9fa"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng6.png",
+          "sha256": "29b3a3336e19d08fff884d5fc951b8a1fe067b700f4b6b1588f45debf80dec9d"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng7.png",
+          "sha256": "f6fd718bd4f7fa039bc422c7dff673f32772f1025e32076035e3eb7bee553b5e"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng8.png",
+          "sha256": "41483d44ad29a8a16b3068f4a15aebad7b6acd668fb63235d7ccce5105d56c61"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_staishici_jineng9.png",
+          "sha256": "2852f40fc6134db8b59dd7c779a6a44ebade40a6d648a14afea139e408f6b683"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_taishici_jineng.atlas",
+          "sha256": "5532f0734ea361c06fe8b7be19a48c37c92b5e2c62ffba3aa4fd1ca4442d536e"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_taishici_jineng.png",
+          "sha256": "e575922fbca1cd1b8ef58ee1579561ba638ddb8e06c5a551580a92fe34963d74"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_taishici_jineng.skel",
+          "sha256": "8bbdbf59ce42f12d91a301577275efd61d8420097b1f99548d964396c97107de"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_taishici_jineng2.png",
+          "sha256": "dc5d1eda559911ec94f7e99036f464b0c50c3b3f5200661f4c95e89279e82c88"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_taishici_jineng3.png",
+          "sha256": "57c05e919d99aa921cb935eb55d64bca0bf928b69a215d2d6baeb411c1daba0c"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_taishici_jineng4.png",
+          "sha256": "280d09f107cc2abff2e93c9bf41e56bd7d490336c96a0ca43d6bb195c8909eac"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_taishici_jineng5.png",
+          "sha256": "857d54b6a3ccbc647bc4ad2163db26a0978ed0eb28976e610b233fc5e609321a"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shiTaiShiCi/SS_taishici_jineng6.png",
+          "sha256": "6e0973c925f2e8be6c8ec56d57fcfa87faefa189476f66d0c8fff97551558f0a"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shizhouyuenter/Ss_zy_ruchangzhanshi.atlas",
+          "sha256": "396720c7c8e13ebb415140f3a7d5d096d12d33b0f2c3e4ede6fb83b7044ddf35"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shizhouyuenter/Ss_zy_ruchangzhanshi.png",
+          "sha256": "8d5d261a3997cfc53ead3e4a115de3b8f0e50982e454eedcac0f5a21e584013f"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shizhouyuenter/Ss_zy_ruchangzhanshi.skel",
+          "sha256": "72ded430a8505c68d163e40d8bfb11ce51b1c7fab2a51c74f173437e596797e5"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shizhouyuenter/Ss_zy_ruchangzhanshi2.png",
+          "sha256": "e7af5e9a6ff28ced3e2c377e2caf8a24d939a86a7f6c494278b171e46e6ecb0b"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shizhouyuenter/Ss_zy_ruchangzhanshi3.png",
+          "sha256": "11e44d6de048c53b6b5098b9f40f2a7c1597ba74ae20098545c59d3c7cf1f991"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/shizhouyuenter/Ss_zy_ruchangzhanshi4.png",
+          "sha256": "218516e298d22a5dc6dafe0d9ca7d26e74948682d4595daabf8b2147d8df4bb5"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/handCardArea/SS_szy_longlin.atlas",
+          "sha256": "7520133df54c4218737f6f0cbfce259eee30e88afb29f50edabac942ed1ed2e3"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/handCardArea/SS_szy_longlin.png",
+          "sha256": "b4f5a20cfed4d59120e9444e7b9c8074cba0d80c9eff4ab7df8826bf853e77e9"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/handCardArea/SS_szy_longlin.skel",
+          "sha256": "8c7d3fc55df0a987f0fabf2c180f9af03de21acb8cde0fdbdfe55402767d8a6b"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/handCardArea/SS_szy_longlin2.png",
+          "sha256": "b82a96d6d59c1dfc75dfa3e9d77601111d0314bf13a49d6f542912b5fbf08b87"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/handCardArea/SS_szy_longlin3.png",
+          "sha256": "5c28e81d6d6316204028b9acf3931674ae40086724a0e5e100d99d240c0dbcfb"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/handCardArea/SS_szy_longlin4.png",
+          "sha256": "6658240e526d0d7fbd088b1abc5809a633f2735eff145969888e1a0c3295bee3"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/handCardArea/SS_szy_longlin5.png",
+          "sha256": "72fb624df7c582226a2ca4a3b296e6663c8c8c44435de74f882d33a5dd6801f3"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/handCardArea/SS_szy_longlin6.png",
+          "sha256": "0e51ebaea0162651e3c2e4effa871630aee5507931e2c10a7f6862fb8e56456e"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/head/SS_szy_kuangfangda.atlas",
+          "sha256": "056419677bdb8492547917b0300ade04f4dee73b69844a8ab7ee5685e052f1bb"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/head/SS_szy_kuangfangda.png",
+          "sha256": "afd05a028c02ee67badeec78cb21ba083d9f9d40abd9247ac9c7b0e1128d4f99"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/head/SS_szy_kuangfangda.skel",
+          "sha256": "34393f4bc9b4b526d0f05d7660a3fbbe826ffe97d14d27ad723e7493b8a06aa2"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/head/SS_szy_kuanglizi.atlas",
+          "sha256": "d4cf3f3c8e7cede6dad673609406af0da0c3ca01093bf34f8032a8b992477ae9"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/head/SS_szy_kuanglizi.png",
+          "sha256": "816bd5a5061f3ee60a1b076541b322b0805f545743c1e1421dd96ba2e738fd58"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/head/SS_szy_kuanglizi.skel",
+          "sha256": "38dbbba0fe663d188ae033aa5fa5c63c2d6d878a6dc2a72d5d5b79a290c8e5b7"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/sha/SS_szy_huosha.atlas",
+          "sha256": "5bba5e95653a0f82cfe60aeca3f69eca7572e29dfa62383f4210d8dece6d11f1"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/sha/SS_szy_huosha.png",
+          "sha256": "4eb606152d941f19fb642432d1332fd8e9c5e42503d4772727ca829b74602dcf"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/sha/SS_szy_huosha.skel",
+          "sha256": "cd7390f242785bc5ba2908633fc144c2e98a704ddf89e49b6badf25ef17a2088"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/sha/SS_szy_huosha2.png",
+          "sha256": "ae95809545dcad590c3475ded5d82bcda2b1bc36ebee22d88781488ddc67349f"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/sha/SS_szy_huosha3.png",
+          "sha256": "3c3ece8ece5e1198d74e1418759a81216cda7ca1f4c1cf073c9f5937b39d2141"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/sha/SS_szy_huosha4.png",
+          "sha256": "cb9ea53740d4fdcaccdc79f57a7612d584ee313a5a98d231631f0afa8c16d890"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/sha/SS_szy_leisha.atlas",
+          "sha256": "58ce44a1c22becb7cca482d1b1b6ce54a812c90381aff0318f6e613a2e6790db"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/sha/SS_szy_leisha.png",
+          "sha256": "9af7cf7503e672308cd98e2640ca378c35867afa1e3377b11307ffd5fd48de4e"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/sha/SS_szy_leisha.skel",
+          "sha256": "cd45eb660b364368711dd19549405b1815c154138b2adb5804e5c8d194db6da8"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/sha/SS_szy_leisha2.png",
+          "sha256": "7c49f3e3d4ae99e5b0257a0ceb756f50f1ffc5b6322b3447fb70082addd1af46"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/sha/SS_szy_leisha3.png",
+          "sha256": "85e687d9f72820031d3791e1af3291bda341be7c258a98565c73241e5d5ca1e0"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/sha/SS_szy_sha.atlas",
+          "sha256": "d224efefce0d1e699bae322d02cfaca82afc7b93f4581bdb1d84a248818ce476"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/sha/SS_szy_sha.png",
+          "sha256": "0bc1e8c71c2bd15807747f4ba14b4b90893577e80345d2a24f48f74d0e6678c6"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/sha/SS_szy_sha.skel",
+          "sha256": "ab9a9bbe409db2db577298396fa3906e6fd9e82cfbf7c2c8ad446a305fce015d"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/sha/SS_szy_sha2.png",
+          "sha256": "91fa6e7f59aa98b814ad3b6df290ffb14151f7ee5b2d394e0c84bcd5981b9145"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/sha/SS_szy_sha3.png",
+          "sha256": "6d7aba8d410641cccdfd0f671c6031805cc7a1bb5ae221075285845ddff1adf6"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/shan/SS_szy_shan.atlas",
+          "sha256": "837047d8cefcb9707f6bdf34a18f623f92747c048c68af1f796578d036b1ebbe"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/shan/SS_szy_shan.png",
+          "sha256": "5cbbd9d654e33230e9596476cd062f7f1265eb2e6fc1bc18f9530765d24e4727"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/shan/SS_szy_shan.skel",
+          "sha256": "974caf3c095b48349683a2bf5f3c71f6837f60669ffbedbba1d9d85189f33f64"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/ShiZhaoYun/shan/SS_szy_shan2.png",
+          "sha256": "dd4b086d02cbd6678671ebf0b091f15cc1d0d7d8f1c51db569bd3f48c6baf4db"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/futu/SS_pjn_skill_zr.atlas",
+          "sha256": "2511f553efb001dd45cf352a3774b258b167a71802020547b16ce23c8077fdfd"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/futu/SS_pjn_skill_zr.png",
+          "sha256": "6553697198d4b44a485d797ce12402c0b1fa4f9ae55378b240f2950596328e90"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/futu/SS_pjn_skill_zr.skel",
+          "sha256": "2a263a887770f8d8aa59b738474c1921ce388599f599caf5a33038077d090a73"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/futu/SS_pjn_skill_zr2.png",
+          "sha256": "9ead76ef3bc8c4859c27d76413d80d62345933627d07b786b0f9e7d4c0f70177"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_tongchang.atlas",
+          "sha256": "74769aaaae6542c78b7136f4b76052cf12e96b7eb26913faac3c1e9dc296931d"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_tongchang.png",
+          "sha256": "a6945f38ce91036344f5be360101fc3ed0dca4a04bbc946717f397f09d671951"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_tongchang.skel",
+          "sha256": "2e2c314dca3d417fb6c4cb12ed9ffc07603af0e93ccef0c7f64039ab6bba1628"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_tongchang2.png",
+          "sha256": "8e4fe0edbf651878f468bba15aa860e58db2f6f3a42354881795418d434bfc63"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_tongchang3.png",
+          "sha256": "f9ca5a10c92a337f57fa5409bc1804307a617220dd6548fd259a47a4ab32d974"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_yinzhan.atlas",
+          "sha256": "e347355141b3eb92905c9b26571855a69d49e27cbe4d42e85583f191d1c37089"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_yinzhan.png",
+          "sha256": "69e7dba457122cd0f53e266cebd86284e860f9c608ac289da7155bff201487c6"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_yinzhan.skel",
+          "sha256": "2e2c314dca3d417fb6c4cb12ed9ffc07603af0e93ccef0c7f64039ab6bba1628"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_yinzhan2.png",
+          "sha256": "2b0a4a6d17680604cad319e981ad0d1158803d7091886a707f4b0e40cf92c0ec"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_yinzhan3.png",
+          "sha256": "11dcf7ad95dcd54bd75b0e335ce4f6d1515ef50d4b15d4cf8bd9b90146ac8dfd"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_zhuangshi1.atlas",
+          "sha256": "715c3b991a58d935ff12cb150390b329a90f19c479f2d01a2727410b9390cb74"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_zhuangshi1.png",
+          "sha256": "9d287ddbeba6cb7676fc30f12c49488539c191a8725f396bbd0b6c5b0fcee869"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_zhuangshi1.skel",
+          "sha256": "2e2c314dca3d417fb6c4cb12ed9ffc07603af0e93ccef0c7f64039ab6bba1628"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_zhuangshi12.png",
+          "sha256": "7bfa65a744ebc46b9dc7932e4c171815d983f4c3f60a47bef0ffc44a2a63d4b6"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_zhuangshi13.png",
+          "sha256": "e8765a0e42d2df161cf19714bc97934c74ba8c6dbec679f7313e7c65d7fe5e1e"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_zhuangshi2.atlas",
+          "sha256": "5bc2079914f2b4b92e844fb5054a5a6d829107928e9b1e3516e698a2876bbac4"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_zhuangshi2.png",
+          "sha256": "480603878a82a897b865a25977e8c571d0114121604be7b2c1352367db6a5175"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_zhuangshi2.skel",
+          "sha256": "2e2c314dca3d417fb6c4cb12ed9ffc07603af0e93ccef0c7f64039ab6bba1628"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_zhuangshi22.png",
+          "sha256": "53ddae170fb6b4f88c594b6c2addcf5b393aba96411078c476778d94d88d41c1"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/haokua/SS_SWY_zhuangshi23.png",
+          "sha256": "18197b53fb2fb288c76b3a233dc4dc5f21bf0f7eec833fe06015f48f86a3f589"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_Jn_shenmachao.atlas",
+          "sha256": "760f84058823c5dd9eee03056a83c9407d663eae949aa3d4585e7dcaf1ece9e9"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_Jn_shenmachao.png",
+          "sha256": "60b7e139ca5902a1cf2658d40ebd261aea27cd74493a2556e0751407738da8bc"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_Jn_shenmachao.skel",
+          "sha256": "bdd7874e346da08c88a3c9fd4215e804d9c85efcb175c322ab29776e45aa68dc"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_Jn_shenmachao2.png",
+          "sha256": "eedde12c62468b73d1b688baf494adfe6aa726e5e826f2c07d2d251e557917be"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_Jn_shenmachao3.png",
+          "sha256": "08e427748429fd8491a61d0c648186cdcf34977861eeee2f55418a59282b31dd"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_Jn_shenmachao4.png",
+          "sha256": "7efa863c094127abe82928b38bfee84a538502d78cfb41e24d070ced61cbd79b"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_Jn_shenmachao5.png",
+          "sha256": "ad999193abe78930f263450c49b1e45e8877819c80e8b97d6f054d3b6a431dbf"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_Jn_shenmachao6.png",
+          "sha256": "36d3d1999f0f88aaed12ed049b380699c88aeea62aab0b1e822e7d0b7db889bb"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_Jn_shenmachao7.png",
+          "sha256": "7273a721b8c15b6218989405688419591f731f9e3b65624f4e19a27f47ca5747"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_Jn_shenmachao8.png",
+          "sha256": "57b690ecb61cd2ebde045a8a22e6ec4c7af256412df5778e35796e806ea303ae"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_Jn_shenmachao9.png",
+          "sha256": "ff64ecc4dfda0ba24562b38c78fba5273d9e89f51d7698f8c5169e084cba43f0"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_smc_dazhao.atlas",
+          "sha256": "c689957f05a7727ecab9453912b65d6533ab1ca4c83be581eb66a127eb77ed50"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_smc_dazhao.png",
+          "sha256": "1a34757c35326e25052857af9ed536356e3aaf41b09b963261166bc410c8df46"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_smc_dazhao.skel",
+          "sha256": "d20fdd57bed0efe71d79f763a0197727699acbdd4c1329c4f680675ea9fc5ba8"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_smc_dazhao10.png",
+          "sha256": "72d36e613c857fb29d49e109d6dde1fce013004e5dc8a38d92b8ea681218f406"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_smc_dazhao2.png",
+          "sha256": "6331da53855b39cd6e90684b11067471fc2bc45b2b24670380f5552b4a6d9da4"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_smc_dazhao3.png",
+          "sha256": "de06732d9c424111705daea2e9b6d0da8962e6d00fd88d4c2788c282f10a96fe"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_smc_dazhao4.png",
+          "sha256": "cccbd8c8ed40f6ba50918831dfa613f2c408fe1b08952d9ebda9fdf5dc5362df"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_smc_dazhao5.png",
+          "sha256": "134713b0ede482fcfdda411626cad417a1331ef749ced465bbd7954a3f7c4731"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_smc_dazhao6.png",
+          "sha256": "f4726a812d8f14b2f43a0da861a1eefc03e11c1e6071bcf36020ff4c749b36ac"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_smc_dazhao7.png",
+          "sha256": "742b157392ee9869400771f6fb77dd339df9ad34d51aeb5f9975963eb08b091c"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_smc_dazhao8.png",
+          "sha256": "15ca5d826fb8fb5db9f690cb1eb90c4218b025bd352fad83c8951cf16b01fc76"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/jimie/SS_smc_dazhao9.png",
+          "sha256": "8cc8b1232e9e5dab85cf3e0511030d56c40e65f3b52466265d8dc48c3c563761"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/kuanggu/SS_ShiWeiyanFaDongSkill.atlas",
+          "sha256": "24983413817e2792c1fd0820a943258e22f4be114133f4c19987ef7c5e42d1a1"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/kuanggu/SS_ShiWeiyanFaDongSkill.png",
+          "sha256": "89dc296e81948c8f265b264f68355fcfeb7108fb1c8c79b82f0ed05f090f5a81"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/kuanggu/SS_ShiWeiyanFaDongSkill.skel",
+          "sha256": "044d8bc2114aa63af1bce7e72d34674cb0503dbe7858c5ddf77e4d7fd58a3a70"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/shizhouyu/SS_jn_szyskillblue.atlas",
+          "sha256": "f217c1f31552195ce21c23f096b88bc3657c023637ca113aad6aed5a21f58ce8"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/shizhouyu/SS_jn_szyskillblue.png",
+          "sha256": "cac49df9bdd0e61e1deec005d5ce6941e9e709268e59503c7133864d70359d44"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/shizhouyu/SS_jn_szyskillblue.skel",
+          "sha256": "a4c3261bba6f81b9a6adfc692cea44ef7e5f55c4be539a56760d6f56ee21d723"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/shizhouyu/SS_jn_szyskillred.atlas",
+          "sha256": "bb2b152c13b51dee6ec434e0ba5dc000b1fd1479127a4b14f962b4230a071047"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/shizhouyu/SS_jn_szyskillred.png",
+          "sha256": "80e4d3d4926e025c4d66a1ba4f845b83026b3769e3c537d1a82f00164ad2d345"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/shizhouyu/SS_jn_szyskillred.skel",
+          "sha256": "d7917f0f92ea24fce1f3877de87459e73af1de8d05426827e5d2dedef3d2fa5a"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/tiansuan/SSXF_PJN_hengfu.atlas",
+          "sha256": "a05c4e845c94006c4e9d6627b3c0a93f40f8001e0be266fb1d99655df87db48e"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/tiansuan/SSXF_PJN_hengfu.png",
+          "sha256": "4d7083e4323494d0bf058adb82db04825a7d94dde6a65f8ba1d38944a1c625a2"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/tiansuan/SSXF_PJN_hengfu.skel",
+          "sha256": "735bb4e870b9f0b75c57df250ff317d4b1e60fc523d045abf16eb0d571545271"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/tiansuan/SSXF_PJN_qiuqian.atlas",
+          "sha256": "1583942f0255473bcc893f851a583ab2e4de5ad2c5f45d34bd96cb9583c8af01"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/tiansuan/SSXF_PJN_qiuqian.png",
+          "sha256": "950f3dcc990d397826417923dbc952a86ffade1cb1022900113e8281aa25ed17"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/tiansuan/SSXF_PJN_qiuqian.skel",
+          "sha256": "d708ef56f99cd39d3195b25f07cb1f4bfb51b8904eef91098dd921898141ab35"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/tiansuan/SSXF_PJN_qiuqianyanwu.atlas",
+          "sha256": "f8511b76e36577903c89a6a648b07f0903e6e614fbe3673f3b38f5c50b4c0f70"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/tiansuan/SSXF_PJN_qiuqianyanwu.png",
+          "sha256": "630128d5888e24aeaf9f3e818011f22bb6da5394c67c9dba38f8ff91208ac987"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/tiansuan/SSXF_PJN_qiuqianyanwu.skel",
+          "sha256": "b21f0048a801ebfaadf4adbc63ec1a4349872748c808b57a07dd0f995fbaed0d"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/tiansuan/SSXF_PJN_zhongqian.atlas",
+          "sha256": "01c2a0cb7de429ee01a3d0fd0301eb31473d0332f00108fdfd05e19bc27dadf8"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/tiansuan/SSXF_PJN_zhongqian.png",
+          "sha256": "c7af20538d565865ebc8a0545b6ce16b77585770069c54783ff06be3048d14e1"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/tiansuan/SSXF_PJN_zhongqian.skel",
+          "sha256": "0cebabd95f0133ec2c9c372201425c19680120db1dc90a563a5e593088ba174c"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/tiansuan/SSXF_PJN_zhongqian2.png",
+          "sha256": "cbe8d81371d6c5647bc7d1e31284948061b8cdbb0730cc59a64d57e323e86d5c"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/tingwei/SS_2026smc_tiesuolianhuan.atlas",
+          "sha256": "d230d22ee0ff0e7fe3f4a0e4d72a7eec519bd875e93a9b00fa4a4d303b75e53b"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/tingwei/SS_2026smc_tiesuolianhuan.png",
+          "sha256": "3eb91b3c6e64fa6636300cc7f9800d7ef9535a1edae5ae52bdd3367672f7af57"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/tingwei/SS_2026smc_tiesuolianhuan.skel",
+          "sha256": "9032394f0365cd21c8608a439ef01771146b117cc009b5bd4bd7d905a26e0447"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/yinzhan/SS_SWY_zhuangtai1hongyan.atlas",
+          "sha256": "c9672da25f1dbeb95bcaa73065649a2444dfb256bf3cc6020ddc611d4a00ce73"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/yinzhan/SS_SWY_zhuangtai1hongyan.png",
+          "sha256": "7e2632229c3f191311bca5fbb977ff7e4073a6ac3c3d70d84ac705b807192d19"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/yinzhan/SS_SWY_zhuangtai1hongyan.skel",
+          "sha256": "b3588446d845a0d97dc2020f1901ae8ba59da467683b1b315b406ea959a67296"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/yinzhan/SS_SWY_zhuangtai2hongyan.atlas",
+          "sha256": "a51a41d3eb0baf5d2ad663a4724253bf1fe15ce3303b1cdd5a0016972b4fa788"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/yinzhan/SS_SWY_zhuangtai2hongyan.png",
+          "sha256": "f96a1e3903328f8d31a8fdce210cf2fdac1f6b999011013e6badb526e3655f9e"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/yinzhan/SS_SWY_zhuangtai2hongyan.skel",
+          "sha256": "68e608f1db2784cfb0e84fb11b6a32ed410bf33615c4b6e6a62d31e04ee73fea"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/yinzhan/SS_SWY_zhuangtai31hongyan.atlas",
+          "sha256": "2cb124d159877e2df7410ca3b1bf2891df9f70e5f30913e95e75370748cc7ee8"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/yinzhan/SS_SWY_zhuangtai31hongyan.png",
+          "sha256": "05036d2f1fded8cf2912ed8011ac8e4e0c6f8150153896aefba442d450d3e78e"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/yinzhan/SS_SWY_zhuangtai31hongyan.skel",
+          "sha256": "ccec46acb03146766605b306d417573521f526de92179fb24ac3bb5cd54ad81b"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/yuli/SS_2026smc_huixue.atlas",
+          "sha256": "27e49b1e092e05aea82fd5fadee3366f30745805854854b82f9df69674ff9cba"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/yuli/SS_2026smc_huixue.png",
+          "sha256": "5770ff6e1fa6942fd45fb4574707cf4a2268212715c8c3af02d1a912270682be"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/yuli/SS_2026smc_huixue.skel",
+          "sha256": "1c9f17efce67641cf425775b335db0e31110cb7fc71f1b16aef6111513879673"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/yuli/SS_2026smc_leishashouji1.atlas",
+          "sha256": "e7f5a55a4378be022fb25d7824f41a5d715d8942b98ac6f4995d6fcd7d08a962"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/yuli/SS_2026smc_leishashouji1.png",
+          "sha256": "c42ebeb3dbc9a6a50f00500deba585992ef16548706e0f89253dc10af2b41d2e"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/yuli/SS_2026smc_leishashouji1.skel",
+          "sha256": "4a88ae062121c39f5853baa01e192c1f414c7345482f057bbfbac288d7534f9c"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill.atlas",
+          "sha256": "9a5b31d25484d60ff9c767e200e88965817ac46228e00b099abdd1808408cd8c"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill.png",
+          "sha256": "35e2248923ff9fe1a5739033c4685de946f893e3862170d69db73b014c7cde85"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill.skel",
+          "sha256": "e999a484842ba8959522a5de394cadf04ac578a0520b1bc98198e896000fa48e"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill10.png",
+          "sha256": "e401bbf9052a0f7e7942ac3bb930b93f5b60bffd30e7ea932745d90faf98c69b"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill11.png",
+          "sha256": "19110e0d4584dcbf1f4f6de859ab09029c17d643ae83a956fad0fc1e3edc4f6a"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill2.png",
+          "sha256": "cf65b342137b6d64ef881173b79e1994045e675f48ba902e48bc4b2ef72d0d30"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill2026.atlas",
+          "sha256": "5478e764b0221829de6e8c3bbc5719920ec29df004d083179e10159cddc5b345"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill2026.png",
+          "sha256": "4447a45420b0ccf3821a26685b494c7ef2b7c4e7bc8bbbb75d8f6ca7deb3f85e"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill2026.skel",
+          "sha256": "93e68a7ef667dd95d3d74a374054fd69d77199a4b18c1e68464f3547086d4671"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill20262.png",
+          "sha256": "3c5836364c418132490aa34b3c1e583a11273b759d0c9febe4673ddcb0843668"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill20263.png",
+          "sha256": "7581ed049e7c8ec304e016cc67d7f0489a9498ab61424cdefd00b89c60e5e5fd"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill20264.png",
+          "sha256": "0a0fad3bb650c86b426e53aaac5c3a988228f88ae504741eda09b4e900e3fb37"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill20265.png",
+          "sha256": "9619d886ec167cd4b1778dcedfe537546b0a09a51fefc2f64e42f6a4829407b3"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill20266.png",
+          "sha256": "b050cfcc1eac987b61eb39853124b65e59af366ca0cde0bd353c2ec6fc7727e5"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill20267.png",
+          "sha256": "b4ccb0fce749681d5490ba3e895b26d53d8ba8f95f6ce4e9c60ffdfa19218825"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill20268.png",
+          "sha256": "c82075b9ffa6039ef39165d44d8fa8bee7f9d84403e3a1986069ee345e0eb430"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill20269.png",
+          "sha256": "8c9fb79742ca590759a13847ca6fe4a9b50b939772ddd456b2ff5291ced8aa6d"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill3.png",
+          "sha256": "f6b4148a63144da52b39a9b6c4e01f130713dbc03048ed46705b2c341d013bd2"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill4.png",
+          "sha256": "00acfbd97dc25aab618c8555be47bfe55145cb9219a3c5f848f1fc499170b1a2"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill5.png",
+          "sha256": "3cdd9b63c9d05d5f89d2d87e44df495cd9410ac80b87ca84c5e0906404ce3a4f"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill6.png",
+          "sha256": "d6f1633f5137d75e0207a1ce45ea115c860a767521435813cf0caf96c74e8524"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill7.png",
+          "sha256": "066910578c2ad61b84231f0ad9b37bd977a458da05cfe94abcde0710844719d4"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill8.png",
+          "sha256": "76dc4a57454cd48d174c21966491ddbf6a65e9996bc7c6d8fa071a63f8eb7a38"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/spell/zhongao/SS_ShiWeiYanSkill9.png",
+          "sha256": "2b9dc82690b2f49f73a03acd84c96ea27dd5da204e959984dd21d4b06bf9e487"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/xingSiMaZhao/SS_smz_fadongjineng.atlas",
+          "sha256": "9c1f8e4fbe089ebb8979c8bf10a40314dac0174b64f9ba4819e28053e696e10e"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/xingSiMaZhao/SS_smz_fadongjineng.png",
+          "sha256": "5206ebc130fef986a54d9799d9a0249af7053a228b9414c9f02fc453030c8a58"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/xingSiMaZhao/SS_smz_fadongjineng.skel",
+          "sha256": "8fef5d6393074dd64caeafbd38c7a3fc56897d68f78491936b08299eaf9a2410"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/xingSiMaZhao/SS_smz_fadongjineng2.png",
+          "sha256": "5dc2fb3f13bb720c7a0c2e55a625374679a170d8abe87cb4ecdce0393f883624"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/xingSiMaZhao/SS_smz_fadongjineng3.png",
+          "sha256": "05e2f63eba1337f0dbebd8a15cab20a2aec58c6eb83c03727b29ff657fc148bd"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/xingSiMaZhao/SS_smz_fadongjineng4.png",
+          "sha256": "3b4ede616ba908218a8ad88f618a81cc02d3f6bc7bc137c01e858d495cd75f13"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-handkill/ui/anim/xingSiMaZhao/SS_smz_fadongjineng5.png",
+          "sha256": "72243e0ef0d8b1ef1f39dad203694e205e80e94c9bddbac63a4bacd44cca1eef"
+        }
+      ]
+    },
+    {
+      "id": "指向线特效-v1",
+      "title": "指向线特效（OL 原始金龙慢放）",
+      "source": "OL",
+      "version": "20261121.26",
+      "requiredClient": "20261121.26",
+      "archive": "xinyuesha-target-line-ol-v1-20261121-26.zip",
+      "bytes": 210001,
+      "sha256": "5908d0caaae872ec2a1116878a2164f51604cf8d88d9ff05ccfdc7166449b617",
+      "files": [
+        {
+          "path": "icon.png",
+          "sha256": "4eb7782b78bde40999baa6f21508fc3414d740ce1876cd8b002cbdc1e9e56471"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-light/ol-target-line/manifest.json",
+          "sha256": "8dcd81785788590d630501148999710c6962aa34e8117c03107841ff922c0225"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-light/ol-target-line/zhixiangxianlong.atlas",
+          "sha256": "3087871a04fa689c2319209d86a7d8a7c62c431ef5c2766ff7bd3847eecfd5e0"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-light/ol-target-line/zhixiangxianlong.png",
+          "sha256": "fa9b788bcdf5d5f00c4947de2363449a8289dfd2c2f476213da80b1c11521b7c"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-light/ol-target-line/zhixiangxianlong.skel",
+          "sha256": "53f31da10149ac0c8c8a364da6c5b0bfa847d9f5eeba0558eac4a2342088ff9a"
+        }
+      ]
+    },
+    {
+      "id": "十周年特效-v1",
+      "title": "十周年特效（原始连招与管宁）",
+      "version": "20261120.18",
+      "archive": "xinyuesha-tenyear-v1-20261120-18.zip",
+      "bytes": 33887598,
+      "sha256": "afcac3400f4a6abf08f0956bc123a856fc2c94d66a6faaf642d0db6c0b3b3b6c",
+      "files": [
+        {
+          "path": "icon.png",
+          "sha256": "4eb7782b78bde40999baa6f21508fc3414d740ce1876cd8b002cbdc1e9e56471"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/manifest.json",
+          "sha256": "8b375ee08fcbc3bbc9f2bb9230ee144927ca226e2c9fdbbddfddb789d79285dd"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weilvbu_jineng.atlas",
+          "sha256": "7fcbecf604fe14d04297b2285aef1a32c60056ddd8fe4b1085e3d7afcf3336d8"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weilvbu_jineng.png",
+          "sha256": "e77f9e4b40d95ef9fb647542c75df013e42b02083765fa203789ff4a7e9c3f77"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weilvbu_jineng.skel",
+          "sha256": "b3fd14e6af1e347862526107cecbc40267b16e51907a92d2a835ecc533ac4320"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weilvbu_jineng_2.png",
+          "sha256": "83fb22a7cda1b8650f38e3c7102a369542355a1ffa745c36085a41adb0bce704"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weilvbu_jineng_3.png",
+          "sha256": "3503a1cf4285013b1638993b3f936be19807ab4fc3b4b75ac176b41ca2229b50"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weimachao_jineng.atlas",
+          "sha256": "c843de71be29061f58f0c6e41740e1740efb184f982b6a85a7370b48d20bd310"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weimachao_jineng.png",
+          "sha256": "fcfe19ea8facf1524ecae7ebfe51d1dba58234c95db360b5c972f05f88e5a40f"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weimachao_jineng.skel",
+          "sha256": "2c14ae58ceae8bb8775e060d8f932edb94ffa178f81b9da469aa61c38a20cac4"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weimachao_jineng_2.png",
+          "sha256": "4ec897c72094e342bae45e63bcdb6fd71ae79de3d20abe2aa3ebd01dfb846e96"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weimateng_jineng.atlas",
+          "sha256": "cfaab7e375b99a6ca48df09fc631728172ffc0abb185bb1a144aa2a5b69173d9"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weimateng_jineng.png",
+          "sha256": "e7fa750039bcb20deea45dcb2e909857dc2ed4c08604df0ba2231f4db3b23ce3"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weimateng_jineng.skel",
+          "sha256": "d2d512b411b8a2b57e0eea03b948a490ce7254fbf7808616c47160f8e48ffecf"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weimateng_jineng_2.png",
+          "sha256": "dae6e10e58aa063584e07b704b01dd6661f2440795ea8adfe672073314f1d0fa"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weizhangliao_jineng.atlas",
+          "sha256": "5eccfcdb5dc8f8f1cb645efc7e6de8531d08594bd44aeae66db620a19fe6f0be"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weizhangliao_jineng.png",
+          "sha256": "431b45b83eeb44e5cfc90de772915b8ec8bb1530c1461a1661d9031062da6d52"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weizhangliao_jineng.skel",
+          "sha256": "42f2520d8d821a381b5dc8f24f7b81e153c03c4499481c040ef58a27e303a085"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/combo/weizhangliao_jineng_2.png",
+          "sha256": "80d0658c521320dcac48dfaf4e5e532e37aa1d304f0a1e358dfeb8ae3d2cd811"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/guanning/8195001/chuchang2.atlas",
+          "sha256": "7a296af5ff0c94f312406a84072d7a750cc945c9084d0ec3438623fcbfc39292"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/guanning/8195001/chuchang2.png",
+          "sha256": "b1f2fc9f2c61e641f62047be84c17d556bba91902dd9d442654160f1acb496b2"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/guanning/8195001/chuchang2.skel",
+          "sha256": "b7c4c1bf1e44272cbb30674bef1db768ddbaa7e7a4f464903a880ecc9dc2752f"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/guanning/8195001/chuchang2_2.png",
+          "sha256": "f36623ba4e30ae6f5ac927347d955a8022540a33b840c29680c644afaac63bf4"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/guanning/8195001/daiji2.atlas",
+          "sha256": "152c75fc832e199ad311b715d586e731b4cb5d9e367a270f7f4335dff9282756"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/guanning/8195001/daiji2.json",
+          "sha256": "90233084c6aea6c96f238745fd003035532a7309d838c9e7754e72c7d3ca6b13"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/guanning/8195001/daiji2.png",
+          "sha256": "d31cef87db40ef3af5fa1f348de05e55203b4c2fbaa6d09dda13ea3db2f07e8b"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/guanning/8195001/shouji.atlas",
+          "sha256": "e0c3b7e65ecabe8beb699d3c3ee9cf225bd821b5e80792b172d020e365395cbc"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/guanning/8195001/shouji.json",
+          "sha256": "8ecbca57772ad9e07e0ef73b4d2e1ee713ca9e8e2aaa8c75a87a67ee7b794159"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/guanning/8195001/shouji.png",
+          "sha256": "b9c10c07c21a38a71ae2739924fd3513484d5f85fe6338fd63281ec587cc29e7"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/guanning/8195001/shouji2.atlas",
+          "sha256": "d1ff69f8bbc4217791f47cb02e9a9ffc485847d29f2af1a2715348dd967bd7dd"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/guanning/8195001/shouji2.json",
+          "sha256": "7531b1fa41311bbda1dc7b28f3432ddd215aad3b8b94ebf54cdc01dbe1d52708"
+        },
+        {
+          "path": "packages/freekill-core/image/xinyuesha-tenyear/guanning/8195001/shouji2.png",
+          "sha256": "d32e868e0661a96f44d4286d923f59111534051b26f1e70aaa54b80037474b86"
+        }
+      ]
+    }
+  ],
+  "bundleId": "ca59d9c11597db9a672cf281663d521436b225a68d0dc6a103ac30abb0cc0ef0"
+}

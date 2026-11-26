@@ -8,6 +8,11 @@ on:
       - 'pc/payload/**'
       - 'android/tools/test_gameplay_work.py'
       - 'scripts/test_counter_catalogue.py'
+      - 'scripts/test_counter_swipe.py'
+      - 'scripts/test_background_chat.py'
+      - 'scripts/qml_spine_stub.py'
+      - 'scripts/test_feedback_features.py'
+      - 'scripts/test_game_haptic_logs.py'
       - 'scripts/test_deck_knowledge.py'
       - 'scripts/fixtures/known_card_tracker_0_5_25.lua'
       - 'scripts/test_social_session.py'
@@ -81,6 +86,12 @@ jobs:
       - if: matrix.platform == 'iOS'
         run: python3 scripts/test_social_native_bridge.py --work-dir "$RUNNER_TEMP/social-native-bridge"
       - run: python3 scripts/test_touch_log.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/touch-log"
+      - run: python3 scripts/test_counter_swipe.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/counter-swipe"
+      - run: python3 scripts/test_background_chat.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/background-chat"
+      - name: Feedback haptics, IME send and centered target lines
+        run: |
+          python3 scripts/test_feedback_features.py --payload '${{ matrix.payload }}' --output "$RUNNER_TEMP/feedback-features"
+          python3 scripts/test_game_haptic_logs.py --payload '${{ matrix.payload }}' --lua-library liblua5.4.so.0
       - run: python3 scripts/test_room_drawer_swipe.py --payload '${{ matrix.payload }}' --platform '${{ matrix.platform }}' --work-dir "$RUNNER_TEMP/room-drawer-swipe"
       - run: python3 scripts/test_role_voice.py --payload '${{ matrix.payload }}' --work-dir "$RUNNER_TEMP/role-voice"
       - name: Xinghun movement, confirmation and player grouping regressions
@@ -100,6 +111,11 @@ jobs:
         with:
           name: counter-catalogue-${{ matrix.platform }}
           path: ${{ runner.temp }}/counter-catalogue/result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: counter-swipe-${{ matrix.platform }}
+          path: ${{ runner.temp }}/counter-swipe/result.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

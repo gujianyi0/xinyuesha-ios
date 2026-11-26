@@ -22,7 +22,7 @@ using namespace Qt::Literals::StringLiterals;
 
 Server *ServerInstance = nullptr;
 
-Server::Server(QObject *parent) : QObject(parent) {
+Server::Server(QObject *parent, Mode mode) : QObject(parent), mode(mode) {
   ServerInstance = this;
   db = std::make_unique<Sqlite3>();
   gamedb = std::make_unique<Sqlite3>("./server/game.db", "./server/gamedb_init.sql");
@@ -37,6 +37,9 @@ Server::Server(QObject *parent) : QObject(parent) {
           &Server::processNewConnection);
 
   m_lobby = new Lobby(this);
+
+  // The loopback client shares the app lifecycle; a stalled heartbeat must not kick it.
+  if (isSinglePlayer()) return;
 
   // 启动心跳包线程
   auto heartbeatThread = QThread::create([=, this] {
@@ -333,6 +336,8 @@ bool Server::checkBanWord(const QString &str) {
 }
 
 void Server::temporarilyBan(int playerId) {
+  if (isSinglePlayer()) return;
+
   auto player = findPlayer(playerId);
   if (!player) return;
 

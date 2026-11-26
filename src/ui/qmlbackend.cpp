@@ -14,6 +14,7 @@
 #ifdef Q_OS_IOS
 #include "platform/iosfriendtransport.h"
 #include "platform/iosbackgroundpicker.h"
+#include "platform/ioshelper.h"
 #include <QPointer>
 #endif
 
@@ -63,6 +64,9 @@ QString QmlBackend::importBackground(const QString &source) {
 #include <QAbstractButton>
 #include <QLibrary>
 #include <QtConcurrent>
+#ifdef Q_OS_ANDROID
+#include <QJniObject>
+#endif
 #endif
 
 #include "ui/soloudplayer.h"
@@ -258,10 +262,10 @@ void QmlBackend::setEngine(QQmlApplicationEngine *engine) {
 void QmlBackend::startServer(ushort port) {
   if (!ServerInstance) {
     QElapsedTimer startupTimer; startupTimer.start();
-    Server *server = new Server(nullptr);
+    Server *server = new Server(nullptr, Server::Mode::SinglePlayer);
     qInfo("[Startup] local server ready: %lld ms", static_cast<long long>(startupTimer.elapsed()));
 
-    if (!server->listen(QHostAddress::Any, port)) {
+    if (!server->listen(QHostAddress::LocalHost, port)) {
       server->deleteLater();
       emit notifyUI("ErrorMsg", tr("Cannot start server!"));
     }
@@ -558,6 +562,20 @@ void QmlBackend::playSound(const QString &name, int index) {
   // 用 SoLoud 播放（dr_mp3 解 mp3 / wav），低延迟、支持并发、无 Qt ffmpeg 解码开销。
   SoloudPlayer::init();
   SoloudPlayer::playFile(fname, float(m_volume / 100.0));
+#endif
+}
+
+bool QmlBackend::playGameHaptic(const QString &kind) {
+  const int effect = kind == "damage" ? 0 : kind == "lose-hp" ? 1 : kind == "turn" ? 2 : -1;
+  if (effect < 0 || QGuiApplication::applicationState() != Qt::ApplicationActive)
+    return false;
+#ifdef Q_OS_IOS
+  return fkIosPlayGameHaptic(effect) != 0;
+#elif defined(Q_OS_ANDROID)
+  return QJniObject::callStaticMethod<jboolean>("org/notify/FreeKill/GameActivity",
+      "playGameHaptic", "(I)Z", jint(effect));
+#else
+  return false;
 #endif
 }
 

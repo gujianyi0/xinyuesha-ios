@@ -10,6 +10,8 @@ def main():
     parser.add_argument('--storepass-file', type=Path, required=True)
     parser.add_argument('--store-type', default='PKCS12')
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--native-library', type=Path, help='ARM64 engine rebuilt against the baseline Qt SDK')
+    parser.add_argument('--embedded-resource-catalog', type=Path, help='Opt-in local sharing edition; includes three verified v1 archives')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     sdk = Path(os.environ.get('ANDROID_HOME') or os.environ['ANDROID_SDK_ROOT'])
@@ -18,6 +20,10 @@ def main():
     java = Path(os.environ['JAVA_HOME']) / 'bin' / ('java' + suffix)
     dex = (root / 'build/classes.dex').read_bytes()
     validate_dex(dex)
+    native_entry = 'lib/arm64-v8a/libFreeKill_arm64-v8a.so'
+    native = args.native_library.read_bytes() if args.native_library else None
+    if native is not None and (native[:6] != b'\x7fELF\x02\x01' or native[16:20] != b'\x03\x00\xb7\x00'):
+        parser.error('--native-library must be an ARM64 shared object')
     payload = {p.relative_to(root/'payload').as_posix():p.read_bytes()
                for p in (root/'payload').rglob('*') if p.is_file()}
     manifest = json.loads(payload.pop('card-counter/bundled-files.json'))
@@ -30,19 +36,42 @@ def main():
     for name in manifest:
         manifest[name] = hashlib.sha256(payload[name]).hexdigest()
     payload['card-counter/bundled-files.json'] = json.dumps(manifest, sort_keys=True, indent=2).encode()
+    embedded = {}
+    if args.embedded_resource_catalog:
+        catalog_path = args.embedded_resource_catalog.resolve()
+        catalog = json.loads(catalog_path.read_text(encoding='utf-8'))
+        assert catalog['schema'] == 1 and re.fullmatch('[a-f0-9]{64}', catalog['bundleId'])
+        assert {p['id'] for p in catalog['packs']} == {'手杀武将特效-v1', '十周年特效-v1', '指向线特效-v1'}
+        assert len(catalog['packs']) == 3
+        for pack in catalog['packs']:
+            assert re.fullmatch('[A-Za-z0-9_-]{1,96}\\.zip', pack['archive'])
+            archive = catalog_path.parent / pack['archive']
+            data = archive.read_bytes()
+            assert len(data) == pack['bytes'] and hashlib.sha256(data).hexdigest() == pack['sha256']
+            with zipfile.ZipFile(archive) as resources:
+                actual = {p.filename: hashlib.sha256(resources.read(p)).hexdigest() for p in resources.infolist() if not p.is_dir()}
+            assert actual == {f['path']: f['sha256'] for f in pack['files']}, 'Embedded inventory differs'
+            embedded['assets/embedded-effects/' + pack['archive']] = archive
+        embedded['assets/embedded-effects/catalog.json'] = catalog_path
     build = root/'build';build.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='package-', dir=build) as temporary:
         directory = Path(temporary)
         unsigned, aligned, signed = [directory/name for name in ('unsigned.apk','aligned.apk','signed.apk')]
         with zipfile.ZipFile(args.baseline) as old, zipfile.ZipFile(unsigned,'w') as new:
             assert 'com.cui.freekill.ds'.encode('utf-16le') in old.read('AndroidManifest.xml'), 'Wrong native baseline'
+            if native is not None and native_entry not in old.namelist():
+                parser.error('The baseline lacks the ARM64 engine entry')
             present = set()
             for item in old.infolist():
                 name = item.filename
+                if name.startswith('assets/embedded-effects/'):
+                    continue  # Embedded data never leaks into the next ordinary build.
                 if name.startswith('META-INF/') and name.upper().endswith(('.SF','.MF','.RSA','.DSA','.EC')):
                     continue
                 data = old.read(name)
-                if name == 'classes2.dex':data = dex
+                if name == native_entry and native is not None:
+                    data = native
+                elif name == 'classes2.dex':data = dex
                 elif name.startswith('assets/res/') and name[11:] in payload:
                     relative = name[11:];data = payload[relative];present.add(relative)
                 if name in ('classes.dex','classes2.dex'):
@@ -51,6 +80,8 @@ def main():
                 new.writestr(item,data)
             for relative,data in payload.items():
                 if relative not in present:new.writestr('assets/res/'+relative,data,compress_type=zipfile.ZIP_DEFLATED)
+            for name, source in embedded.items():
+                new.write(source, name, compress_type=zipfile.ZIP_STORED)
         def run(*command):subprocess.run(list(map(str,command)),check=True)
         run(tools/('zipalign'+suffix),'-P','16','-f','4',unsigned,aligned)
         signer=[java,'-jar',tools/'lib/apksigner.jar']

@@ -7,6 +7,22 @@ FkCardCounterInstalled = FkCardCounterInstalled or setmetatable({}, {__mode="k"}
 local function install(klass)
 if not klass or FkCardCounterInstalled[klass] or type(klass.prepareDrawPile) ~= "function" then return end
 FkCardCounterInstalled[klass] = true
+
+-- Only committed public logs carry a player's turn/HP-loss identity. The
+-- generic LoseHP sound event has no player id, so it must not drive haptics.
+local originalFeedbackLog = klass.appendLog
+if type(originalFeedbackLog) == "function" then
+  klass.appendLog = function(self, message, ...)
+    local result = originalFeedbackLog(self, message, ...)
+    if type(message) == "table" and type(message.from) == "number" then
+      local kind = message.type == "#LoseHP" and tonumber(message.arg) and tonumber(message.arg) > 0 and "lose-hp" or
+        ((message.type == "$TurnStart" or message.type == "$ExtraTurnStart") and "turn" or nil)
+      if kind then self:notifyUI("Fk.GameHaptic", {player=message.from, kind=kind}) end
+    end
+    return result
+  end
+end
+
 local originalPrepare = klass.prepareDrawPile
 klass.prepareDrawPile = function(self, ids)
   originalPrepare(self, ids)
@@ -33,6 +49,16 @@ if type(originalMove) == "function" then
   end
 end
 
+
+local originalUseActive = klass.askForUseActiveSkill
+if type(originalUseActive) == "function" then
+  klass.askForUseActiveSkill = function(self, data)
+    local result = originalUseActive(self, data)
+    FkCardCounterV2 = FkCardCounterV2 or dofile("card-counter/counter.lua")
+    pcall(FkCardCounterV2.rememberRevealedRequest, self, data)
+    return result
+  end
+end
 
 local originalShuffle = klass.shuffleDrawPile
 if type(originalShuffle) == "function" then
@@ -67,6 +93,57 @@ klass.deserialize = function(self, data)
   end
   self._counter_pool = pool
 end
+
+-- Use the public, structured card-use log, not the translated UI text or a
+-- request prompt (which can be cancelled). Only this client's frontend hears
+-- the action; no packet, game state or card identity is changed.
+local originalAppendLog = klass.appendLog
+if type(originalAppendLog) == "function" then
+  klass.appendLog = function(self, message, ...)
+    local result = originalAppendLog(self, message, ...)
+    if type(message) == "table" and message.type == "$GameStart" then
+      self:notifyUI("Fk.HandkillGameStart", {})
+    end
+    if type(message) == "table" and message.type == "#TiansuanResult" and message.from and
+       type(message.arg) == "string" then
+      self:notifyUI("Fk.HandkillPublicLog", {type=message.type, player=message.from, result=message.arg})
+    end
+    if type(message) == "table" and message.from and
+       (message.type == "#UseCard" or message.type == "#UseCardToTargets" or message.type == "#UseCardToCard") then
+      local targets = {}
+      for _, id in ipairs(type(message.to) == "table" and message.to or {}) do
+        if type(id) == "number" then targets[#targets+1] = id end
+      end
+      self:notifyUI("Fk.GuanNingSkinAction", {player=message.from, action="attack", targets=targets})
+    end
+    if type(message) == "table" and message.from and
+       (message.type == "#UseCard" or message.type == "#UseCardToTargets" or
+        message.type == "#UseCardToCard" or message.type == "#ResponsePlayCard") then
+      -- Only identities already present in this public committed log are used.
+      local card = type(message.card) == "table" and message.card[1] or nil
+      if type(card) == "number" then
+        local ok, real = pcall(function() return card > 0 and Fk:getCardById(card, true) or nil end)
+        card = ok and real or nil
+      end
+      if type(card) == "table" and type(card.name) == "string" then
+        self:notifyUI("Fk.HandkillCard", {player=message.from, cardName=card.name})
+      end
+    end
+    return result
+  end
+end
+-- updateQuestSkillUI consumes a public server event but normally emits only
+-- the generic skill-icon refresh. Preserve it and forward its exact identity.
+local originalQuest = klass.updateQuestSkillUI
+if type(originalQuest) == "function" then
+  klass.updateQuestSkillUI = function(self, data, ...)
+    local result = originalQuest(self, data, ...)
+    if type(data) == "table" and data[1] and data[2] == "zhongao" then
+      self:notifyUI("Fk.HandkillQuest", { data[1], data[2] })
+    end
+    return result
+  end
+end
 end
 install(Client)
 for _, boardgame in pairs((Fk and Fk.boardgames) or {}) do
@@ -74,8 +151,12 @@ for _, boardgame in pairs((Fk and Fk.boardgames) or {}) do
 end
 if ClientInstance and ClientInstance.callbacks then
   install(ClientInstance.class)
+  if ClientInstance.class.appendLog then ClientInstance.callbacks.GameLog = ClientInstance.class.appendLog end
   ClientInstance.callbacks.PrepareDrawPile = ClientInstance.class.prepareDrawPile
+  if ClientInstance.class.askForUseActiveSkill then ClientInstance.callbacks.AskForUseActiveSkill = ClientInstance.class.askForUseActiveSkill end
   if ClientInstance.class.moveCards then ClientInstance.callbacks.MoveCards = ClientInstance.class.moveCards end
+  if ClientInstance.class.appendLog then ClientInstance.callbacks.GameLog = ClientInstance.class.appendLog end
+  if ClientInstance.class.updateQuestSkillUI then ClientInstance.callbacks.UpdateQuestSkillUI = ClientInstance.class.updateQuestSkillUI end
 end
 
 -- Route the named built-in skin downloader to the local responsive frontend.

@@ -64,6 +64,7 @@ public:
   Q_INVOKABLE void saveConf(const QString &conf);
 
   Q_INVOKABLE void playSound(const QString &name, int index = 0);
+  Q_INVOKABLE bool playGameHaptic(const QString &kind);
 
   Q_INVOKABLE void copyToClipboard(const QString &s);
   Q_INVOKABLE QString readClipboard();
