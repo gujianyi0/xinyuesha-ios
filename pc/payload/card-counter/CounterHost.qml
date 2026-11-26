@@ -762,7 +762,26 @@ Item {
     const sync = roomDrawerSwipeSync.createObject(view, {view:view, tabs:tabs});
     if (sync) {
       view.interactive = Qt.binding(function() { return sync.available; });
+      desktopDrawerSlider.createObject(view.parent,{view:view,sync:sync});
       adaptedControls.push(view);
+    }
+  }
+  Component {
+    id: desktopDrawerSlider
+    Slider {
+      objectName:"desktopDrawerSlider"
+      required property var view
+      required property var sync
+      // A visual child of SwipeView becomes another page. Own this control
+      // from the drawer layout, which is destroyed with the same popup.
+      parent:view.parent
+      Layout.fillWidth:true;Layout.preferredHeight:18;Layout.maximumHeight:18
+      leftPadding:10;rightPadding:10;topPadding:0;bottomPadding:0
+      visible:sync.available;from:0;to:2;stepSize:1;snapMode:Slider.SnapAlways
+      value:sync.tabs.currentIndex
+      onMoved:sync.tabs.currentIndex=Math.round(value)
+      ToolTip.visible:hovered
+      ToolTip.text:"拖动切换战报／聊天／玩家列表"
     }
   }
   Component {
@@ -1088,8 +1107,7 @@ Item {
       if (type.indexOf("PlayerDetail_QMLTYPE") === 0) host.adaptPlayerDetail(item);
       if (type.indexOf("AvatarChatBox_QMLTYPE") === 0 && typeof item.loadSkills === "function")
         host.attachRoleVoices(item);
-      if ((Cpp.os==="Android" || Cpp.os==="iOS") &&
-          (type.indexOf("LogEdit_QMLTYPE")===0 || type.indexOf("RoomGameLogEdit_QMLTYPE")===0))
+      if (type.indexOf("LogEdit_QMLTYPE")===0 || type.indexOf("RoomGameLogEdit_QMLTYPE")===0)
         host.adaptTouchLog(item);
       serverPage = serverPage || ("selectedServer" in item && "serverListUrl" in item);
       lobbyPage = lobbyPage || ("roomModel" in item && "serverPlayerNum" in item);
