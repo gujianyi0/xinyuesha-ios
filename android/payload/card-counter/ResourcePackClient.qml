@@ -27,8 +27,9 @@ Item {
   function request(action,pack) {
     if(requestId)return false;
     const id=Date.now().toString()+"_"+Math.floor(Math.random()*1000000);
+    operation=action;installing=pack;
     if(!Backend.writeFileToAssets(bridge+"request.json",JSON.stringify({id:id,operation:action,pack:pack}))) {status="无法写入下载请求";return false;}
-    requestId=id;operation=action;installing=pack;activityAt=Date.now();startedAt=activityAt;progressDone=-1;progressStage="";cancelling=false;
+    requestId=id;activityAt=Date.now();startedAt=activityAt;progressDone=-1;progressStage="";cancelling=false;
     status=action==="install"?"正在连接下载服务…":action==="uninstall"?"正在删除…":"正在读取资源列表…";
     return true;
   }

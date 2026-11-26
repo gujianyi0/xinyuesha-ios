@@ -274,7 +274,7 @@ Item {
       ToolButton {
         visible: entry.requestId === "" && entry.status !== ""
         text: "重试"
-        onClicked: entry.request("catalog", "")
+        onClicked: entry.request(entry.operation==="install"?"install":entry.operation==="uninstall"?"uninstall":"catalog",entry.installing)
       }
     }
   }
