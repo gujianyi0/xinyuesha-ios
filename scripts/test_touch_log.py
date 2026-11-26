@@ -12,6 +12,9 @@ def pump(ms):
  loop=QEventLoop();QTimer.singleShot(ms,loop.quit);loop.exec()
 with tempfile.TemporaryDirectory(dir=a.work_dir) as temp:
  base=Path(temp)
+ shutil.copytree(a.payload/'card-counter',base,dirs_exist_ok=True)
+ from qml_spine_stub import install_spine_stub
+ install_spine_stub(base)
  def put(name,s):
   dest=base/name;dest.parent.mkdir(parents=True,exist_ok=True);dest.write_text(s,encoding="utf8")
  put("Fk/qmldir","module Fk\n"+"".join("singleton "+n+" 1.0 "+n+".qml\n" for n in ["Cpp","Config","Backend","Lua","Mediator"]))

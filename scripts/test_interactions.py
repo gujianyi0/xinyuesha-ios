@@ -51,6 +51,8 @@ ColumnLayout {id:root;anchors.fill:parent;anchors.margins:12;required property v
 }'''.replace('STOCK_ROW',row))
 
  shutil.copytree(a.payload/'card-counter',B/'card-counter')
+ from qml_spine_stub import install_spine_stub
+ install_spine_stub(B)
  put('Main.qml','''import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

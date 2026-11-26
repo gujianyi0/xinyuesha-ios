@@ -1,5 +1,5 @@
 """Measure actual QML helper work under gameplay notifications, without a server."""
-import argparse, json, os, shutil, tempfile, time
+import argparse, json, os, shutil, sys, tempfile, time
 from pathlib import Path
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 os.environ.setdefault('QT_QUICK_BACKEND', 'software')
@@ -48,6 +48,9 @@ QtObject {signal commandGot(var sender,string command,var data)}''')
     put('LunarLtk/qmldir','module LunarLtk\nsingleton Ltk 1.0 Ltk.qml\n')
     put('LunarLtk/Ltk.qml','pragma Singleton\nimport QtQuick\nQtObject {property var roomScene:null;}')
     shutil.copytree(args.payload/'card-counter',base/'card-counter')
+    sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'scripts'))
+    from qml_spine_stub import install_spine_stub
+    install_spine_stub(base)
     if args.overview:
         for file,function in [('CounterHost.qml','refreshCompatibility(rootItem)'),('SocialHost.qml','refreshRoomBridge()')]:
             copied=base/'card-counter'/file

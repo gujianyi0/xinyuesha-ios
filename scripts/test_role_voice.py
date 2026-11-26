@@ -84,6 +84,8 @@ put('MetroButton.qml','import QtQuick.Controls\nButton {}')
 put('LogEdit.qml','import QtQuick\nListView {function append(a){}function clear(){}}')
 put('CardItem.qml','import QtQuick\nItem {property bool known:false;property var dataModel;}')
 shutil.copytree(a.payload/'card-counter',B/'card-counter')
+from qml_spine_stub import install_spine_stub
+install_spine_stub(B)
 put('Main.qml','''import QtQuick
 import Fk
 import LunarLtk

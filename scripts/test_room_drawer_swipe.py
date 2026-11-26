@@ -104,6 +104,8 @@ QtObject {property var roomScene:null;function getPlayer(){return null;}function
     put('Fk/Components/WaitingRoom/qmldir', 'module Fk.Components.WaitingRoom\nTitleItem 1.0 TitleItem.qml\n')
     put('Fk/Components/WaitingRoom/TitleItem.qml', 'import QtQuick\nItem {property string title;property string style;}')
     shutil.copytree(a.payload / 'card-counter', base / 'card-counter')
+    from qml_spine_stub import install_spine_stub
+    install_spine_stub(base)
     put('Main.qml', '''import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
