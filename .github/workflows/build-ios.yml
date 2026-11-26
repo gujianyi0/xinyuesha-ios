@@ -163,6 +163,10 @@ jobs:
             ${{ runner.temp }}/background-picker.log
   build:
     name: Build iOS arm64
+    permissions:
+      # Draft build inputs remain private; GitHub requires contents:write to
+      # read a draft release even when the build only downloads its assets.
+      contents: write
     # Build concurrently with the independent regression jobs. A candidate is
     # accepted only after every job succeeds, including the real picker tests.
     runs-on: macos-15-intel
@@ -251,3 +255,13 @@ jobs:
           path: build-ios/ipa/*.ipa
           if-no-files-found: error
           retention-days: 30
+
+      - name: Preserve completed toolchain for a retry
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/Qt/6.8.3/ios
+            ~/Qt/6.8.3/macos
+            ios-deps
+          key: fk-ios-deps-${{ runner.os }}-qt683-openssl351-git2-197-v1
