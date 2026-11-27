@@ -13,6 +13,10 @@ on:
         description: Embed the three explicitly requested v1 sharing packs
         type: boolean
         default: false
+      native_only:
+        description: Build changed native code using independent unchanged core and picker evidence
+        type: boolean
+        default: false
       picker_only:
         description: Run the isolated PhotosUI integration test without rebuilding the app
         type: boolean
@@ -24,7 +28,7 @@ on:
 jobs:
   test-core-repair:
     name: Test core repository recovery
-    if: ${{ inputs.picker_only != true }}
+    if: ${{ inputs.picker_only != true && inputs.native_only != true }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -104,6 +108,7 @@ jobs:
             ${{ runner.temp }}/server-ui
   test-picker:
     name: Test PhotosUI with UIKit and the shipped Qt window
+    if: ${{ inputs.native_only != true }}
     runs-on: macos-15-intel
     timeout-minutes: 35
     steps:

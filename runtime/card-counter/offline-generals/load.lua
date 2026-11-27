@@ -4,7 +4,8 @@
 -- in the reviewed client payload, outside the server's packages/checksum tree.
 -- Qt's native QFile reader validates the JSON and enabled-pack list (including
 -- Unicode paths on Windows) before supplying this one-shot permission.
-if __XinyueshaOfflineLusu ~= true then return end
+-- Lua::setGlobal carries a UTF-8 string, rather than decoding JSON values.
+if __XinyueshaOfflineLusu ~= "true" then return end
 __XinyueshaOfflineLusu = nil
 if Fk.packages.xinyuesha_offline_lusu then return end
 local extension = dofile("card-counter/offline-generals/lusu.lua")

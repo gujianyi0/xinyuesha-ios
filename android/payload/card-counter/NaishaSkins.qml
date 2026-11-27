@@ -58,7 +58,9 @@ Item {
   function updatePicker() {
     const room=roomGenerals();
     skinList=room.length?catalog.filter(s=>room.some(g=>matches(g,s))):catalog;
-    skins.currentIndex=skinList.length?0:-1;
+    const saved=room.map(g=>selectedSkin(g)).find(s=>!!s);
+    const index=saved?skinList.findIndex(s=>s.id===saved.id):-1;
+    skins.currentIndex=index>=0?index:skinList.length?0:-1;
     updateTargets();
   }
   function updateTargets() {

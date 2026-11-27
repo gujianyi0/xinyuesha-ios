@@ -7,6 +7,16 @@ local count = "xylusu_cards-round"
 local currentDamage, previousDamage = "xylusu_thunder", "xylusu_previous_thunder"
 local previousCard = "xylusu_previous_card"
 local bonus = "xylusu_shield_bonus"
+leitong:addLoseEffect(function(self, player) player[previousCard] = nil end)
+local function releaseShieldBonus(player)
+  local room, old = player.room, player:getMark(bonus)
+  if old > 0 then
+    room:removePlayerMark(player, MarkEnum.MaxShieldChanged, old)
+    room:setPlayerMark(player, bonus, 0)
+    if player.shield > player:getMaxShield() then room:changeShield(player, player:getMaxShield() - player.shield) end
+  end
+end
+zhenlei:addLoseEffect(function(self, player) releaseShieldBonus(player) end)
 
 -- Preserve the use event itself: a repeated physical/virtual card is a new use.
 leitong:addEffect(fk.CardUsing, {
@@ -100,12 +110,7 @@ zhenlei:addEffect(fk.RoundStart, {
     local room = player.room
     room:setPlayerMark(player, previousDamage, player:getMark(currentDamage))
     room:setPlayerMark(player, currentDamage, 0)
-    local old = player:getMark(bonus)
-    if old > 0 then
-      room:removePlayerMark(player, MarkEnum.MaxShieldChanged, old)
-      room:setPlayerMark(player, bonus, 0)
-      if player.shield > player:getMaxShield() then room:changeShield(player, player:getMaxShield() - player.shield) end
-    end
+    releaseShieldBonus(player)
   end,
 })
 zhenlei:addEffect(fk.TurnStart, {

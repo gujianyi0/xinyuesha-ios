@@ -13,7 +13,7 @@ inline QJsonObject readObject(const QString &path) {
   return QJsonDocument::fromJson(file.readAll()).object();
 }
 inline bool lusuEnabled(const QString &root) {
-  const QString id = QStringLiteral("九雷震鼓鲁肃-v1");
+  const QString id = QStringLiteral("\u4e5d\u96f7\u9707\u9f13\u9c81\u8083-v1");
   const auto conf = readObject(root + "/freekill.client.config.json");
   if (!conf["enabledResourcePacks"].toArray().contains(id)) return false;
   const auto manifest = readObject(root + "/resource_pak/" + id +

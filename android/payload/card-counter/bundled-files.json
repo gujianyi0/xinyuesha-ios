@@ -12,7 +12,7 @@
   "card-counter/LuckGoals.js": "dd9faede3b661b0e7d3178be77dbe5d6cfc75ed33b0142807e69f416e935901a",
   "card-counter/NaishaLayer.qml": "29fa7b7d026cc2a55a8f44d2e7c517c006622bc9c3a67fa942316ce37e4a1c88",
   "card-counter/NaishaPortrait.qml": "1b6d8d9298c496fe597e5b29b2ee6d4b827b9f235e8ac3ad81c0379ed87fe649",
-  "card-counter/NaishaSkins.qml": "bd6b3ea9927f161b6e52d8e8530f416cb7313a8737c07700cf057fd019ce8137",
+  "card-counter/NaishaSkins.qml": "19fd54002e0911b221d26b92e0a0e507549502318668b28c774f90db853d7182",
   "card-counter/ResourcePackClient.qml": "0021e86c88e0872a8f725fc40e656a256ba9bcfab7d8a4dd555247fad924ce34",
   "card-counter/ResourcePackDownload.qml": "cbb79ff5e88368505a2fe225b969731a725fa5619adaeff8822c6cce8059b7b4",
   "card-counter/RoleVoiceControl.qml": "9e6809b0c36151d909fb384748b12ca40eaf328ef256d01bf0e494b41bcf0d5f",
@@ -29,7 +29,7 @@
   "card-counter/guanning/GuanNingPreview.qml": "3d0e3c1ec5e36b7ab0d87267a7dd88fc976fca3ba31c9d1a5fefc1529523ac8d",
   "card-counter/guanning/GuanNingTrail.qml": "03af04cc76e14f3168c3810043960c8b501ac229a7cbc48967defec1f4dec05e",
   "card-counter/known-hand.png": "e4152309603a458cd95c72bc7330145445cb9e4994ab15cecf4043068df7db75",
-  "card-counter/offline-generals/load.lua": "519e2c1ce5069cbf0a0cb32e8824cf826f7367dd638e246479ca9da9a70ccd91",
-  "card-counter/offline-generals/lusu.lua": "748b1cb43b5da67fd5c74a1102786dc777c8ab2c2681ef4a6152d53d56ff1fa0",
+  "card-counter/offline-generals/load.lua": "fc95a3c1e24efe62273515e32a19b3c4e58dbd9caf61d5c271ed566c7705845e",
+  "card-counter/offline-generals/lusu.lua": "64e0805f78af61791a6a880d49f2be8ac3cfb5f257eebb0541713ade79433568",
   "card-counter/resource-catalog.json": "934e253fcf8a75963dc5442f9e6c3f6547812114fb786b90486195dd19605f8b"
 }

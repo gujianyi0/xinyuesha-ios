@@ -32,13 +32,15 @@ Scheduler::Scheduler(RoomThread *thread) {
 #endif
 
   L->dofile("lua/freekill.lua");
+  L->dofile("lua/server/scheduler.lua");
+  // scheduler.lua restores the app root; freekill.lua intentionally leaves
+  // the working directory inside freekill-core when a core package is active.
   if (ServerInstance && ServerInstance->isSinglePlayer() && fkOfflineGenerals::lusuEnabled(".") &&
       QFile::exists("card-counter/offline-generals/load.lua"))
   {
     L->setGlobal("__XinyueshaOfflineLusu", "true");
     L->dofile("card-counter/offline-generals/load.lua");
   }
-  L->dofile("lua/server/scheduler.lua");
   L->call("InitScheduler", { QVariant::fromValue(thread), QVariant::fromValue(ServerInstance) });
 }
 

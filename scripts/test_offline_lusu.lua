@@ -5,7 +5,7 @@ local function check(value, message) checks = checks + 1; assert(value, message)
 check(Fk.generals.xinyuesha__lusu == nil, "Offline general leaked into normal engine startup")
 dofile("card-counter/offline-generals/load.lua")
 check(Fk.generals.xinyuesha__lusu == nil, "Unprivileged load must not register offline rules")
-__XinyueshaOfflineLusu = true
+__XinyueshaOfflineLusu = "true"
 dofile("card-counter/offline-generals/load.lua")
 local g = Fk.generals.xinyuesha__lusu
 check(g and g.hp == 4 and g.kingdom == "wu", "Offline pack failed to register")
@@ -70,4 +70,7 @@ s=spec(z,fk.TurnStart);check(not s.can_refresh(nil,nil,player,player,{}),"Previo
 spec(z,fk.RoundStart).on_refresh(nil,nil,nil,player,{})
 check(s.can_refresh(nil,nil,player,player,{}),"Thunder-free previous round must permit reset");s.on_refresh(nil,nil,player,player,{})
 check(history[z.name]==0,"Limited history did not reset")
+history[z.name]=1;spec(z,fk.CardUsing).on_refresh(nil,nil,player,player,outside)
+z.on_lose(player,false)
+check(player:getMark("xylusu_shield_bonus")==0 and player:getMark(MarkEnum.MaxShieldChanged)==0 and player.shield<=5,"Losing the skill must restore its armor-limit contribution")
 print("OFFLINE_LUSU_TEST_CHECKS="..checks)
