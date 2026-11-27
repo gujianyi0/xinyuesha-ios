@@ -1,0 +1,44 @@
+name: Verify offline-general candidate downloads
+on:
+  push:
+    branches: [candidate/20261127-41-download-verification]
+permissions:
+  contents: read
+jobs:
+  verify-downloads:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Download actual public clients and verify every byte
+        env:
+          FILES_JSON: '[{"path":"xinyuesha/20261127-41-offline-skins/android.apk","size":278624262,"sha256":"eb238b19e8f2613f34ddd1498466d4870c29e087c7670d6105330158df3f9ef7","version":"20261127.41"},{"path":"xinyuesha/20261127-41-offline-skins/pc.zip","size":295323765,"sha256":"2e3164c8a9494a05fcf315abeb920f5cb0bddb119373b68d228000320b72baf2","version":"20261127.41"},{"path":"xinyuesha/20261127-41-offline-skins/ios.ipa","size":266124948,"sha256":"aac04619116e4960588adcd2fbd03a76d264a675da06a5b11acad7ba495969b5","version":"20261127.41"},{"path":"xinyuesha/20261127-41-offline-skins/SHA256SUMS.txt","size":307,"sha256":"b7dce0b7549c40457446bd28a9d911a2d76f329c98f115b9bacc83484918d910","version":"20261127.41"}]'
+        run: |
+          node --input-type=module <<'NODE'
+          import {createHash} from 'node:crypto';
+          import fs from 'node:fs/promises';
+          import assert from 'node:assert/strict';
+          const rows=JSON.parse(process.env.FILES_JSON);
+          const results=await Promise.all(rows.map(async row=>{
+            const url='https://preview.gujianyi-web-preview.pages.dev/download/'+row.path;
+            const head=await fetch(url,{method:'HEAD',signal:AbortSignal.timeout(30000)});
+            assert.equal(head.status,200);assert.equal(head.headers.get('x-client-version'),row.version);assert.equal(head.headers.get('x-checksum-sha256'),row.sha256);
+            for(const range of ['bytes=0-15','bytes=-16']){
+              const part=await fetch(url,{headers:{range},signal:AbortSignal.timeout(30000)});assert.equal(part.status,206);assert.equal((await part.arrayBuffer()).byteLength,16);
+            }
+            const response=await fetch(url,{signal:AbortSignal.timeout(180000)});assert.equal(response.status,200);
+            const hash=createHash('sha256');let bytes=0;
+            for await(const chunk of response.body){hash.update(chunk);bytes+=chunk.length;}
+            assert.equal(bytes,row.size);assert.equal(hash.digest('hex'),row.sha256);
+            const result={...row,bytes,headVerified:true,prefixAndSuffixRanges:true,fullPublicDownloadVerified:true};console.log(JSON.stringify(result));return result;
+          }));
+          await fs.writeFile('public-downloads-verified.json',JSON.stringify(results,null,2));
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: offline-general-downloads-20261127-41
+          path: public-downloads-verified.json
+          if-no-files-found: warn
