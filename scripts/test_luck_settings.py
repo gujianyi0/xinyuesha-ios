@@ -3,13 +3,15 @@ import argparse,json,os,shutil,tempfile
 from pathlib import Path
 os.environ.update(QT_QPA_PLATFORM='offscreen',QT_QUICK_BACKEND='software',QT_QUICK_CONTROLS_STYLE='Basic')
 from PySide6.QtCore import QUrl,QTimer,QEventLoop,QMetaObject,Q_RETURN_ARG,Q_ARG,QPointF,Qt,qInstallMessageHandler
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication,QFontDatabase,QFont
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtTest import QTest
 p=argparse.ArgumentParser();p.add_argument('--payload',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True)
 s=(a.payload/'card-counter/CounterHost.qml').read_text('utf8');fragment=s[s.index('  property bool directionalLuckEnabled:'):s.index('  function adaptFunctionSettings')]
 logs=[];qInstallMessageHandler(lambda k,c,m:logs.append(m));app=QGuiApplication([])
+if Path('C:/Windows/Fonts/msyh.ttc').exists():
+ font=QFontDatabase.addApplicationFont('C:/Windows/Fonts/msyh.ttc');app.setFont(QFont(QFontDatabase.applicationFontFamilies(font)[0]))
 with tempfile.TemporaryDirectory(dir=a.output) as temp:
  b=Path(temp)
  def put(name,value):

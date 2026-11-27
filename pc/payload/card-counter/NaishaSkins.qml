@@ -12,6 +12,9 @@ Item {
   readonly property string dataPath:"resource_pak/"+packId+"/packages/freekill-core/image/xinyuesha-naisha/"
   readonly property string resourceRoot:String(Cpp.path).replace(/\/$/,"")+"/"+dataPath
   property var catalog: []
+  readonly property var skinsById: {
+    const index={};for(const skin of catalog)index[skin.id]=skin;return index;
+  }
   property var choices: ({})
   property var states: []
   property string error:""
@@ -39,9 +42,9 @@ Item {
   function selectedSkin(general) {
     // Explicit restoration overrides a family choice. Older per-ID files stay valid.
     if(Object.prototype.hasOwnProperty.call(choices,general))
-      return catalog.find(s=>s.id===choices[general] && matches(general,s)) || null;
+      {const skin=skinsById[choices[general]];return skin && matches(general,skin)?skin:null;}
     for(const saved of Object.keys(choices)) {
-      const skin=catalog.find(s=>s.id===choices[saved]);
+      const skin=skinsById[choices[saved]];
       if(skin && matches(saved,skin) && matches(general,skin))return skin;
     }
     return null;
