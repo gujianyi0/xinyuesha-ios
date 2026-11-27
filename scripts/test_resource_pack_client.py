@@ -2,10 +2,11 @@
 import argparse,json,os,shutil,tempfile
 from pathlib import Path
 os.environ.update(QT_QPA_PLATFORM='offscreen',QT_QUICK_BACKEND='software',QT_QUICK_CONTROLS_STYLE='Material')
-from PySide6.QtCore import QUrl,QTimer,QEventLoop,QMetaObject,Q_RETURN_ARG,Q_ARG,qInstallMessageHandler
+from PySide6.QtCore import QUrl,QTimer,QEventLoop,QMetaObject,Q_RETURN_ARG,Q_ARG,QPoint,qInstallMessageHandler
 from PySide6.QtGui import QGuiApplication,QFontDatabase,QFont
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
+from PySide6.QtTest import QTest
 p=argparse.ArgumentParser();p.add_argument('--payload',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True);root=Path(__file__).resolve().parents[1]
 logs=[];qInstallMessageHandler(lambda k,c,m:logs.append(m));app=QGuiApplication([])
 if Path('C:/Windows/Fonts/msyh.ttc').exists():i=QFontDatabase.addApplicationFont('C:/Windows/Fonts/msyh.ttc');app.setFont(QFont(QFontDatabase.applicationFontFamilies(i)[0]))
@@ -14,7 +15,7 @@ with tempfile.TemporaryDirectory(dir=a.output) as temp:
  def put(name,text):
   f=b/name;f.parent.mkdir(parents=True,exist_ok=True);f.write_text(text,'utf8')
  put('Fk/qmldir','module Fk\n'+''.join('singleton '+n+' 1.0 '+n+'.qml\n' for n in ['Cpp','Config','Backend','Fs','App']))
- put('Fk/Cpp.qml','pragma Singleton\nimport QtQuick\nQtObject{property string path:"file:///fixture";property string os:"Android";}')
+ put('Fk/Cpp.qml','pragma Singleton\nimport QtQuick\nQtObject{property string path:"file:///fixture";property string os:"iOS";}')
  put('Fk/Fs.qml','pragma Singleton\nimport QtQuick\nQtObject{function isDir(path){return true;}function convertUrlToPath(path){return path;}}')
  put('Fk/App.qml','pragma Singleton\nimport QtQuick\nQtObject{function quitPage(){}}')
  put('Fk/Config.qml','pragma Singleton\nimport QtQuick\nQtObject{property var enabledResourcePacks:["other-pack"];property int saves:0;property string username:"fixture-user";property string password:"not-an-account";function saveConf(){saves++;}}')
@@ -54,7 +55,12 @@ Window{id:win;width:1100;height:620;visible:true;property var page:null;property
  function cancel(){client.cancel();}
  function pendingSettings(){owner.settingsReady=false;}
  function readySettings(){owner.settingsReady=true;}
- function state(){return JSON.stringify({busy:client.requestId!=="",id:client.requestId,enabled:Config.enabledResourcePacks,saves:Config.saves,status:client.status,cancelling:client.cancelling,pageEnabled:page?page.fullEnabledList:[],pageAvailable:page?page.fullAvailableList:[],offers:adapter?adapter.offers.map(p=>p.id):[],cancel:Backend.files[client.bridge+"cancel.json"],username:Config.username,password:Config.password});}
+ function expireCatalog(){client.activityAt=Date.now()-46000;client.poll();}
+ function offerBounds(){
+  function find(item){if(item.objectName==="resourcePackOffer_奶杀动皮-v1"){const p=item.mapToItem(win.contentItem,item.width/2,item.height/2);return {x:p.x,y:p.y,enabled:item.enabled};}for(const c of item.children||[]){const found=find(c);if(found)return found;}return null;}
+  return JSON.stringify(find(win.contentItem));
+ }
+ function state(){return JSON.stringify({busy:client.requestId!=="",id:client.requestId,operation:client.operation,mutating:client.mutating,queued:client.queuedAction,enabled:Config.enabledResourcePacks,saves:Config.saves,status:client.status,cancelling:client.cancelling,pageEnabled:page?page.fullEnabledList:[],pageAvailable:page?page.fullAvailableList:[],offers:adapter?adapter.offers.map(p=>p.id):[],cancel:Backend.files[client.bridge+"cancel.json"],username:Config.username,password:Config.password});}
 }''')
  engine=QQmlApplicationEngine();engine.addImportPath(str(b));engine.rootContext().setContextProperty('AppPath','file:///fixture');engine.load(QUrl.fromLocalFile(str(b/'Main.qml')));assert engine.rootObjects(),logs;win=engine.rootObjects()[0]
  def pump(ms=80):loop=QEventLoop();QTimer.singleShot(ms,loop.quit);loop.exec()
@@ -62,14 +68,25 @@ Window{id:win;width:1100;height:620;visible:true;property var page:null;property
   arguments=[Q_ARG('QVariant',v) for v in args]
   result=QMetaObject.invokeMethod(win,name,Q_RETURN_ARG('QVariant'),*arguments) if returns else QMetaObject.invokeMethod(win,name,*arguments);pump();return result
  def state():return json.loads(QMetaObject.invokeMethod(win,'state',Q_RETURN_ARG('QVariant')))
- call('showPage');assert state()['busy'];call('reply',True,'');assert state()['offers']==['奶杀动皮-v1'],state()
- call('request','install','奶杀动皮-v1',returns=True);identifier=state()['id'];call('progress');assert 'MB' in state()['status'];call('staleReply');assert state()['id']==identifier
+ call('showPage');assert not state()['busy'],'Opening the cached catalog must not lock every offer';assert state()['offers']==['奶杀动皮-v1'],state()
+ win.grabWindow().save(str(a.output/'available-ready.png'))
+ # A stalled manual refresh retains the usable catalog and recovers its controls.
+ call('request','catalog','',returns=True);assert state()['busy'] and not state()['mutating'];call('expireCatalog');assert not state()['busy'] and state()['offers']==['奶杀动皮-v1'] and '超时' in state()['status']
+ # Use actual Qt pointer events on the visible delegate, not a direct request call.
+ point=json.loads(call('offerBounds',returns=True));assert point['enabled'],point
+ device=QTest.createTouchDevice();pos=QPoint(round(point['x']),round(point['y']))
+ QTest.touchEvent(win,device).press(0,pos,win).commit();pump(30);QTest.touchEvent(win,device).release(0,pos,win).commit();pump()
+ assert state()['operation']=='install' and state()['busy'],state();identifier=state()['id'];call('progress');assert 'MB' in state()['status'];call('staleReply');assert state()['id']==identifier
  win.grabWindow().save(str(a.output/'downloading.png'));call('hidePage');call('addDirectory');call('reply',True,'奶杀动皮-v1');assert state()['enabled']==['奶杀动皮-v1','other-pack'],state()
- call('showPage');call('reply',True,'');assert '奶杀动皮-v1' in state()['pageEnabled'] and not state()['offers'];win.grabWindow().save(str(a.output/'installed.png'))
+ call('showPage');assert not state()['busy'];assert '奶杀动皮-v1' in state()['pageEnabled'] and not state()['offers'];win.grabWindow().save(str(a.output/'installed.png'))
  call('disableMilk');assert state()['enabled']==['other-pack'] and state()['pageAvailable']==['奶杀动皮-v1'],state()
  call('request','uninstall','奶杀动皮-v1',returns=True);call('removeDirectory');call('reply',True,'奶杀动皮-v1');assert state()['offers']==['奶杀动皮-v1'] and not state()['pageAvailable']
- call('request','install','奶杀动皮-v1',returns=True);call('cancel');s=state();assert s['cancelling'] and json.loads(s['cancel'])['id']==s['id'];call('reply',False,'奶杀动皮-v1');assert not state()['busy'] and state()['enabled']==['other-pack']
+ call('request','catalog','',returns=True);catalog_id=state()['id'];point=json.loads(call('offerBounds',returns=True));assert point['enabled'],point
+ QTest.mouseClick(win,__import__('PySide6.QtCore',fromlist=['Qt']).Qt.LeftButton,pos=QPoint(round(point['x']),round(point['y'])));pump()
+ assert state()['queued']=='install' and state()['id']==catalog_id and state()['mutating'],state();assert json.loads(state()['cancel'])['id']==catalog_id
+ call('reply',True,'');assert state()['operation']=='install' and state()['id']!=catalog_id and not state()['queued'],state()
+ call('cancel');s=state();assert s['cancelling'] and json.loads(s['cancel'])['id']==s['id'];call('reply',False,'奶杀动皮-v1');assert not state()['busy'] and state()['enabled']==['other-pack']
  call('request','install','奶杀动皮-v1',returns=True);call('pendingSettings');call('reply',True,'奶杀动皮-v1');assert state()['busy'] and state()['enabled']==['other-pack'];call('readySettings');assert not state()['busy'] and state()['enabled'][0]=='奶杀动皮-v1'
  assert state()['username']=='fixture-user' and state()['password']=='not-an-account'
  bad=[m for m in logs if any(s in m for s in ['ReferenceError','TypeError','Binding loop','Unable to assign','Cannot assign'])];assert not bad,bad
- result={'passed':True,'qt':__import__('PySide6').__version__,'stockManagerUsed':True,'downloadEnableAndReturnToAvailableAndDelete':True,'continuesAfterPageClosed':True,'waitsForSettingsBeforeEnabling':True,'cancelAndStaleReplyIsolation':True,'accountValuesPreserved':True,'deviceAcceptance':False};(a.output/'result.json').write_text(json.dumps(result,indent=2),'utf8');print(json.dumps(result))
+ result={'passed':True,'qt':__import__('PySide6').__version__,'stockManagerUsed':True,'cachedOffersClickableWithoutNetwork':True,'qtTouchAndMouseInput':True,'refreshTimeoutKeepsCatalog':True,'refreshClickQueuesAndCancelsMetadataOnly':True,'downloadEnableAndReturnToAvailableAndDelete':True,'continuesAfterPageClosed':True,'waitsForSettingsBeforeEnabling':True,'cancelAndStaleReplyIsolation':True,'accountValuesPreserved':True,'deviceAcceptance':False};(a.output/'result.json').write_text(json.dumps(result,indent=2),'utf8');print(json.dumps(result))

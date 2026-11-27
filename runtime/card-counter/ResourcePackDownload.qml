@@ -56,13 +56,16 @@ Item {
       }
     }
     availableView.header = downloadRows;
+    availableView.footer = availableCount;
     availableView.delegate = installedAvailableRow;
     availableView.clip = true;
     enabledModel = views[1].model;
     views[1].delegate = enabledRow;
     views[1].clip = true;
     Qt.callLater(saveEnabled);
-    request("catalog", "");
+    // The bundled, pinned catalog is already usable. Do not turn every row
+    // grey while waiting for an unnecessary network request on page entry.
+    if (!client.packs.length && !client.requestId) request("catalog", "");
   }
   Component.onCompleted: Qt.callLater(attach)
   Component.onDestruction: if (availableView) availableView.header = null
@@ -145,7 +148,7 @@ Item {
       required property string name
       width: ListView.view ? ListView.view.width : 0
       height: 64
-      enabled: entry.requestId === ""
+      enabled: !entry.client.mutating
       onClicked: entry.managerPage.enablePack(name)
       contentItem: RowLayout {
         spacing: 6
@@ -230,6 +233,15 @@ Item {
   }
 
   Component {
+    id: availableCount
+    Label {
+      width: ListView.view ? ListView.view.width : 0
+      text: "本地可用 %1 个 · 可下载 %2 个".arg(entry.availableView ? entry.availableView.count : 0).arg(entry.offers.length)
+      wrapMode: Text.WordWrap
+    }
+  }
+
+  Component {
     id: downloadRows
     Column {
       width: ListView.view ? ListView.view.width : 0
@@ -238,9 +250,10 @@ Item {
         model: entry.offers
         delegate: ItemDelegate {
           required property var modelData
+          objectName: "resourcePackOffer_" + modelData.id
           width: parent ? parent.width : 0
           height: 64
-          enabled: entry.requestId === ""
+          enabled: !entry.client.mutating
           contentItem: RowLayout {
             spacing: 10
             Label { text: "↓"; font.pixelSize: 24; Layout.preferredWidth: 36; horizontalAlignment: Text.AlignHCenter }
@@ -249,7 +262,7 @@ Item {
               spacing: 1
               Label { text: modelData.title; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
               Label {
-                text: entry.installing === modelData.id && entry.requestId !== "" ? "正在下载并校验…" : modelData.version + " · " + (Number(modelData.bytes)/1048576).toFixed(0) + " MB · 下载并启用"
+                text: entry.client.queuedPack === modelData.id ? "正在准备下载…" : entry.installing === modelData.id && entry.operation === "install" && entry.requestId !== "" ? "正在下载并校验…" : modelData.version + " · " + (Number(modelData.bytes)/1048576).toFixed(0) + " MB · 下载并启用"
                 elide: Text.ElideRight
                 font.pixelSize: 12
                 Layout.fillWidth: true
