@@ -1,0 +1,44 @@
+name: Verify public candidate downloads
+on:
+  push:
+    branches: [candidate/20261127-38-download-verification]
+permissions:
+  contents: read
+jobs:
+  verify-downloads:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Download actual public clients and verify every byte
+        env:
+          FILES_JSON: '[{"path":"xinyuesha/20261127-38-effects/android.apk","size":278603510,"sha256":"30865f63fa986cfeb9ea6df8015ca374c306a15f4e9e94d1b4af3be3ef6c5884","version":"20261127.38"},{"path":"xinyuesha/20261127-38-effects/pc.zip","size":295317218,"sha256":"4016bcc98d58f9f8c63dc7b180d6874664c196934d9ef29cc45d24f1a8def212","version":"20261127.38"},{"path":"xinyuesha/20261127-38-effects/ios.ipa","size":266118500,"sha256":"cadd6b14e1260fffe3a9bb6cdf646a92a69e0152096d8977c6211fc08b8597e0","version":"20261127.38"},{"path":"xinyuesha/20261127-38-effects/SHA256SUMS.txt","size":307,"sha256":"dc2a801d4775be097f462dd501c596d63d450929f714e916887768ba52d1a587","version":"20261127.38"}]'
+        run: |
+          node --input-type=module <<'NODE'
+          import {createHash} from 'node:crypto';
+          import fs from 'node:fs/promises';
+          import assert from 'node:assert/strict';
+          const rows=JSON.parse(process.env.FILES_JSON);
+          const results=await Promise.all(rows.map(async row=>{
+            const url='https://preview.gujianyi-web-preview.pages.dev/download/'+row.path;
+            const head=await fetch(url,{method:'HEAD',signal:AbortSignal.timeout(30000)});
+            assert.equal(head.status,200);assert.equal(head.headers.get('x-client-version'),row.version);assert.equal(head.headers.get('x-checksum-sha256'),row.sha256);
+            for(const range of ['bytes=0-15','bytes=-16']){
+              const part=await fetch(url,{headers:{range},signal:AbortSignal.timeout(30000)});assert.equal(part.status,206);assert.equal((await part.arrayBuffer()).byteLength,16);
+            }
+            const response=await fetch(url,{signal:AbortSignal.timeout(180000)});assert.equal(response.status,200);
+            const hash=createHash('sha256');let bytes=0;
+            for await(const chunk of response.body){hash.update(chunk);bytes+=chunk.length;}
+            assert.equal(bytes,row.size);assert.equal(hash.digest('hex'),row.sha256);
+            const result={...row,bytes,headVerified:true,prefixAndSuffixRanges:true,fullPublicDownloadVerified:true};console.log(JSON.stringify(result));return result;
+          }));
+          await fs.writeFile('public-downloads-verified.json',JSON.stringify(results,null,2));
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-client-download-verification-20261127-38
+          path: public-downloads-verified.json
+          if-no-files-found: warn
