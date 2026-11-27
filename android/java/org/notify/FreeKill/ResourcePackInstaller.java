@@ -103,7 +103,7 @@ final class ResourcePackInstaller {
         // Android's NIO provider rejects getFileStore; File uses statvfs on
         // the same app-owned volume and is supported by the Android runtime.
         if(root.toFile().getUsableSpace()<needed)throw new IOException("存储空间不足，请至少腾出 "+((needed+1048575)/1048576)+" MB 后重试。");
-        Path temporary=Files.createTempDirectory(bridge,"install-");long[] expanded={pack.getLong("expandedBytes")};int[] files={0};Set<String> seen=new HashSet<>();List<Path> completed=new ArrayList<>();
+        Path temporary=Files.createTempDirectory(bridge,"install-");long[] expanded={pack.getLong("expandedBytes")};int[] files={0};Set<String> seen=new HashSet<>();List<Path> completed=new ArrayList<>();boolean committed=false;
         try {
             Path output=Files.createDirectory(temporary.resolve("pack"));before=0;
             for(int i=0;i<parts.length();i++) {
@@ -119,11 +119,14 @@ final class ResourcePackInstaller {
                 before+=p.getLong("bytes");report("extracting",before,true);extract(archive,output,expanded,files,seen);completed.add(archive);
             }
             if(files[0]==0||(pack.optBoolean("strictFileCount",false)&&pack.getInt("fileCount")!=files[0])||(pack.optBoolean("strictExpanded",false)&&expanded[0]!=0))throw new IOException("资源展开清单不匹配");
-            lastCancelCheck=0;checkCancelled();moveCompatible(output,destination,false);
+            lastCancelCheck=0;checkCancelled();moveCompatible(output,destination,false);committed=true;
             // A committed, verified pack must not be reported as failed just
             // because the filesystem temporarily refuses cache housekeeping.
             for(Path file:completed)try{Files.deleteIfExists(file);}catch(IOException ignored){}
-        }finally{try(java.util.stream.Stream<Path> paths=Files.walk(temporary)){for(Path path:(Iterable<Path>)paths.sorted(Comparator.reverseOrder())::iterator)Files.deleteIfExists(path);}}
+        }finally{
+            try(java.util.stream.Stream<Path> paths=Files.walk(temporary)){for(Path path:(Iterable<Path>)paths.sorted(Comparator.reverseOrder())::iterator)Files.deleteIfExists(path);}
+            catch(IOException cleanup){if(!committed)throw cleanup;}
+        }
     }
     static void extract(Path archive,Path destination,long[] remaining,int[] count,Set<String> seen)throws Exception {
         try(ZipFile zip=new ZipFile(archive.toFile())) {

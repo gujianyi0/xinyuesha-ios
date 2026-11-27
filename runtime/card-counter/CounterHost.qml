@@ -37,7 +37,7 @@ Item {
       }
     }
   }
-  onCurrentSceneChanged: { Qt.callLater(host.setUpLightTargetLine); cancelPresentQueue(); cancelTenyearCombos(); revealFocusSkill=""; releaseGuanNingEffects(); syncBackgroundChatShortcut(); Qt.callLater(host.adaptPlayerDetail); }
+  onCurrentSceneChanged: { closeKnownHandPopup(); Qt.callLater(host.setUpLightTargetLine); cancelPresentQueue(); cancelTenyearCombos(); revealFocusSkill=""; releaseGuanNingEffects(); syncBackgroundChatShortcut(); Qt.callLater(host.adaptPlayerDetail); }
   readonly property var backgroundChatScene: waitingRoomScene && waitingRoomScene.visible ? waitingRoomScene : currentScene
   onBackgroundChatSceneChanged: syncBackgroundChatShortcut()
   property var backgroundChatShortcut: null
@@ -323,6 +323,7 @@ Item {
   // without opening the counter panel.
   property var knownHandBadges: []
   property var knownHandPopupItem: null
+  property var knownHandPopupControl: null
   property string knownHandPopupOwner: ""
   property var knownHandPopupIds: []
   property var knownHandCounts: ({})
@@ -517,7 +518,7 @@ Item {
         photoBounds = Qt.rect(Math.min(top.x, bottom.x), Math.min(top.y, bottom.y),
           Math.abs(bottom.x-top.x), Math.abs(bottom.y-top.y));
       }
-      width: 48
+      width: 54
       height: Math.min(photoBounds.height, cardNames.implicitHeight + 10)
       radius: 6
       z: 20
@@ -605,7 +606,7 @@ Item {
     } catch (_) { return {}; }
   }
   function knownHandCardFace(row) {
-    const suit=["","♠","♣","♥","♦",""][Number(row.suit)] || "";
+    const suit=["","黑桃","梅花","红桃","方块",""][Number(row.suit)] || "";
     const rank=Number(row.number), number=({1:"A",11:"J",12:"Q",13:"K"})[rank] || (rank>0?String(rank):"");
     return suit+number;
   }
@@ -626,6 +627,17 @@ Item {
     });
     knownHandPopupOwner=ownerKey || "";knownHandPopupIds=visibleIds;
     knownHandPopupItem=scene.infoPopup && scene.infoPopup.item || null;
+    knownHandPopupControl=scene.infoPopup || null;
+    // Qt 6.8 can reset a typed list during component construction. Assign
+    // the confirmed IDs again after the stock popup has created ViewPile.
+    if(knownHandPopupItem)knownHandPopupItem.ids=visibleIds.slice();
+  }
+  function closeKnownHandPopup() {
+    try {
+      if(knownHandPopupControl && knownHandPopupControl.item===knownHandPopupItem && knownHandPopupItem)
+        knownHandPopupControl.close();
+    }catch(_){}
+    knownHandPopupControl=null;knownHandPopupItem=null;knownHandPopupOwner="";knownHandPopupIds=[];
   }
   function refreshKnownHandPopup(hands) {
     try {

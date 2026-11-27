@@ -4,7 +4,7 @@ Only loopback fixture servers and disposable app directories are used.
 """
 import argparse,hashlib,http.server,io,json,os,shutil,socket,subprocess,tempfile,threading,time,zipfile
 from pathlib import Path
-p=argparse.ArgumentParser();p.add_argument('--native',type=Path,required=True);p.add_argument('--qt',type=Path);p.add_argument('--output',type=Path,required=True);p.add_argument('--skip-java',action='store_true');a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True)
+p=argparse.ArgumentParser();p.add_argument('--native',type=Path);p.add_argument('--qt',type=Path);p.add_argument('--output',type=Path,required=True);p.add_argument('--skip-java',action='store_true');p.add_argument('--java-only',action='store_true');a=p.parse_args();assert a.java_only or a.native;assert not(a.java_only and a.skip_java);a.output.mkdir(parents=True,exist_ok=True)
 root=Path(__file__).resolve().parents[1];objects={};requests=[];mode={'drop':None,'bad':None,'slow':False};catalog={}
 def digest(data):return hashlib.sha256(data).hexdigest()
 def pack(name,entries):
@@ -39,7 +39,7 @@ server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Handler);threading.Thread
 env=dict(os.environ)
 if a.qt:env['PATH']=str(a.qt/'bin')+os.pathsep+env['PATH']
 env.pop('HTTP_PROXY',None);env.pop('HTTPS_PROXY',None)
-commands={'Qt':[str(a.native.resolve())]}
+commands={} if a.java_only else {'Qt':[str(a.native.resolve())]}
 work=a.output/'java';work.mkdir(exist_ok=True)
 if not a.skip_java:
     jdk=Path(os.environ.get('JAVA_HOME','C:/Program Files/Android/openjdk/jdk-21.0.8'))/'bin';jar=root/'work/embedded-v1-20261121/json-20240303.jar';assert jar.is_file()
