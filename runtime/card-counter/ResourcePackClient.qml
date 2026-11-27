@@ -16,6 +16,9 @@ Item {
   property double progressDone:-1
   property string progressStage:""
   property bool cancelling:false
+  property string queuedAction:""
+  property string queuedPack:""
+  readonly property bool mutating: queuedAction!=="" || (requestId!=="" && operation!=="catalog")
   signal installed(string pack)
   signal removed(string pack)
   function read(name) {
@@ -25,12 +28,22 @@ Item {
     }catch(_){return null;}
   }
   function request(action,pack) {
-    if(requestId)return false;
+    if(requestId) {
+      // Metadata refresh must not eat a user's first download/enable action.
+      // Cancel the read-only job, then start the mutation after its reply.
+      if(operation==="catalog" && action!=="catalog" && !queuedAction) {
+        queuedAction=action;queuedPack=pack;
+        Backend.writeFileToAssets(bridge+"cancel.json",JSON.stringify({id:requestId}));
+        status=action==="install"?"正在准备下载…":"正在准备删除…";
+        return true;
+      }
+      return false;
+    }
     const id=Date.now().toString()+"_"+Math.floor(Math.random()*1000000);
     operation=action;installing=pack;
     if(!Backend.writeFileToAssets(bridge+"request.json",JSON.stringify({id:id,operation:action,pack:pack}))) {status="无法写入下载请求";return false;}
     requestId=id;activityAt=Date.now();startedAt=activityAt;progressDone=-1;progressStage="";cancelling=false;
-    status=action==="install"?"正在连接下载服务…":action==="uninstall"?"正在删除…":"正在读取资源列表…";
+    status=action==="install"?"正在连接下载服务…":action==="uninstall"?"正在删除…":"正在刷新资源列表，仍可选择资源包…";
     return true;
   }
   function cancel() {
@@ -66,7 +79,11 @@ Item {
         if(!enabled.includes(reply.pack)){Config.enabledResourcePacks=[reply.pack].concat(enabled);Config.saveConf();}
         status="";installed(reply.pack);
       }else if(operation==="uninstall"){status="";removed(reply.pack);}
-      Backend.writeFileToAssets(bridge+"ack.json",JSON.stringify({id:reply.id}));requestId="";cancelling=false;return;
+      const nextAction=queuedAction,nextPack=queuedPack;
+      Backend.writeFileToAssets(bridge+"ack.json",JSON.stringify({id:reply.id}));requestId="";cancelling=false;
+      queuedAction="";queuedPack="";
+      if(nextAction)request(nextAction,nextPack);
+      return;
     }
     const progress=read("progress.json");
     if(progress && progress.id===requestId && (Number(progress.done)!==progressDone || progress.stage!==progressStage)) {
@@ -77,7 +94,10 @@ Item {
     if(Date.now()-activityAt>idleLimit || Date.now()-startedAt>21600000) {
       // Do not abandon an active job and then allow another request to race it.
       if(operation==="install"){if(!cancelling)cancel();status="下载长时间没有进度，正在停止；随后可重试继续下载。";}
-      else {status="请求超时，请刷新重试";requestId="";}
+      else {
+        status=operation==="catalog" && packs.length?"资源列表更新超时，已保留内置列表；请重新选择资源包。":"请求超时，请刷新重试";
+        requestId="";queuedAction="";queuedPack="";
+      }
     }
   }
   Connections {target:client.owner;ignoreUnknownSignals:true;function onSettingsReadyChanged(){client.poll();}}
