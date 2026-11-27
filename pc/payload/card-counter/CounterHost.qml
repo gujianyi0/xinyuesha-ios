@@ -7,6 +7,7 @@ import QtQuick.Layouts
 import QtQuick.Window
 import QtQuick.Dialogs
 import Fk
+import Fk.Widgets as W
 import LunarLtk
 import "LuckGoals.js" as LuckGoals
 Item {
@@ -40,6 +41,16 @@ Item {
   readonly property var backgroundChatScene: waitingRoomScene && waitingRoomScene.visible ? waitingRoomScene : currentScene
   onBackgroundChatSceneChanged: syncBackgroundChatShortcut()
   property var backgroundChatShortcut: null
+  property var inheritedBackgroundChatGate: null
+  Component {
+    id:backgroundChatGateComponent
+    Binding {
+      required property var shortcut
+      target:shortcut;property:"enabled";value:false
+      when:!host.backgroundChatEnabled
+      restoreMode:Binding.RestoreBindingOrValue
+    }
+  }
   Component {
     id: backgroundChatComponent
     MouseArea {
@@ -49,7 +60,7 @@ Item {
       // Only input left unhandled by the room's cards and controls reaches us.
       z: -1
       acceptedButtons: Qt.LeftButton
-      enabled: scene.visible && !(scene.infoPopup && scene.infoPopup.visible) &&
+      enabled: host.backgroundChatEnabled && scene.visible && !(scene.infoPopup && scene.infoPopup.visible) &&
         !scene.popupItem && !scene.agItem && !(scene.areaHandler && scene.areaHandler.visible) && !(host.popup && host.popup.visible)
       property double lastBackgroundTapAt: 0
       property point lastBackgroundTap: Qt.point(0,0)
@@ -98,8 +109,10 @@ Item {
       if (previous && previous.parent === scene) { backgroundChatShortcut=previous; return; }
       if (previous) { previous.enabled=false; previous.objectName=""; previous.destroy(); }
     } catch (_) { /* A destroyed scene can leave a stale QML wrapper. */ }
+    if(inheritedBackgroundChatGate){inheritedBackgroundChatGate.destroy();inheritedBackgroundChatGate=null;}
     if (!scene) return;
-    if (scene.children.some(c => c.objectName === "roomBackgroundChatShortcut")) return;
+    const inherited=scene.children.find(c => c.objectName === "roomBackgroundChatShortcut");
+    if(inherited){inheritedBackgroundChatGate=backgroundChatGateComponent.createObject(scene,{shortcut:inherited});return;}
     backgroundChatShortcut = backgroundChatComponent.createObject(scene, {scene:scene});
   }
   function disposeRoomItem(item) {
@@ -252,8 +265,21 @@ Item {
   property bool hideTitles: false
   property bool preferencesLoaded: false
   property bool directionalLuckEnabled: true
+  property bool backgroundChatEnabled: true
   property string directionalLuckGoals: "诸葛连弩/丈八蛇矛"
   property string functionSettingsError: ""
+  function setBackgroundChatEnabled(enabled) {
+    let features;
+    try {
+      features = JSON.parse(Backend.readFileFromAssets("function-settings.json") || "{}");
+      if (!features || typeof features !== "object" || Array.isArray(features)) throw Error("Invalid settings");
+    } catch (_) { functionSettingsError="功能设置读取失败，原文件已保留"; return false; }
+    features.backgroundChat=!!enabled;
+    if (!Backend.writeFileToAssets("function-settings.json",JSON.stringify(features))) {
+      functionSettingsError="设置保存失败，请重试"; return false;
+    }
+    backgroundChatEnabled=!!enabled; functionSettingsError=""; return true;
+  }
   function setDirectionalLuckGoals(value) {
     value=String(value).trim();
     if(!LuckGoals.parse(value)) {functionSettingsError="目标格式不正确，例如：连弩，杀:2";return false;}
@@ -296,6 +322,9 @@ Item {
   // opponent cards onto the stock player photo so the information is visible
   // without opening the counter panel.
   property var knownHandBadges: []
+  property var knownHandPopupItem: null
+  property string knownHandPopupOwner: ""
+  property var knownHandPopupIds: []
   property var knownHandCounts: ({})
   property string knownHandPayload: ""
   property var guanNingSkinStates: []
@@ -321,6 +350,7 @@ Item {
       hideTitles = data.hideTitles === true;
       const features = JSON.parse(Backend.readFileFromAssets("function-settings.json") || "{}");
       directionalLuckEnabled = features.directionalLuck !== false;
+      backgroundChatEnabled = features.backgroundChat !== false;
       if(typeof features.directionalLuckGoals==="string" && LuckGoals.parse(features.directionalLuckGoals))directionalLuckGoals=features.directionalLuckGoals;
       preferencesLoaded = true;
       requestCompatibility();
@@ -462,6 +492,8 @@ Item {
       required property var photo
       property var knownCards: []
       property var knownIds: []
+      property var knownRows: []
+      property string ownerKey: ""
       readonly property var stockViewer: photo && Array.from(photo.children || []).find(
         item => String(item).indexOf("HandcardViewer_QMLTYPE") === 0) || null
       // Reuse the native viewer's appearance and full-card popup, without
@@ -474,7 +506,7 @@ Item {
         restoreMode: Binding.RestoreBindingOrValue
       }
       readonly property int knownCount: knownCards.length
-      readonly property bool rightSide: photoBounds.x < width + 10
+      readonly property bool rightSide: photoBounds.x < width + 6
       property rect photoBounds: Qt.rect(0, 0, 0, 0)
       function syncPosition() {
         // mapToItem() does not establish a QML binding on the photo's x/y.
@@ -485,7 +517,7 @@ Item {
         photoBounds = Qt.rect(Math.min(top.x, bottom.x), Math.min(top.y, bottom.y),
           Math.abs(bottom.x-top.x), Math.abs(bottom.y-top.y));
       }
-      width: Math.min(66, Math.max(44, photoBounds.width * 0.38))
+      width: 48
       height: Math.min(photoBounds.height, cardNames.implicitHeight + 10)
       radius: 6
       z: 20
@@ -519,16 +551,20 @@ Item {
           width: parent.width
           spacing: 2
           Repeater {
-            model: badge.knownCards.slice(0, 4)
-            delegate: Text {
-              required property string modelData
+            model: badge.knownRows.slice(0, 4)
+            delegate: Column {
+              required property var modelData
               width: cardNames.width
-              text: modelData
-              textFormat: Text.PlainText
-              horizontalAlignment: Text.AlignHCenter
-              wrapMode: Text.WrapAnywhere
-              color: "#E4D5A0"
-              font.pixelSize: 16
+              Text {
+                width: parent.width;height:18; text: Array.from(parent.modelData.name).slice(0,2).join("")
+                textFormat:Text.PlainText;horizontalAlignment:Text.AlignHCenter
+                color:"#E4D5A0";font.pixelSize:16
+              }
+              Text {
+                width:parent.width;height:13;text:host.knownHandCardFace(parent.modelData)
+                textFormat:Text.PlainText;horizontalAlignment:Text.AlignHCenter
+                color:[3,4].indexOf(Number(parent.modelData.suit))>=0?"#ff9690":"#eeeeee";font.pixelSize:11
+              }
             }
           }
           Text {
@@ -542,9 +578,9 @@ Item {
           }
         }
       }
-      TapHandler {
+      W.TapHandler {
         enabled: badge.knownIds.length > 0
-        onTapped: host.openKnownHands(badge.knownIds)
+        onTapped: host.openKnownHands(badge.knownIds,badge.ownerKey)
       }
     }
   }
@@ -563,29 +599,53 @@ Item {
         const key = row.ownerId === undefined || row.ownerId === null ? "" : String(row.ownerId);
         if (!key) continue;
         if (!byOwner[key]) byOwner[key] = [];
-        byOwner[key].push({name:String(row.name || row.key || "明牌"), id:Number(row.id || 0)});
+        byOwner[key].push({name:String(row.name || row.key || "明牌"), id:Number(row.id || 0),suit:Number(row.suit || 5),number:Number(row.number || 0)});
       }
       return byOwner;
     } catch (_) { return {}; }
   }
-  function openKnownHands(ids) {
+  function knownHandCardFace(row) {
+    const suit=["","♠","♣","♥","♦",""][Number(row.suit)] || "";
+    const rank=Number(row.number), number=({1:"A",11:"J",12:"Q",13:"K"})[rank] || (rank>0?String(rank):"");
+    return suit+number;
+  }
+  function openKnownHands(ids,ownerKey) {
     const scene = currentScene;
     if (!scene || typeof scene.showInfoPopup !== "function") return;
     const live = readKnownHands();
     // Revalidate after a move; a stale badge must never reopen expired cards.
     const confirmed = new Set();
-    for (const owner of Object.keys(live))
+    for (const owner of Object.keys(live).filter(key=>!ownerKey || key===ownerKey))
       for (const row of live[owner]) confirmed.add(row.id);
     const visibleIds = ids.filter(id => id > 0 && confirmed.has(id));
     if (!visibleIds.length) return;
-    scene.showInfoPopup(Qt.createComponent("LunarLtk.Pages.InfoPopups", "ViewPile"), {
-      name:"hand_card", ids:visibleIds, additional_prop:{selectable:true, markVisible:true}
+    const component=Qt.createComponent("LunarLtk.Pages.InfoPopups", "ViewPile");
+    if(component.status!==Component.Ready) {console.warn("[KnownHands] "+component.errorString());return;}
+    scene.showInfoPopup(component, {
+      name:"hand_card", ids:visibleIds, additional_prop:{known:true,selectable:true, markVisible:true}
     });
+    knownHandPopupOwner=ownerKey || "";knownHandPopupIds=visibleIds;
+    knownHandPopupItem=scene.infoPopup && scene.infoPopup.item || null;
+  }
+  function refreshKnownHandPopup(hands) {
+    try {
+      const popup=currentScene && currentScene.infoPopup;
+      if(!knownHandPopupItem || !popup || !popup.visible || popup.item!==knownHandPopupItem) {
+        knownHandPopupItem=null;return;
+      }
+      const allowed=new Set();
+      for(const key of Object.keys(hands).filter(key=>!knownHandPopupOwner || key===knownHandPopupOwner))
+        for(const row of hands[key])allowed.add(row.id);
+      const ids=knownHandPopupIds.filter(id=>allowed.has(id));
+      if(!ids.length) {popup.close();knownHandPopupItem=null;return;}
+      if(JSON.stringify(Array.from(knownHandPopupItem.ids))!==JSON.stringify(ids))knownHandPopupItem.ids=ids;
+    }catch(_){knownHandPopupItem=null;}
   }
   function syncKnownHandBadges() {
     const scene = currentScene;
     const players = scene && scene.dataModel && scene.dataModel.players || [];
     const hands = readKnownHands();
+    refreshKnownHandPopup(hands);
     const payload = JSON.stringify(hands);
     if (knownHandPayload !== payload) {
       knownHandPayload = payload;
@@ -612,6 +672,8 @@ Item {
       const rows = hands[knownHandKey(model)] || [];
       const cards = rows.map(row => row.name), ids = rows.map(row => row.id).filter(id => id > 0);
       if (badge) {
+        badge.ownerKey=knownHandKey(model);
+        if (JSON.stringify(badge.knownRows)!==JSON.stringify(rows))badge.knownRows=rows;
         if (JSON.stringify(badge.knownCards) !== JSON.stringify(cards)) badge.knownCards = cards;
         if (JSON.stringify(badge.knownIds) !== JSON.stringify(ids)) badge.knownIds = ids;
       }
@@ -996,7 +1058,20 @@ Item {
   onPresentSceneChanged: cancelPresentQueue()
   onWaitingRoomSceneChanged: {
     if (waitingPresentBar) { waitingPresentBar.destroy(); waitingPresentBar=null; }
-    if (waitingRoomScene) waitingPresentBar=waitingPresentComponent.createObject(waitingRoomScene,{scene:waitingRoomScene});
+    Qt.callLater(syncWaitingPresentBar);
+  }
+  function syncWaitingPresentBar() {
+    const scene=waitingRoomScene;
+    if(!scene)return;
+    const pending=Array.from(scene.children || []);
+    let controlRow=null;
+    for(let i=0;i<pending.length && i<512;i++) {
+      const item=pending[i];
+      if(item.text===Lua.tr("Change Room Config")) {controlRow=item.parent;break;}
+      if(item.children)pending.push(...Array.from(item.children));
+    }
+    if(!controlRow || waitingPresentBar)return;
+    waitingPresentBar=waitingPresentComponent.createObject(controlRow,{scene:scene});
   }
   Connections {
     target: host.waitingRoomScene
@@ -1021,29 +1096,31 @@ Item {
       id: waitingBar
       objectName: "waitingRoomPresentActions"
       required property var scene
-      readonly property var panel: host.waitingGiftPanel(scene)
-      readonly property real panelX: panel ? panel.x : 0
-      readonly property real panelY: panel ? panel.y : 0
-      readonly property var panelParent: panel ? panel.parent : null
-      readonly property point origin: panelParent ? panelParent.mapToItem(scene,panelX,panelY) : Qt.point(0,0)
-      readonly property bool fitsRight: !!panel && origin.x+panel.width+width+12<=scene.width
-      readonly property bool fitsLeft: origin.x>=width+12
-      width: 116; height: actions.implicitHeight+12; radius: 7
+      Layout.preferredWidth:100;Layout.preferredHeight:35
+      width:100;height:35;radius:7
       color: "#2A1F1F"; border.color: "#a68a54"
-      z: scene.areaHandler ? scene.areaHandler.z+2 : 22
-      visible: !!panel && scene.visible && scene.areaHandler.visible && !Config.replaying
-      x: !panel ? 0 : fitsRight ? origin.x+panel.width+6 : fitsLeft ? origin.x-width-6 : Math.max(6,Math.min(scene.width-width-6,origin.x))
-      y: {
-        if (!panel) return 0;
-        const top=fitsRight || fitsLeft ? origin.y :
-          origin.y+panel.height+height+12<=scene.height ? origin.y+panel.height+6 : origin.y-height-6;
-        return Math.max(6,Math.min(scene.height-height-6,top));
+      visible:scene.visible && !Config.replaying
+      onVisibleChanged:if(!visible)waitingGifts.close()
+      Button {
+        objectName:"waitingRoomPresentMenuButton"
+        anchors.fill:parent;text:"全员互动";font.pixelSize:16;leftPadding:6;rightPadding:6
+        onClicked:{
+          if(waitingBar.scene.areaHandler && waitingBar.scene.areaHandler.visible)waitingBar.scene.areaHandler.closeItem();
+          waitingGifts.open();
+        }
       }
-      Column {
-        id: actions
-        x: 6; y: 6; width: parent.width-12; spacing: 6
-        PresentButton {objectName:"waitingRoomFlowerButton";text:"全员送花";presentKind:"Flower";width:parent.width;height:36;closeWaitingPanel:true}
-        PresentButton {objectName:"waitingRoomEggButton";text:"全员砸蛋";presentKind:"Egg";width:parent.width;height:36;closeWaitingPanel:true}
+      Menu {
+        id:waitingGifts;width:140;y:-height-4
+        MenuItem {
+          objectName:"waitingRoomFlowerButton";text:"全员送花"
+          enabled:host.presentRestSeconds===0 && !host.presentQueue.length
+          onTriggered:host.sendPresent("Flower")
+        }
+        MenuItem {
+          objectName:"waitingRoomEggButton";text:"全员砸蛋"
+          enabled:host.presentRestSeconds===0 && !host.presentQueue.length
+          onTriggered:host.sendPresent("Egg")
+        }
       }
     }
   }

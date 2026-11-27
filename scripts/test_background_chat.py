@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory(dir=a.work_dir) as tmp:
  put('Fk/Cpp.qml','pragma Singleton\nimport QtQuick\nQtObject{property string os:"Android";property string path:"/fixture";}')
  put('Fk/Config.qml','pragma Singleton\nimport QtQuick\nQtObject{property bool replaying:false;property bool observing:false;property string roomBg:"";property string lobbyBg:"";property var enabledResourcePacks:[];property real winScale:1;property var blockedUsers:[];property bool banChangeSkin:false;}')
  put('Fk/Lua.qml','pragma Singleton\nimport QtQuick\nQtObject{function ev(s){return true;}function tr(s){return s;}}')
- put('Fk/Backend.qml','pragma Singleton\nimport QtQuick\nQtObject{function readFileFromAssets(p){return "{}";}function writeFileToAssets(p,v){return true;}}')
+ put('Fk/Backend.qml','pragma Singleton\nimport QtQuick\nQtObject{property string prefs:\'{"directionalLuck":false,"future":7}\';property bool fail:false;function readFileFromAssets(p){return p==="function-settings.json"?prefs:"{}";}function writeFileToAssets(p,v){if(fail)return false;if(p==="function-settings.json")prefs=v;return true;}}')
  put('Fk/Mediator.qml','pragma Singleton\nimport QtQuick\nQtObject{property int chats:0;signal commandGot(var sender,string command,var data);function notify(sender,command,data){if(command==="IWantToChat")chats++;commandGot(sender,command,data);}}')
  put('Fk/SkinBank.qml','pragma Singleton\nimport QtQuick\nQtObject{}')
  put('LunarLtk/qmldir','module LunarLtk\nsingleton Ltk 1.0 Ltk.qml\n')
@@ -67,6 +67,11 @@ Window {
  function hideScene(){scene.visible=false;}function showScene(){scene.visible=true;}
  function scaleScene(){scene.scale=.6;scene.transformOrigin=Item.TopLeft;}
  function resetScale(){scene.scale=1;}
+ function disableShortcut(){counter.setBackgroundChatEnabled(false);}
+ function enableShortcut(){counter.setBackgroundChatEnabled(true);}
+ function failedShortcutSave(){Backend.fail=true;counter.setBackgroundChatEnabled(false);Backend.fail=false;}
+ function reloadShortcut(){counter.backgroundChatEnabled=true;counter.preferencesLoaded=false;counter.settingsReady=false;counter.settingsReady=true;}
+ function preferenceState(){return JSON.stringify({stored:JSON.parse(Backend.prefs),enabled:counter.backgroundChatEnabled,error:counter.functionSettingsError});}
  function nativeShortcut(){counter.currentScene=null;Qt.createQmlObject('import QtQuick; import Fk; MouseArea {objectName:"roomBackgroundChatShortcut";anchors.fill:parent;z:-1;onDoubleClicked: Mediator.notify(parent,"IWantToChat")}',scene,"native-existing");counter.currentScene=scene;}
  function state(){return JSON.stringify({attached:counter.currentScene===scene,shortcutObject:!!counter.backgroundChatShortcut,chats:Mediator.chats,drawer:roomDrawer.visible,cards:cardClicks,cardDoubles:cardDoubles,buttons:buttonClicks,shortcuts:scene.children.filter(c=>c.objectName==="roomBackgroundChatShortcut").length});}
 }'''.replace('OPEN_CHAT',open_chat))
@@ -115,7 +120,14 @@ Window {
   call('release');assert state()['shortcuts']==0,state();touch_double();assert state()['chats']==3,state()
   call('attach');call('attach');assert state()['shortcuts']==1,state();touch_double();assert state()['chats']==4,state();call('closeChat')
   checks.append('leaving and reattaching cleans up without duplicate handlers')
-  call('nativeShortcut');assert state()['shortcuts']==1,state();mouse_double();assert state()['chats']==5,state();call('closeChat')
+  call('disableShortcut');mouse_double();touch_double();assert state()['chats']==4 and not state()['drawer'],state()
+  prefs=json.loads(QMetaObject.invokeMethod(win,'preferenceState',Q_RETURN_ARG('QVariant')))
+  assert prefs['stored']=={'directionalLuck':False,'future':7,'backgroundChat':False} and not prefs['enabled'],prefs
+  call('reloadShortcut');touch_double();assert state()['chats']==4,state()
+  call('enableShortcut');call('failedShortcutSave');touch_double();assert state()['chats']==5 and state()['drawer'],state();call('closeChat')
+  checks.append('disable persists, preserves other settings and blocks mouse/touch immediately; failed writes keep the enabled value')
+  call('nativeShortcut');assert state()['shortcuts']==1,state();mouse_double();assert state()['chats']==6,state();call('closeChat')
+  call('disableShortcut');mouse_double();assert state()['chats']==6,state();call('enableShortcut');mouse_double();assert state()['chats']==7,state();call('closeChat')
   checks.append('an existing native iOS shortcut is reused without a second listener')
   result={'checks':checks,'state':state(),'qt':__import__('PySide6').__version__,'testedPayload':str(a.payload),'realDevice':False}
  errors=[m for m in messages if any(s in m for s in ['TypeError','ReferenceError','SyntaxError','Cannot assign','Unable to assign'])]

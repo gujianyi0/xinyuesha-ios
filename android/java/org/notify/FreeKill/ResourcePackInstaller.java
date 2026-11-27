@@ -16,6 +16,17 @@ final class ResourcePackInstaller {
     static final int MAX_FILES=4096;
     interface Progress { void update(String stage,long done,long total,int part,int parts)throws Exception; }
     interface Copier { void copy(JSONObject part,Path destination)throws Exception; }
+    interface Mover { Path move(Path from,Path to,CopyOption... options)throws IOException; }
+    static void moveCompatible(Path from,Path to,boolean replace)throws IOException {
+        moveCompatible(from,to,replace,Files::move);
+    }
+    static void moveCompatible(Path from,Path to,boolean replace,Mover mover)throws IOException {
+        CopyOption[] atomic=replace?new CopyOption[]{StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING}:new CopyOption[]{StandardCopyOption.ATOMIC_MOVE};
+        try {mover.move(from,to,atomic);}
+        catch(AtomicMoveNotSupportedException|UnsupportedOperationException unavailable) {
+            mover.move(from,to,replace?new CopyOption[]{StandardCopyOption.REPLACE_EXISTING}:new CopyOption[]{});
+        }
+    }
     final Path root,bridge; final String origin,id; final Progress progress;
     private long lastProgress,lastCancelCheck; private long before,total;private int partNumber,partCount;
     ResourcePackInstaller(Path root,String origin,String id,Progress progress)throws Exception {
@@ -103,13 +114,15 @@ final class ResourcePackInstaller {
                     report("downloading",before+(Files.exists(partial)?Files.size(partial):0),true);
                     if(embedded!=null){Files.deleteIfExists(partial);embedded.copy(p,partial);}else fetch(p,partial);
                     if(Files.size(partial)!=p.getLong("bytes")||!hash(partial).equals(p.getString("sha256"))){Files.deleteIfExists(partial);throw new IOException("资源校验失败，请重新下载。");}
-                    Files.move(partial,archive,StandardCopyOption.REPLACE_EXISTING);
+                    moveCompatible(partial,archive,true);
                 }
                 before+=p.getLong("bytes");report("extracting",before,true);extract(archive,output,expanded,files,seen);completed.add(archive);
             }
             if(files[0]==0||(pack.optBoolean("strictFileCount",false)&&pack.getInt("fileCount")!=files[0])||(pack.optBoolean("strictExpanded",false)&&expanded[0]!=0))throw new IOException("资源展开清单不匹配");
-            lastCancelCheck=0;checkCancelled();Files.move(output,destination,StandardCopyOption.ATOMIC_MOVE);
-            for(Path file:completed)Files.deleteIfExists(file);
+            lastCancelCheck=0;checkCancelled();moveCompatible(output,destination,false);
+            // A committed, verified pack must not be reported as failed just
+            // because the filesystem temporarily refuses cache housekeeping.
+            for(Path file:completed)try{Files.deleteIfExists(file);}catch(IOException ignored){}
         }finally{try(java.util.stream.Stream<Path> paths=Files.walk(temporary)){for(Path path:(Iterable<Path>)paths.sorted(Comparator.reverseOrder())::iterator)Files.deleteIfExists(path);}}
     }
     static void extract(Path archive,Path destination,long[] remaining,int[] count,Set<String> seen)throws Exception {

@@ -32,6 +32,8 @@ with tempfile.TemporaryDirectory(dir=a.work_dir) as tmp:
  put('Fk/Mediator.qml','pragma Singleton\nimport QtQuick\nQtObject{signal commandGot(var sender,string command,var data);function notify(sender,cmd,data){commandGot(sender,cmd,data);}}')
  put('Fk/SkinBank.qml','pragma Singleton\nimport QtQuick\nQtObject{}')
  put('LunarLtk/qmldir','module LunarLtk\nsingleton Ltk 1.0 Ltk.qml\n');put('LunarLtk/Ltk.qml','pragma Singleton\nimport QtQuick\nQtObject{property var roomScene:null;}')
+ put('Fk/Widgets/qmldir','module Fk.Widgets\nTapHandler 1.0 TapHandler.qml\n')
+ shutil.copyfile(a.payload/'Fk/Widgets/TapHandler.qml',b/'Fk/Widgets/TapHandler.qml')
  put('LunarLtk/Pages/InfoPopups/qmldir','module LunarLtk.Pages.InfoPopups\nViewPile 1.0 ViewPile.qml\n');put('LunarLtk/Pages/InfoPopups/ViewPile.qml','import QtQuick\nItem{}')
  # Simulated native lifecycle only. Real Spine rendering has a separate C++ probe.
  put('Spine/qmldir','module Spine\nSkeletonAnimation 1.0 SkeletonAnimation.qml\nsingleton SpineVersion 1.0 SpineVersion.qml\nsingleton TestControl 1.0 TestControl.qml\n')

@@ -53,6 +53,9 @@ Window{id:win;width:800;height:720;visible:true
  def action(name,*args):QMetaObject.invokeMethod(win,name,*[Q_ARG('QVariant',v) for v in args]);pump()
  def state():return json.loads(call('state'))
  pump(650);field=win.findChild(QQuickItem,'directionalLuckGoalInput');button=win.findChild(QQuickItem,'directionalLuckSaveGoals');assert field and button and button.isVisible(),logs
+ control=win.findChild(QQuickItem,'backgroundChatEnabledSwitch');assert control and control.isVisible() and control.property('checked'),logs
+ pos=control.mapToScene(QPointF(control.width()/2,control.height()/2));QTest.mouseClick(win,Qt.LeftButton,Qt.NoModifier,pos.toPoint());pump()
+ assert json.loads(state()['stored'])=={'directionalLuck':True,'future':7,'backgroundChat':False},state()
  win.grabWindow().save(str(a.output/'before.png'))
  field.setProperty('text','连弩，杀:2');pos=button.mapToScene(QPointF(button.width()/2,button.height()/2));assert 0<pos.x()<win.width() and 0<pos.y()<win.height(),(pos,button.width(),button.height());QTest.mouseClick(win,Qt.LeftButton,Qt.NoModifier,pos.toPoint());pump()
  value=state();stored=json.loads(value['stored']);assert stored['directionalLuckGoals']=='连弩，杀:2' and stored['future']==7 and stored['directionalLuck'] is True,value

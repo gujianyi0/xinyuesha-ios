@@ -88,7 +88,7 @@ final class BundledPackInstaller {
         Path stage=Files.createTempFile(file.getParent(),"embedded-write-",".tmp");
         try {
             try (FileOutputStream output=new FileOutputStream(stage.toFile())) { output.write(bytes);output.getFD().sync(); }
-            Files.move(stage,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
+            ResourcePackInstaller.moveCompatible(stage,file,true);
         } finally { Files.deleteIfExists(stage); }
     }
     static void writeJson(Path file, JSONObject json) throws Exception {
@@ -160,8 +160,8 @@ final class BundledPackInstaller {
             if (before!=null) atomicWrite(backup.resolve("client-before.private.json"),before);
             for (int i=0;i<packs.length();i++) {
                 String id=packs.getJSONObject(i).getString("id");Path destination=active.resolve(id);
-                if (Files.exists(destination,LinkOption.NOFOLLOW_LINKS)) {Files.move(destination,backup.resolve(id),StandardCopyOption.ATOMIC_MOVE);previous.add(id);}
-                try {Files.move(stage.resolve(id),destination,StandardCopyOption.ATOMIC_MOVE);}
+                if (Files.exists(destination,LinkOption.NOFOLLOW_LINKS)) {ResourcePackInstaller.moveCompatible(destination,backup.resolve(id),false);previous.add(id);}
+                try {ResourcePackInstaller.moveCompatible(stage.resolve(id),destination,false);}
                 catch (Exception error) {if(previous.contains(id))Files.move(backup.resolve(id),destination);throw error;}
                 moved.add(id);
             }

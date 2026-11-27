@@ -54,7 +54,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Fk
 import "card-counter" as Counter
-Window {id:win;width:800;height:500;visible:true;property var sent:[];property bool switchDuringSend:false
+Window {id:win;width:800;height:500;visible:true;property var sent:[];property bool switchDuringSend:false;property int observerClicks:0
  property alias selfObject:self;QtObject{id:self;property int id:1}
  QtObject{id:endpoint;function notifyServer(c,d){win.sent=win.sent.concat([{command:c,data:d}]);if(win.switchDuringSend){win.switchDuringSend=false;win.startGame();}}}
  Counter.CounterHost{id:counter;navigationRoot:navigation;clientContext:endpoint}
@@ -69,11 +69,17 @@ Window {id:win;width:800;height:500;visible:true;property var sent:[];property b
    function sendDanmu(s){}
    ListModel{id:seats;Component.onCompleted:{for(const row of [{id:1,screenName:"Self",sealed:false},{id:2,screenName:"Other",sealed:false},{id:-2,screenName:"Bot",sealed:false},{id:-1,screenName:"",sealed:false},{id:0,screenName:"Invalid",sealed:false},{id:6,screenName:"Sealed",sealed:true},{id:2,screenName:"Duplicate",sealed:false},{id:7,screenName:"",sealed:false}])append(row);}}
    AvatarFixture{id:avatar;x:100;y:80;roomScene:roomScene}
+   RowLayout {x:10;y:parent.height-48;spacing:5
+    Button{text:"Change Room Config";Layout.preferredWidth:100;Layout.preferredHeight:35}
+    Button{text:"Chat";Layout.preferredWidth:70;Layout.preferredHeight:35}
+   }
+   Button{objectName:"observerFixture";x:650;y:80;width:130;height:55;text:"Observer";onClicked:win.observerClicks++}
    HANDLER
   }
   Item{id:battle;anchors.fill:parent;visible:roomPage.gameContent===battle;property var dataModel:({players:[{playerid:1},{playerid:3}]})}
  }
  function open(){avatar.open();}
+ function closeAvatar(){globalTapHandler.closeItem();}
  function single(){const panel=globalTapHandler.tmpItem;const flow=panel.children.find(c=>c.children&&Array.from(c.children).some(b=>b.text==="Give Flower"));flow.children.find(b=>b.text==="Give Flower").clicked(null);}
  function resetSent(){sent=[];}
  function startGame(){globalTapHandler.closeItem();roomPage.gameContent=battle;counter.currentScene=battle;}
@@ -82,7 +88,7 @@ Window {id:win;width:800;height:500;visible:true;property var sent:[];property b
  function switchOnSend(){switchDuringSend=true;}
  function leave(){stack.currentItem=lobby;}
  function narrow(){win.width=340;avatar.x=20;}
- function state(){const bar=counter.waitingPresentBar;return JSON.stringify({chats:Mediator.chats,waitingShortcuts:roomScene.children.filter(c=>c.objectName==="roomBackgroundChatShortcut").length,sent:sent,rest:counter.presentRestSeconds,bar:bar?{visible:bar.visible,x:bar.x,y:bar.y,width:bar.width,height:bar.height}:null,panelOpen:globalTapHandler.visible,context:counter.presentScene===roomScene?"waiting":counter.presentScene===battle?"battle":"none"});}
+ function state(){const bar=counter.waitingPresentBar,p=bar?bar.mapToItem(roomScene,0,0):Qt.point(0,0);return JSON.stringify({observerClicks:observerClicks,chats:Mediator.chats,waitingShortcuts:roomScene.children.filter(c=>c.objectName==="roomBackgroundChatShortcut").length,sent:sent,rest:counter.presentRestSeconds,bar:bar?{visible:bar.visible,x:p.x,y:p.y,width:bar.width,height:bar.height,inConfigRow:Array.from(bar.parent.children).some(c=>c.text==="Change Room Config")}:null,panelOpen:globalTapHandler.visible,context:counter.presentScene===roomScene?"waiting":counter.presentScene===battle?"battle":"none"});}
 }'''.replace('HANDLER',handler))
     engine=QQmlApplicationEngine();engine.addImportPath(str(base));engine.rootContext().setContextProperty('ClientInstance',None);engine.rootContext().setContextProperty('Self',None)
     engine.load(QUrl.fromLocalFile(str(base/'Main.qml')));assert engine.rootObjects(),logs;win=engine.rootObjects()[0]
@@ -98,7 +104,7 @@ Window {id:win;width:800;height:500;visible:true;property var sent:[];property b
         deadline=time.monotonic()+12
         while state()['rest'] and time.monotonic()<deadline:pump(150)
         assert state()['rest']==0
-    pump(300);assert state()['context']=='waiting' and not state()['sent'] and not state()['bar']['visible'],(state(),logs)
+    pump(300);assert state()['context']=='waiting' and not state()['sent'] and state()['bar']['visible'] and state()['bar']['inConfigRow'],(state(),logs)
     assert state()['waitingShortcuts']==1,state()
     touch=QTest.createTouchDevice();blank=QPoint(650,230)
     def tap():
@@ -113,18 +119,19 @@ Window {id:win;width:800;height:500;visible:true;property var sent:[];property b
     QTest.touchEvent(win,touch).release(0,QPoint(700,300),win).commit();pump();assert state()['chats']==3,state()
     call('open');assert state()['bar']['visible'];win.grabWindow().save(str(a.work_dir/'waiting-room-actions.png'))
     tap();tap();assert state()['chats']==3,'Avatar popup must retain input'
-    call('open')
+    call('closeAvatar');click('observerFixture');assert state()['observerClicks']==1,state()
+    click('waitingRoomPresentMenuButton')
     egg=win.findChild(QObject,'waitingRoomEggButton');assert egg
     QTest.mousePress(win,Qt.LeftButton,Qt.NoModifier,point(egg));pump(1300);assert not state()['sent']
     QTest.mouseRelease(win,Qt.LeftButton,Qt.NoModifier,point(egg));pump();assert [r['data']['msg'] for r in state()['sent']]==['$@Egg:2','$@Egg:-2'],(state(),logs)
     assert not state()['panelOpen'];call('startGame');assert state()['rest']>0 and state()['context']=='battle'
-    call('returnWaiting');call('open');assert not win.findChild(QObject,'waitingRoomFlowerButton').property('enabled')
-    call('addPlayer');cooldown();call('resetSent');click('waitingRoomFlowerButton')
+    call('returnWaiting');assert not win.findChild(QObject,'waitingRoomFlowerButton').property('enabled')
+    call('addPlayer');cooldown();call('resetSent');click('waitingRoomPresentMenuButton');click('waitingRoomFlowerButton')
     assert [r['data']['msg'] for r in state()['sent']]==['$@Flower:1','$@Flower:2','$@Flower:-2','$@Flower:9'],state()
     call('open');call('resetSent');call('single');assert [r['data']['msg'] for r in state()['sent']]==['$@Flower:2'],(state(),logs)
-    cooldown();call('open');call('narrow');pump();s=state();bar=s['bar'];assert bar['x']>=0 and bar['x']+bar['width']<=win.width() and bar['y']>=0 and bar['y']+bar['height']<=win.height(),s
+    cooldown();call('closeAvatar');call('narrow');pump();s=state();bar=s['bar'];assert bar['x']>=0 and bar['x']+bar['width']<=win.width() and bar['y']>=0 and bar['y']+bar['height']<=win.height(),s
     win.grabWindow().save(str(a.work_dir/'waiting-room-actions-narrow.png'))
-    call('resetSent');call('switchOnSend');click('waitingRoomFlowerButton');assert len(state()['sent'])==1 and state()['context']=='battle',state()
+    call('resetSent');call('switchOnSend');click('waitingRoomPresentMenuButton');click('waitingRoomFlowerButton');assert len(state()['sent'])==1 and state()['context']=='battle',state()
     call('leave');assert not state()['sent'][0]['data']['msg'].endswith(':9')
     errors=[m for m in logs if any(s in m for s in ['TypeError','ReferenceError','Cannot assign','Unable to assign','Binding loop','is not a type'])]
     assert not errors,errors

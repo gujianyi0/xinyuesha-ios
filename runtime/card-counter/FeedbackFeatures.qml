@@ -113,11 +113,23 @@ Item {
         spacing: 12
         Label { text:"功能设置";font.pixelSize:24;font.bold:true;Layout.margins:16 }
         Switch {
+          objectName:"backgroundChatEnabledSwitch"
+          visible:"backgroundChatEnabled" in features.owner
+          text:"双击空白处打开聊天"
+          checked:visible && features.owner.backgroundChatEnabled
+          onToggled:if (!features.owner.setBackgroundChatEnabled(checked)) checked=features.owner.backgroundChatEnabled
+        }
+        Label {
+          visible:"backgroundChatEnabled" in features.owner
+          text:"同时控制牌局和等待房间的快捷聊天；关闭后仍可点击聊天按钮。等待房间长按空白处也遵循此开关。"
+          Layout.fillWidth:true;Layout.leftMargin:16;Layout.rightMargin:16;wrapMode:Text.Wrap
+        }
+        Switch {
           objectName:"directionalLuckEnabledSwitch"
           visible: "directionalLuckEnabled" in features.owner
           text:"定向刷牌"
           checked: visible && features.owner.directionalLuckEnabled
-          onToggled: features.owner.setDirectionalLuckEnabled(checked)
+          onToggled: if (!features.owner.setDirectionalLuckEnabled(checked)) checked=features.owner.directionalLuckEnabled
         }
         Label {
           visible: "directionalLuckEnabled" in features.owner
@@ -151,7 +163,7 @@ Item {
         }
         Label {
           visible: features.mobile
-          text:features.hapticsSupported ? "仅自己受伤、失去体力或回合开始时提醒；默认关闭，遵循系统触感设置。" : "此版本暂不支持震动提醒。"
+          text:features.hapticsSupported ? "仅自己受伤、失去体力或回合开始时提醒；默认关闭，遵循系统触感设置。"+(Cpp.os==="iOS"?"开启后使用最大强度的重触感。":"") : "此版本暂不支持震动提醒。"
           Layout.fillWidth:true;Layout.leftMargin:16;Layout.rightMargin:16;wrapMode:Text.Wrap
         }
         Button {

@@ -43,10 +43,11 @@ int fkIosPlayGameHaptic(int kind) {
   if (kind < 0 || kind > 2 || ![NSThread isMainThread]) return 0;
   @autoreleasepool {
     if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) return 0;
-    const UIImpactFeedbackStyle style = kind == 0 ? UIImpactFeedbackStyleMedium : UIImpactFeedbackStyleLight;
+    const UIImpactFeedbackStyle style = UIImpactFeedbackStyleHeavy;
     UIImpactFeedbackGenerator *feedback = [[[UIImpactFeedbackGenerator alloc] initWithStyle:style] autorelease];
     [feedback prepare];
-    [feedback impactOccurred];
+    if (@available(iOS 13.0, *)) [feedback impactOccurredWithIntensity:1.0];
+    else [feedback impactOccurred];
     return 1;
   }
 }
