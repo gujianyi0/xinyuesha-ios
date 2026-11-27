@@ -12,6 +12,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--native-library', type=Path, help='ARM64 engine rebuilt against the baseline Qt SDK')
     parser.add_argument('--embedded-resource-catalog', type=Path, help='Opt-in local sharing edition; includes three verified v1 archives')
+    parser.add_argument('--payload-directory', type=Path, help='Explicit isolated managed payload for device diagnostics; defaults to the published payload')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     sdk = Path(os.environ.get('ANDROID_HOME') or os.environ['ANDROID_SDK_ROOT'])
@@ -24,8 +25,9 @@ def main():
     native = args.native_library.read_bytes() if args.native_library else None
     if native is not None and (native[:6] != b'\x7fELF\x02\x01' or native[16:20] != b'\x03\x00\xb7\x00'):
         parser.error('--native-library must be an ARM64 shared object')
-    payload = {p.relative_to(root/'payload').as_posix():p.read_bytes()
-               for p in (root/'payload').rglob('*') if p.is_file()}
+    payload_root = (args.payload_directory or root/'payload').resolve()
+    payload = {p.relative_to(payload_root).as_posix():p.read_bytes()
+               for p in payload_root.rglob('*') if p.is_file()}
     manifest = json.loads(payload.pop('card-counter/bundled-files.json'))
     assert all(name in payload for name in manifest), 'Incomplete published payload'
     startup = (root/'java/org/notify/FreeKill/CounterStartup.java').read_text(encoding='utf-8')

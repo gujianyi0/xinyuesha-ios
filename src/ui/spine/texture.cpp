@@ -99,5 +99,10 @@ QString Texture::name() const
 
 QImage *Texture::image()
 {
+    // The RHI renderer consumes RGBA8888. Normalize the owned decode once so
+    // atlas snapshots share these pixels instead of retaining an additional
+    // full BGRA image for the lifetime of every skeleton.
+    if (mImage && mImage->format() != QImage::Format_RGBA8888)
+        *mImage = mImage->convertToFormat(QImage::Format_RGBA8888);
     return mImage;
 }

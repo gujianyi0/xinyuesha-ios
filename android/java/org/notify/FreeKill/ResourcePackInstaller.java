@@ -89,7 +89,9 @@ final class ResourcePackInstaller {
         Path cache=safe("assets/resource-pack-download/cache");Files.createDirectories(cache);
         long needed=pack.getLong("expandedBytes")+64L*1024*1024;
         for(int i=0;i<parts.length();i++){JSONObject p=parts.getJSONObject(i);Path cached=cache.resolve(p.getString("sha256")+".zip"),partial=cache.resolve(p.getString("sha256")+".partial");long have=Files.exists(cached)?Files.size(cached):Files.exists(partial)?Files.size(partial):0;needed+=Math.max(0,p.getLong("bytes")-have);}
-        if(Files.getFileStore(root).getUsableSpace()<needed)throw new IOException("存储空间不足，请至少腾出 "+((needed+1048575)/1048576)+" MB 后重试。");
+        // Android's NIO provider rejects getFileStore; File uses statvfs on
+        // the same app-owned volume and is supported by the Android runtime.
+        if(root.toFile().getUsableSpace()<needed)throw new IOException("存储空间不足，请至少腾出 "+((needed+1048575)/1048576)+" MB 后重试。");
         Path temporary=Files.createTempDirectory(bridge,"install-");long[] expanded={pack.getLong("expandedBytes")};int[] files={0};Set<String> seen=new HashSet<>();List<Path> completed=new ArrayList<>();
         try {
             Path output=Files.createDirectory(temporary.resolve("pack"));before=0;

@@ -122,9 +122,9 @@ Window{id:win;width:800;height:500;visible:true
     query=QInputMethodQueryEvent(Qt.ImEnterKeyType);QCoreApplication.sendEvent(editor_item,query);assert int(query.value(Qt.ImEnterKeyType))==state()['sendKey']
     QTest.keyClick(win,Qt.Key_Return);pump();assert endpoint.messages==[('Chat',{'type':2,'msg':'你好，测试'})],endpoint.messages
     QTest.keyClick(win,Qt.Key_Return);pump();assert len(endpoint.messages)==1,'Empty send or duplicate handler'
-    points=json.loads(QMetaObject.invokeMethod(win,'points',Q_RETURN_ARG('QVariant')));assert points=={'from':[400,400],'to':[130,170],'missing':None},points
-    call('draw',2,[[3,99,2]]);call('draw',3,[[2]]);lines=state()['lines'];assert lines and lines[0]=={'from':[400,400],'to':[[130,170]]} and lines[-1]=={'from':[130,170],'to':[[400,400]]},(lines,logs)
+    points=json.loads(QMetaObject.invokeMethod(win,'points',Q_RETURN_ARG('QVariant')));assert points=={'from':[710,422.5],'to':[130,170],'missing':None},points
+    call('draw',2,[[3,99,2]]);call('draw',3,[[2]]);lines=state()['lines'];assert lines and lines[0]=={'from':[710,422.5],'to':[[130,170]]} and lines[-1]=={'from':[130,170],'to':[[710,422.5]]},(lines,logs)
     call('otherAnimation');assert state()['otherAnimations']==1
     errors=[s for s in logs if any(t in s for t in ('TypeError','ReferenceError','Cannot assign','Unable to assign','Binding loop'))];assert not errors,errors
-    result={'passed':True,'payload':str(a.payload),'qt':__import__('PySide6').__version__,'hapticMotorSimulated':True,'defaultOffSelfOnlyAndDeduplicated':True,'observerReplayBackgroundAndDisconnectSuppressed':True,'settingsPreserveOtherKeysAndFailedWrites':True,'realStockEditorImeSendAction':True,'composingTextSentExactlyOnce':True,'ownOutgoingAndIncomingLineCentered':True,'otherAnimationPreserved':True,'phoneUsed':False}
+    result={'passed':True,'payload':str(a.payload),'qt':__import__('PySide6').__version__,'hapticMotorSimulated':True,'defaultOffSelfOnlyAndDeduplicated':True,'observerReplayBackgroundAndDisconnectSuppressed':True,'settingsPreserveOtherKeysAndFailedWrites':True,'realStockEditorImeSendAction':True,'composingTextSentExactlyOnce':True,'ownOutgoingAndIncomingLineUsesPortrait':True,'otherAnimationPreserved':True,'phoneUsed':False}
     (a.output/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf8');print(json.dumps(result,ensure_ascii=False));win.close()

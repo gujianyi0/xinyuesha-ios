@@ -239,6 +239,14 @@ Item {
     id: overlayAdapt; interval: 32
     onTriggered: if (host.settingsReady && host.Overlay.overlay) host.refreshCompatibility(host.Overlay.overlay)
   }
+  Connections {
+    target: Backend
+    ignoreUnknownSignals: true
+    function onBackgroundPicked(key, url, error) {
+      if (url && ["lobbyBg","roomBg","ladyImg"].indexOf(key)>=0) { Config[key]=url; backgroundSave.restart(); }
+      else if (error && typeof App!=="undefined" && App.showToast) App.showToast(error);
+    }
+  }
   property var photoLocations: []
   property bool hideTitles: false
   property bool preferencesLoaded: false
@@ -674,8 +682,19 @@ Item {
   function isGuanNingGeneral(name) {
     return /^(guanning|guan_ning|guan-ning|管宁|n_guanning)$|__guanning$/i.test(String(name || ""));
   }
+  function canonicalSkillName(name) {
+    if (!name) return "";
+    try {
+      // SkillSkeleton generates names such as #zhongao_4_trig. Resolve the
+      // registered engine relationship rather than stripping name patterns.
+      const result=Lua.ev('(function() local s=Fk.skills['+JSON.stringify(String(name))+']; if not s then return nil end return (s.skeleton and s.skeleton.name) or (s.main_skill and s.main_skill.name) or s.name end)()');
+      if (typeof result==="string" && result.length) return result;
+    } catch (_) {}
+    return String(name);
+  }
   function generalOwnsSkill(general, name) {
     if (!name) return false;
+    name=canonicalSkillName(name);
     const key=general+":"+String(name);
     if (guanNingSkillOwners[key]!==undefined)return guanNingSkillOwners[key];
     let owns=false;
@@ -728,7 +747,9 @@ Item {
     const shapes = {
       sound: '<path d="M3 4h18v13H11l-5 4v-4H3z" fill="white" stroke="#161616" stroke-width="1.3"/>',
       emoji: '<circle cx="12" cy="12" r="10" fill="#ffd348" stroke="#ba8822"/><ellipse cx="8.5" cy="9" rx="1.4" ry="2" fill="#35271b"/><ellipse cx="15.5" cy="9" rx="1.4" ry="2" fill="#35271b"/><path d="M6.5 14h11c-1 6-10 6-11 0" fill="#513824"/><path d="M8 14h8v2H8z" fill="white"/>',
-      send: '<path d="M4 12l5 6L21 4" fill="none" stroke="#91a9bc" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>'
+      send: '<path d="M4 12l5 6L21 4" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>',
+      expand: '<path d="M2 3h13v11H9l-5 4v-4H2z" fill="white"/><path d="M20 13v9m-4-4h8" stroke="white" stroke-width="2"/>',
+      collapse: '<path d="M2 3h13v11H9l-5 4v-4H2z" fill="white"/><path d="M16 18h8" stroke="white" stroke-width="2"/>'
     };
     return "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">'+shapes[kind]+'</svg>');
   }
@@ -1070,9 +1091,8 @@ Item {
     }
   }
   function refreshCompatibility(rootItem) {
-    // Never walk the entire animated table from a periodic UI-thread callback.
-    // Android room popups are adapted through popupItemChanged, in isolation.
-    if (Cpp.os === "Android" && activeRoomScene && !rootItem) return;
+    // Periodic whole-tree scans must never run during a match or spectating.
+    if (activeRoomScene && !rootItem) return;
     const window = host.Window.window;
     if (!window) return;
     // Cache surviving controls so bindings are installed once per instance.
@@ -1082,13 +1102,13 @@ Item {
     let visited = 0;
     const seen = new Set();
     function scan(item, depth, serverPage, lobbyPage, chatBox) {
-      if (!item || (typeof item !== "object" && typeof item !== "function") || seen.has(item) || depth > 24 || ++visited > 12000) return;
+      if (!item || typeof item !== "object" || seen.has(item) || depth > 24 || ++visited > 12000) return;
       seen.add(item);
       if ("model" in item) host.prepareSkinMenu(item.model);
       const type = String(item);
       if (type.indexOf("ChatBox_QMLTYPE") === 0 || type.indexOf("AvatarChatBox_QMLTYPE") === 0) feedbackFeatures.adaptChat(item);
-      if (type.indexOf("SwipeView_QMLTYPE") === 0) host.adaptRoomDrawerSwipe(item);
       if (type.indexOf("EditProfile_QMLTYPE") === 0) host.adaptFunctionSettings(item);
+      if (ios && type.indexOf("SwipeView_QMLTYPE") === 0) host.adaptRoomDrawerSwipe(item);
       if (type.indexOf("PlayerDetail_QMLTYPE") === 0) host.adaptPlayerDetail(item);
       if (type.indexOf("AvatarChatBox_QMLTYPE") === 0 && typeof item.loadSkills === "function")
         host.attachRoleVoices(item);
@@ -1098,13 +1118,15 @@ Item {
       serverPage = serverPage || ("selectedServer" in item && "serverListUrl" in item);
       lobbyPage = lobbyPage || ("roomModel" in item && "serverPlayerNum" in item);
       chatBox = chatBox || type.indexOf("ChatBox_QMLTYPE") === 0;
-      // Do not traverse the overview's dense delegate trees during navigation.
+      // Overview card/general grids contain no compatibility controls. Do not
+      // inspect thousands of delegates when opening these utility pages.
       if (!serverPage && !lobbyPage && "cellWidth" in item && "cellHeight" in item && "delegate" in item && "model" in item) return;
       if (serverPage && adaptedControls.indexOf(item) < 0 && "model" in item && "countChanged" in item && "contentItem" in item) {
+        // Server probes populate delegates after the page is first displayed.
         item.countChanged.connect(host.requestCompatibility);
         adaptedControls.push(item);
       }
-      const children = item.children || [];
+      const children = item.children ? Array.from(item.children) : [];
       if (adaptedControls.indexOf(item) < 0 && "generalCardList" in item && "draggingCard" in item && "dataModel" in item) {
         // Fit the complete selection box, including both borders and buttons.
         item.scale = Qt.binding(function() {
@@ -1133,9 +1155,6 @@ Item {
             if (JSON.stringify(filters) !== JSON.stringify(Array.from(item.nameFilters))) item.nameFilters = filters;
           } else if (Array.from(item.nameFilters).some(f => f.indexOf("*.fk.rep") >= 0)) {
             item.currentFolder = AppPath + "/recording";
-            // Android's system document picker cannot browse the app's private
-            // recording directory. Use the in-app picker for this entry.
-            if (Cpp.os === "Android") item.options |= FileDialog.DontUseNativeDialog;
             item.nameFilters = ["新月杀录像 (*.rep)", "所有文件 (*)"];
           }
         }
@@ -1149,7 +1168,7 @@ Item {
         item.opacity = Qt.binding(function() { return host.hideTitles ? 0 : 1; });
       }
       if (ios && adaptedControls.indexOf(item) < 0) {
-        if (serverPage && "text" in item && "elide" in item && "font" in item) {
+        if (serverPage && "text" in item && "elide" in item && "font" in item && item.wrapMode === Text.NoWrap) {
           item.elide = Text.ElideRight; item.maximumLineCount = 1;
           item.Layout.minimumWidth = 0;
           if (item.parent && String(item.parent).indexOf("ColumnLayout") >= 0) item.parent.Layout.minimumWidth = 0;
@@ -1161,29 +1180,41 @@ Item {
           }
           adaptedControls.push(item);
         } else if (lobbyPage && "text" in item && "display" in item && item.text === Lua.tr("Exit Lobby")) {
-          item.height = 40; item.font.pixelSize = 14;
+          // Material's implicit height includes its vertical style insets.
+          // A fixed 40 px control shrinks the visible pill below its siblings.
+          item.height = Qt.binding(function() { return item.implicitHeight; });
+          item.width = Qt.binding(function() { return Math.max(120,item.implicitWidth); });
+          item.font.pixelSize = 16;
+          item.anchors.top = item.parent.top; item.anchors.topMargin = 16;
+          item.anchors.rightMargin = 8;
           item.icon.width = 20; item.icon.height = 20;
           adaptedControls.push(item);
         } else if (lobbyPage && "textFormat" in item && item.textFormat === Text.MarkdownText) {
           item.font.pixelSize = 14; adaptedControls.push(item);
-        } else if (chatBox && "textFont" in item && "clicked" in item) {
+        } else if ((chatBox || lobbyPage) && "textFont" in item && "clicked" in item) {
           const icons = {"🗨️":"sound", "😃":"emoji", "✔️":"send", "语音":"sound", "表情":"emoji", "发送":"send"};
-          if (icons[item.text] && "icon" in item && "title" in item) {
-            item.icon.source = host.chatIcon(icons[item.text]);
+          const toggle = String(item.text).indexOf("🗨️") === 0 && item.text.length > "🗨️".length;
+          if ((icons[item.text] || toggle) && "icon" in item && "title" in item) {
+            if (toggle) {
+              // Leave the original text binding intact: it tracks chatShown.
+              item.icon.source = Qt.binding(function() {
+                return host.chatIcon(String(item.text).indexOf("➕") >= 0 ? "expand" : "collapse");
+              });
+            } else {
+              item.icon.source = host.chatIcon(icons[item.text]);
+              item.text = "";
+            }
             item.icon.width = 24; item.icon.height = 24;
-            item.text = ""; item.title.visible = false;
+            item.title.visible = false;
             item.width = 40; item.height = 40; adaptedControls.push(item);
           }
         }
       }
       for (const child of children) scan(child,depth+1,serverPage,lobbyPage,chatBox);
       // Native FileDialog objects are in data, not visual children.
-      // Some server pages use a scalar/model property named data. Only walk
-      // Qt object lists; treating those scalars as iterables throws every tick.
-      const declared = item.data;
-      if (declared && typeof declared !== "string" && typeof declared.length === "number") {
-        for (let i=0; i<declared.length; i++) scan(declared[i],depth+1,serverPage,lobbyPage,chatBox);
-      }
+      const data = item.data;
+      if (data && typeof data === "object" && typeof data.length === "number")
+        for (let i=0; i<data.length; i++) scan(data[i],depth+1,serverPage,lobbyPage,chatBox);
     }
     scan(rootItem || window.contentItem,0,false,false,false);
   }

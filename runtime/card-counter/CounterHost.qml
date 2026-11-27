@@ -682,8 +682,19 @@ Item {
   function isGuanNingGeneral(name) {
     return /^(guanning|guan_ning|guan-ning|管宁|n_guanning)$|__guanning$/i.test(String(name || ""));
   }
+  function canonicalSkillName(name) {
+    if (!name) return "";
+    try {
+      // SkillSkeleton generates names such as #zhongao_4_trig. Resolve the
+      // registered engine relationship rather than stripping name patterns.
+      const result=Lua.ev('(function() local s=Fk.skills['+JSON.stringify(String(name))+']; if not s then return nil end return (s.skeleton and s.skeleton.name) or (s.main_skill and s.main_skill.name) or s.name end)()');
+      if (typeof result==="string" && result.length) return result;
+    } catch (_) {}
+    return String(name);
+  }
   function generalOwnsSkill(general, name) {
     if (!name) return false;
+    name=canonicalSkillName(name);
     const key=general+":"+String(name);
     if (guanNingSkillOwners[key]!==undefined)return guanNingSkillOwners[key];
     let owns=false;

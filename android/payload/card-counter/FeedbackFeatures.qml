@@ -162,14 +162,12 @@ Item {
   }
 
   function indicationPoint(room, id) {
-    const self = typeof Self !== "undefined" ? Self : null;
-    const own = self && Number(id) === Number(self.id);
-    let item = own && room.dashboard ? room.dashboard : null;
-    if (!item && typeof room.getPhoto === "function") item = room.getPhoto(id);
+    // Dashboard includes the whole hand area. Both directions must use the
+    // player's actual photo; only older UIs without that photo use Dashboard.
+    let item = typeof room.getPhoto === "function" ? room.getPhoto(id) : null;
     if (!item && typeof room.getPhotoOrDashboard === "function") item = room.getPhotoOrDashboard(id);
     if (!item) return null;
-    const point = room.mapFromItem(item, item.width/2, item.height/2);
-    return own ? Qt.point(room.width/2, point.y) : point;
+    return room.mapFromItem(item, item.width/2, item.height/2);
   }
   property var stockLineComponent: null
   function showIndication(room, from, targets) {

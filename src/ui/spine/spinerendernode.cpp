@@ -143,6 +143,12 @@ SpineRenderNode::SpineRenderNode(QQuickWindow *window)
 
 SpineRenderNode::~SpineRenderNode()
 {
+    // releaseResources() covers scene-graph invalidation, but normal removal
+    // of a completed effect can destroy its node directly. Private owns raw
+    // QRhi resources; deleting the vectors alone leaks every uploaded atlas.
+    // freeRhi() is idempotent when invalidation already released them.
+    if (d)
+        d->freeRhi();
     delete d;
 }
 
@@ -161,7 +167,8 @@ void SpineRenderNode::setTextures(const std::vector<QImage> &images, int epoch)
         return;
     d->textures = images;
     d->textureEpoch = epoch;
-    d->invalidated = true;
+    // Atlas changes rebuild only the texture bindings in prepare(). Keep
+    // compatible pipelines and vertex/uniform buffers until scene invalidation.
 }
 
 QSGRenderNode::RenderingFlags SpineRenderNode::flags() const

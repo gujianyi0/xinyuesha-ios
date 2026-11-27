@@ -9,7 +9,11 @@
   "card-counter/HandkillPerformance.qml": "66b98528101e93c27eb336671336a916c2f33b6056bb49960399a9efa8977f44",
   "card-counter/HandkillRouter.qml": "52fbbd5cc1fb1b769c018cd5d0e3c731a93c63c03579a665e3e4d4c1cc559696",
   "card-counter/LightTargetLine.qml": "01c4cb98a5e67eecadc41a01dc6bac866f7160bd45b62c29cec90303329da80d",
-  "card-counter/ResourcePackDownload.qml": "7e2fb1c4d31660c82cf1e8d0ccc4acbed2b822bda2fc5fbea5ab0e2aca2d2d53",
+  "card-counter/NaishaLayer.qml": "29fa7b7d026cc2a55a8f44d2e7c517c006622bc9c3a67fa942316ce37e4a1c88",
+  "card-counter/NaishaPortrait.qml": "1b6d8d9298c496fe597e5b29b2ee6d4b827b9f235e8ac3ad81c0379ed87fe649",
+  "card-counter/NaishaSkins.qml": "0374a34a847411c15a1d352377759c9affa14e411c9fe7bfd7688766e0c7e8da",
+  "card-counter/ResourcePackClient.qml": "9a6fc4118ef4fae2c43685784171edd6b2728a94f726b20f9cf87342cc9011ae",
+  "card-counter/ResourcePackDownload.qml": "2c31b42ecd8832aec46bd5f3d5f6fbe8911448a4af39520e893d18c0c026a2e3",
   "card-counter/RoleVoiceControl.qml": "9e6809b0c36151d909fb384748b12ca40eaf328ef256d01bf0e494b41bcf0d5f",
   "card-counter/SkinSetting.qml": "93f5c09212e7b080aadb443d333efe7beddeeb43ed973f3e944f1d66a85a29a7",
   "card-counter/SocialAuth.js": "47a55593ea42a333fc80529213ad4194771d639be051524b119a3d332004c861",
@@ -24,9 +28,5 @@
   "card-counter/guanning/GuanNingPreview.qml": "3d0e3c1ec5e36b7ab0d87267a7dd88fc976fca3ba31c9d1a5fefc1529523ac8d",
   "card-counter/guanning/GuanNingTrail.qml": "03af04cc76e14f3168c3810043960c8b501ac229a7cbc48967defec1f4dec05e",
   "card-counter/known-hand.png": "e4152309603a458cd95c72bc7330145445cb9e4994ab15cecf4043068df7db75",
-  "card-counter/NaishaLayer.qml": "29fa7b7d026cc2a55a8f44d2e7c517c006622bc9c3a67fa942316ce37e4a1c88",
-  "card-counter/NaishaPortrait.qml": "1b6d8d9298c496fe597e5b29b2ee6d4b827b9f235e8ac3ad81c0379ed87fe649",
-  "card-counter/NaishaSkins.qml": "0374a34a847411c15a1d352377759c9affa14e411c9fe7bfd7688766e0c7e8da",
-  "card-counter/ResourcePackClient.qml": "e51402d7f56c90053c4a4153d1a7db20c656b09ff7351c6cae031dd5cd2342d7",
   "card-counter/resource-catalog.json": "f42f29dda95e85b00ea78c8e0a8279286d89a990ce777c0990f6e64129ceb256"
 }

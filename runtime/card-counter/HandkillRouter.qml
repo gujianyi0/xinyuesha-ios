@@ -7,6 +7,7 @@ Item {
   required property var owner
   readonly property var room: owner.currentScene
   property var activeItem: null
+  property var activeRequest: null
   property var queue: []
   property var manifests: null
   property var identityCache: ({})
@@ -15,13 +16,36 @@ Item {
   property var playerComponent: null
   property var pendingStates: ({})
   property var soundEvents: []
+  property bool gameFinished: false
+  property bool finalSceneReady: false
+  property double finalSceneDeadline: 0
+  property int finalSceneStableTicks: 0
 
   function reset() {
     queue = []; manifests = null; identityCache = ({}); lastKey = ""; lastAt = 0;
     pendingStates = ({}); soundEvents = [];
+    gameFinished = false;
+    finalSceneReady = false; finalSceneDeadline = 0; finalSceneStableTicks = 0;
+    finalDeathTimer.stop(); activeRequest = null;
     entryTimer.stop();
     const old = activeItem; activeItem = null;
     if (old) { old.visible = false; old.destroy(); }
+  }
+  function finishGame() {
+    if (gameFinished) return;
+    gameFinished = true;
+    entryTimer.stop(); pendingStates = ({}); soundEvents = [];
+    // The stock victory presentation can cover an already-running death.
+    // Replay that final death once the result dialog has settled, so its full
+    // visible playback survives both the server judge and the victory overlay.
+    queue = queue.filter(request => request.skill === "death");
+    if (activeRequest && activeRequest.skill === "death") queue.unshift(activeRequest);
+    activeRequest = null;
+    if (activeItem) {
+      const old = activeItem; activeItem = null;
+      old.visible = false; old.destroy();
+    }
+    if (queue.length) {finalSceneDeadline=Date.now()+10000;finalSceneStableTicks=0;finalDeathTimer.restart();}
   }
   onRoomChanged: reset()
   Component.onDestruction: reset()
@@ -74,7 +98,11 @@ Item {
     identityCache[key] = matches;
     return matches;
   }
+  function skillName(name) {
+    return typeof owner.canonicalSkillName==="function" ? owner.canonicalSkillName(name) : String(name);
+  }
   function skillIs(name, keys) {
+    name=skillName(name);
     const canonical = String(name).split("__").pop().replace(/^#/, "");
     const translated = String(Lua.tr(name));
     return keys.indexOf(canonical) >= 0 || keys.indexOf(translated) >= 0;
@@ -132,7 +160,7 @@ Item {
   }
   function takeSound(general, skill) {
     const i=soundEvents.findIndex(s => Date.now()-s.at < 3000 &&
-      (s.general===general || s.deputy===general) && String(s.name)===String(skill));
+      (s.general===general || s.deputy===general) && skillName(s.name)===skillName(skill));
     if (i<0) return 0;
     const index=soundEvents[i].index;
     soundEvents=soundEvents.filter((s,n) => n!==i);
@@ -225,11 +253,29 @@ Item {
       const row = pack.effects.find(e => e.stem === stem && e.nativeCompatible === true);
       if (!row || !/^ui\/anim\/[A-Za-z0-9_/-]+$/.test(row.stem) || row.stem.indexOf("..") >= 0 ||
           !Array.isArray(row.animations) || !row.animations.some(a => a.name === animation)) continue;
+      // Original exports stay blocked. Only explicitly adapted copies with
+      // the two known source identities may opt into their repaired routes.
+      if (/_atlasfix1$/.test(stem)) {
+        const source = stem.slice(0, -10), repair = row.repair;
+        const expected = originalGapRepairs[source];
+        if (!expected || !repair || repair.repairId !== "explicit-transparent-region-v1" ||
+            repair.sourceStem !== source || repair.missingRegion !== expected.region ||
+            repair.sourceSkeletonMD5 !== expected.md5 || repair.skeletonBytesChanged !== false ||
+            repair.missingOriginalPixelsRecovered !== false) continue;
+      }
       const base = pack.root + row.stem;
       if (owner.visualFileExists(base + ".atlas") && owner.visualFileExists(base + ".skel"))
         return {base:base, seconds:row.animations.find(a => a.name === animation).seconds};
     }
     return null;
+  }
+  readonly property var originalGapRepairs: ({
+    "ui/anim/caomaozhengwang/SS_CM_2025zhenwang": {region:"texture/rwmhgx/rwmhgx_00059",md5:"2bc64fbcc8cfc0ebf03aad7447b7402b"},
+    "ui/anim/spell/yuli/SS_2026smc_leishashouji2": {region:"shouji2/shouji2_ad_00012",md5:"9aabb28d98bc2e231d73dcd8a5af6bd7"}
+  })
+  function adaptedOriginalOrFallback(original, fallback) {
+    const adapted = "ui/anim/" + original + "_atlasfix1";
+    return resource(adapted, "play") ? original + "_atlasfix1" : fallback;
   }
   function enqueue(general, skill, stem, animation, actor, next) {
     const source = resource(stem, animation);
@@ -244,6 +290,7 @@ Item {
   }
   function startNext() {
     if (activeItem || !queue.length) return;
+    if (gameFinished && !finalSceneReady) return;
     if (!room || !room.visible || Config.banChangeSkin) { reset(); return; }
     const request = queue.shift();
     const source = resource(request.stem, request.animation);
@@ -266,15 +313,18 @@ Item {
       anchorPhoto:portraitEffect && model ? model.photoItem : null});
     if (!item) { Qt.callLater(startNext); return; }
     activeItem = item;
+    activeRequest = request;
     item.finished.connect(function(ok) {
       if (router.activeItem !== item) return;
-      router.activeItem = null; item.destroy(); Qt.callLater(router.startNext);
+      router.activeItem = null; router.activeRequest = null; item.destroy(); Qt.callLater(router.startNext);
     });
   }
   function route(command, data) {
-    if (["EnterRoom","EnterLobby","BackToStart","GameOver"].indexOf(command) >= 0) { reset(); return false; }
+    if (["EnterRoom","EnterLobby","BackToStart"].indexOf(command) >= 0) { reset(); return false; }
+    if (command === "GameOver") { finishGame(); return false; }
     if (!room || !room.visible || Config.banChangeSkin) return false;
-    if (command === "Fk.HandkillGameStart") { entryTimer.restart(); return false; }
+    if (command === "Fk.HandkillGameStart") { if (gameFinished) reset(); entryTimer.restart(); return false; }
+    if (gameFinished) return false;
     if (!data) return false;
     if (!libraries().length) return false;
     if (command === "SetPlayerMark") return routePublicMark(data);
@@ -308,7 +358,8 @@ Item {
       };
       if (death) {
         if (roleMatches(general,"jiangwei")) return play("shenJiangWei/SS_Sjw_dead");
-        if (roleMatches(general,"caomao")) return play("caomaozhengwang/SS_CM_zhenwang");
+        if (roleMatches(general,"caomao")) return play(adaptedOriginalOrFallback(
+          "caomaozhengwang/SS_CM_2025zhenwang", "caomaozhengwang/SS_CM_zhenwang"));
         continue;
       }
       if (card) {
@@ -325,7 +376,8 @@ Item {
         if (skillIs(data.name,["jimie","寂灭"])) return play("spell/jimie/SS_smc_dazhao");
         if (skillIs(data.name,["tingwei","霆威"])) return rememberState(actor,"tingwei",general,data.name);
         if (skillIs(data.name,["yuli","驭雳"])) return play(data.skill_type==="defensive" ?
-          "spell/yuli/SS_2026smc_huixue" : "spell/yuli/SS_2026smc_leishashouji1");
+          adaptedOriginalOrFallback("spell/yuli/SS_2026smc_leishashouji2", "spell/yuli/SS_2026smc_huixue") :
+          "spell/yuli/SS_2026smc_leishashouji1");
       }
       if (roleMatches(general,"weiyan")) {
         if (skillIs(data.name,["zhongao","忠傲"])) {
@@ -344,7 +396,7 @@ Item {
       if (roleMatches(general,"zhouyu")) {
         if (skillIs(data.name,["xiongzi","雄姿","jinlan","瑾澜"])) return rememberState(actor,"zhouyu",general,data.name);
         const actions={chiyun:"play1",chiyi:"play1",yanhui:"play3",yanling:"play3",fentao:"play2"};
-        const name=String(data.name).split("__").pop(), animation=actions[name];
+        const name=skillName(data.name).split("__").pop(), animation=actions[name];
         const scheme=publicState(actor).zhouyu;
         if (animation && (scheme==="xiongzi_1" || scheme==="xiongzi_2"))
           return play("spell/shizhouyu/SS_jn_szyskill"+(scheme==="xiongzi_1" ? "blue" : "red"),animation);
@@ -356,6 +408,24 @@ Item {
       if (roleMatches(general,"lvbu") && skillIs(data.name,["wushuang","mouwushuang","无双","谋无双"])) return play("game/mouWuShuang/SS_MoulvbuSkill","play1",["play2"]);
     }
     return false;
+  }
+  Timer {
+    id: finalDeathTimer
+    interval: 80
+    repeat: true
+    onTriggered: {
+      if (!router.room || !router.room.visible || Config.banChangeSkin) {router.reset();return;}
+      const popup=router.room.popupItem;
+      const big=router.room.bigAnim;
+      const ready=popup && popup.visible && popup.opacity>=0.99 && popup.dataModel &&
+        typeof popup.dataModel.winner==="string" && !(big && big.item && big.item.visible);
+      router.finalSceneStableTicks=ready ? router.finalSceneStableTicks+1 : 0;
+      if (router.finalSceneStableTicks>=3) {
+        stop();router.finalSceneReady=true;router.startNext();
+      } else if (Date.now()>=router.finalSceneDeadline) {
+        stop();router.queue=[];
+      }
+    }
   }
   Timer {
     interval: 1000

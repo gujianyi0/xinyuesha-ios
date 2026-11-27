@@ -50,10 +50,14 @@ Item {
     choices=next;error="";release();sync();return true;
   }
   function release() {
-    for (const state of states) {
-      try {if (state.loader) state.loader.opacity=state.opacity;if(state.effect)state.effect.destroy();}catch(_){}
-    }
+    for (const state of states) releaseState(state);
     states=[];
+  }
+  function releaseState(state) {
+    try {
+      if (state.loader) state.loader.opacity=state.opacity;
+      if (state.slot) {state.slot.retiring=true;state.slot.destroy();}else if(state.effect)state.effect.destroy();
+    } catch (_) {}
   }
   function findArea(photo,general) {
     const pending=Array.from(photo.children || []);
@@ -65,6 +69,42 @@ Item {
     return null;
   }
   Component { id:portraitComponent;NaishaPortrait{} }
+  Component {
+    id:portraitSlot
+    Item {
+      id: replacementSlot
+      objectName:"naishaPortraitSlot"
+      required property var photo
+      required property string general
+      required property bool splitMask
+      property var stockLoader: null
+      property var replacement: null
+      property bool retiring: false
+      // Hiding a stock portrait leaves its video/skeleton and decoded textures
+      // alive. Unload only after the replacement is ready. Binding restores
+      // the original active binding/value on failure, disable or room exit.
+      Binding {
+        target: replacementSlot.stockLoader
+        property: "active"
+        value: false
+        when: !replacementSlot.retiring && !!replacementSlot.stockLoader && !!replacementSlot.replacement && replacementSlot.replacement.ready
+        restoreMode: Binding.RestoreBindingOrValue
+      }
+      clip:true
+      width:parent ? parent.width/(splitMask && photo.deputyGeneral ? 2 : 1) : 0
+      height:parent ? parent.height : 0
+      x:splitMask && general===String(photo.deputyGeneral) ? width : 0
+    }
+  }
+  function photoSurface(photo) {
+    // Stock portraits render a hidden, double-resolution SkinArea through an
+    // OpacityMask. Draw the replacement on that mask's visible surface, below
+    // the existing name/HP/interaction siblings. Native skeletons must not be
+    // nested inside the mask's hidden offscreen source on Android.
+    if (!("photoMask" in photo)) return null;
+    return Array.from(photo.children || []).find(c=>
+      "maskSource" in c && c.maskSource===photo.photoMask) || null;
+  }
   function sync() {
     if (!loaded || !scene || !scene.visible || Config.banChangeSkin) {release();return;}
     const live=[];
@@ -77,17 +117,20 @@ Item {
         let state=states.find(s=>s.area===area && s.skin===skin.id);
         if (!state) {
           const loader=Array.from(area.children || []).find(c=>"sourceComponent" in c && "item" in c);
-          const effect=portraitComponent.createObject(area,{skin:skin,resourceRoot:resourceRoot});
-          if(!effect)continue;
-          state={area:area,photo:photo,general:general,skin:skin.id,effect:effect,loader:loader,opacity:loader?loader.opacity:1};
+          const surface=photoSurface(photo);
+          const slot=portraitSlot.createObject(surface || area,{photo:photo,general:general,splitMask:!!surface,stockLoader:loader || null,visible:false});
+          if(!slot)continue;
+          const effect=portraitComponent.createObject(slot,{skin:skin,resourceRoot:resourceRoot});
+          if(!effect){slot.destroy();continue;}
+          slot.replacement=effect;
+          slot.visible=Qt.binding(()=>effect.ready);
+          state={area:area,photo:photo,general:general,skin:skin.id,slot:slot,effect:effect,loader:loader,opacity:loader?loader.opacity:1};
         }
         if(state.loader)state.loader.opacity=state.effect.ready?0:state.opacity;
         live.push(state);
       }
     }
-    for(const old of states)if(!live.includes(old)) {
-      try{if(old.loader)old.loader.opacity=old.opacity;if(old.effect)old.effect.destroy();}catch(_){}
-    }
+    for(const old of states)if(!live.includes(old)) releaseState(old);
     states=live;
   }
   function route(command,data) {
@@ -117,17 +160,22 @@ Item {
     ColumnLayout {
       anchors.fill:parent;spacing:8
       RowLayout {Layout.fillWidth:true;Label{text:"奶杀动皮（本地选择）";font.pixelSize:22;Layout.fillWidth:true}Button{text:"关闭";onClicked:picker.close()}}
-      Label {Layout.fillWidth:true;wrapMode:Text.Wrap;text:manager.loaded?"资源包已启用。选择只作用于本机，不修改服务器皮肤。":"请先导入并启用「奶杀动皮-v1」独立资源包，再打开本页。"}
+      Label {Layout.fillWidth:true;wrapMode:Text.Wrap;text:manager.loaded?"资源包已启用。选择只作用于本机，不修改服务器皮肤。":"请先在「管理资源包」下载并启用「奶杀动皮」，再打开本页。"}
       RowLayout {
-        Layout.fillWidth:true;Layout.fillHeight:true;spacing:16
+        Layout.fillWidth:true;Layout.fillHeight:true;Layout.minimumHeight:0;spacing:16
         Item {
-          Layout.preferredWidth:Math.min(210,picker.width*.32);Layout.fillHeight:true
+          Layout.preferredWidth:Math.min(210,picker.width*.32);Layout.fillHeight:true;Layout.minimumHeight:0;clip:true
           Rectangle {anchors.fill:parent;color:"#283239";radius:8}
-          Loader {id:previewLoader;anchors.centerIn:parent;width:Math.min(190,parent.width);height:width*180/120;active:picker.visible && !!picker.selected
+          Loader {id:previewLoader;objectName:"naishaPortraitPreview";anchors.centerIn:parent;width:Math.max(0,Math.min(190,parent.width,parent.height*120/180));height:width*180/120;active:picker.visible && !!picker.selected
             sourceComponent:NaishaPortrait{skin:picker.selected;resourceRoot:manager.resourceRoot}}
         }
+        ScrollView {
+          id:controlsScroll;objectName:"naishaControlsScroll"
+          Layout.fillWidth:true;Layout.fillHeight:true;Layout.minimumWidth:0;Layout.minimumHeight:0;clip:true
+          contentWidth:availableWidth
+          ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
         ColumnLayout {
-          Layout.fillWidth:true;Layout.fillHeight:true
+          width:controlsScroll.availableWidth;spacing:8
           ComboBox {id:skins;Layout.fillWidth:true;model:manager.catalog;textRole:"title";onActivated:target.text=picker.selected.sourceGeneral}
           TextField{id:target;Layout.fillWidth:true;placeholderText:"目标武将 ID，例如 diaochan";text:picker.selected?picker.selected.sourceGeneral:""}
           Label {Layout.fillWidth:true;wrapMode:Text.Wrap;text:"不同扩展需填该扩展的武将 ID；核对名称后才会使用。停用资源包会恢复原皮肤。"}
@@ -136,7 +184,7 @@ Item {
           Button {text:"预览攻击";enabled:!!picker.selected && !!picker.selected.attack;onClicked:preview("attack")}
           Button {text:"预览技能";enabled:!!picker.selected && !!picker.selected.skill;onClicked:preview("skill")}
           Label {Layout.fillWidth:true;wrapMode:Text.Wrap;color:"#d0644c";text:manager.error}
-          Item {Layout.fillHeight:true}
+        }
         }
       }
     }

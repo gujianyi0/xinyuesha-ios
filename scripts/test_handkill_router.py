@@ -28,11 +28,12 @@ with tempfile.TemporaryDirectory(dir=a.output) as temp:
     with zipfile.ZipFile(a.pack) as z:
         files=[b.as_uri()+'/resource_pak/handkill/'+n for n in z.namelist()]
         manifest=json.loads(z.read('packages/freekill-core/image/xinyuesha-handkill/manifest.json'))
+    repaired=any(x['stem'].endswith('_atlasfix1') for x in manifest['effects'])
     put('Fk/qmldir','module Fk\n'+''.join('singleton '+n+' 1.0 '+n+'.qml\n' for n in ['Cpp','Config','Lua','Backend']))
     put('Fk/Cpp.qml','pragma Singleton\nimport QtQuick\nQtObject {property string path:'+json.dumps(b.as_uri())+'}')
     put('Fk/Config.qml','pragma Singleton\nimport QtQuick\nQtObject {property bool banChangeSkin:false;property var enabledResourcePacks:["handkill"]}')
     put('Fk/Lua.qml','pragma Singleton\nimport QtQuick\nQtObject {property var publicStateData:({hp:2,zhouyu:0,quest:0,kuanggu:0});property int cardReads:0;property string publicCardColour:"red";function tr(s){return s;}function ev(s){if(s.includes("p:getMark"))return publicStateData;if(s.includes("Fk:getCardById")){cardReads++;return publicCardColour;}return false;}}')
-    put('Fk/Backend.qml','pragma Singleton\nimport QtQuick\nQtObject {function readFileFromAssets(p){return "";}function readJsonObjectFromFile(p){return '+json.dumps(manifest)+';}}')
+    put('Fk/Backend.qml','pragma Singleton\nimport QtQuick\nQtObject {property bool invalidRepairMetadata:false;property var contents:'+json.dumps(manifest)+';function readFileFromAssets(p){return "";}function readJsonObjectFromFile(p){const value=JSON.parse(JSON.stringify(contents));if(invalidRepairMetadata)for(const row of value.effects)if(row.repair)row.repair.sourceSkeletonMD5="invalid";return value;}}')
     put('Spine/qmldir','module Spine\nSkeletonAnimation 1.0 SkeletonAnimation.qml\nsingleton SpineVersion 1.0 SpineVersion.qml\nsingleton TestControl 1.0 TestControl.qml\n')
     put('Spine/SpineVersion.qml','pragma Singleton\nimport QtQuick\nQtObject {enum Version {Auto}}')
     put('Spine/TestControl.qml','pragma Singleton\nimport QtQuick\nQtObject {property bool fail:false;}')
@@ -57,12 +58,15 @@ Item {id:scene;anchors.fill:parent;property var dataModel:({players:[actor]});pr
  Item {id:photo;x:460;y:20;width:120;height:150;visible:true;property string general:"神姜维";property string deputyGeneral:""}
  QtObject {id:actor;property int playerid:2;property var photoItem:photo}
 }
-QtObject {id:owner;property var currentScene:scene;property bool missing:false
- function visualFileExists(p){return !missing&&FILES.includes(p);}
+QtObject {id:owner;property var currentScene:scene;property bool missing:false;property bool missingRepairs:false
+ function visualFileExists(p){return !missing&&!(missingRepairs&&p.includes("_atlasfix1"))&&FILES.includes(p);}
  function generalOwnsSkill(g,n){return n!=="foreign_skill";}
+ function canonicalSkillName(n){return ({"#zhongao_4_trig":"zhongao","#m_shi__kuanggu_1_trig":"m_shi__kuanggu","#xiongzi_1_trig":"xiongzi","#chiyun_1_trig":"chiyun","#yuli_2_trig":"yuli"})[n]||n;}
 }
 HandkillRouter {id:router;owner:owner}
-function configure(g,d){router.reset();photo.general=g;photo.deputyGeneral=d;Config.enabledResourcePacks=["handkill"];Config.banChangeSkin=false;owner.missing=false;TestControl.fail=false;Lua.publicStateData=({hp:2,zhouyu:0,quest:0,kuanggu:0});}
+function configure(g,d){router.reset();scene.popupItem=null;photo.general=g;photo.deputyGeneral=d;Config.enabledResourcePacks=["handkill"];Config.banChangeSkin=false;owner.missing=false;owner.missingRepairs=false;Backend.invalidRepairMetadata=false;TestControl.fail=false;Lua.publicStateData=({hp:2,zhouyu:0,quest:0,kuanggu:0});}
+function legacy(){owner.missingRepairs=true;router.reset();}
+function tamperRepair(){Backend.invalidRepairMetadata=true;router.reset();}
 function send(command,data){return router.route(command,data);}
 function publicState(data){Lua.publicStateData=data;}
 function cardColour(colour){Lua.publicCardColour=colour;}
@@ -79,6 +83,7 @@ function fail(){TestControl.fail=true;}
 function missing(){owner.missing=true;}
 function openPopup(){scene.popupItem=({visible:true});}
 function closePopup(){scene.popupItem=null;}
+function openGameOver(){scene.popupItem=({visible:true,opacity:1,dataModel:{winner:"1"}});}
 
 function bad(){return router.resource("ui/anim/caomaozhengwang/SS_CM_2025zhenwang","play")===null&&router.resource("ui/anim/spell/yuli/SS_2026smc_leishashouji2","play")===null;}
 }'''.replace('FILES',json.dumps(files)))
@@ -119,6 +124,17 @@ function bad(){return router.resource("ui/anim/caomaozhengwang/SS_CM_2025zhenwan
         config('势魏延');send('LogEvent',dict(type='PlaySkillSound',name='m_shi__kuanggu',general='势魏延',i=index))
         skill('m_shi__kuanggu');active('SS_ShiWeiyanFaDongSkill');assert state()['active']['animation']==animation
     config('势魏延');send('LogEvent',dict(type='PlaySkillSound',name='zhongao',general='势魏延',i=1));skill('zhongao');assert state()['active'] is None
+    # Real .25 callbacks use registered SkillSkeleton branch names. Test the
+    # same parent identity for gating, pending quest state and voice variants.
+    config('势魏延');skill('#zhongao_4_trig');publish(dict(hp=2,quest='failed'));send('Fk.HandkillQuest',[2,'zhongao']);active('SS_ShiWeiYanSkill');assert state()['active']['animation']=='play1'
+    config('势魏延');send('LogEvent',dict(type='PlaySkillSound',name='m_shi__kuanggu',general='势魏延',i=3));skill('#m_shi__kuanggu_1_trig');active('SS_ShiWeiyanFaDongSkill');assert state()['active']['animation']=='play2'
+    config('势周瑜');skill('#xiongzi_1_trig');send('SetPlayerMark',[2,'@xiongzi-noclear','xiongzi_1']);active('SS_szy_jn_shui')
+    config('势周瑜');publish(dict(zhouyu='xiongzi_2',hp=2));skill('#chiyun_1_trig');active('SS_jn_szyskillred')
+    config('神马超');skill('#yuli_2_trig',skill_type='defensive');active('SS_2026smc_leishashouji2_atlasfix1' if repaired else 'SS_2026smc_huixue')
+    if repaired:
+        for mode in ['legacy','tamperRepair']:
+            config('神马超');call(mode);skill('#yuli_2_trig',skill_type='defensive');active('SS_2026smc_huixue')
+            config('曹髦');call(mode);send('Animate',dict(type='Death',to=2));active('SS_CM_zhenwang')
     for scheme,stem,colour in [('xiongzi_1','SS_szy_jn_shui','blue'),('xiongzi_2','SS_szy_jn_huo','red')]:
         config('势周瑜');skill('xiongzi');assert state()['active'] is None
         send('SetPlayerMark',[2,'@xiongzi-noclear',scheme]);active(stem)
@@ -160,7 +176,19 @@ function bad(){return router.resource("ui/anim/caomaozhengwang/SS_CM_2025zhenwan
     send('Animate',dict(type='InvokeUltSkill',player=2,name='jiufa',deputy=True));active('SS_Sjw_skill1','神姜维')
     call('leave');assert state()=={'active':None,'pending':0};call('restore')
     config('神姜维');send('LogEvent',dict(type='Death',to=2));active('SS_Sjw_dead')
-    config('曹髦');send('Animate',dict(type='Death',to=2));active('SS_CM_zhenwang')
+    # The final death must get full visible playback after the stock victory
+    # overlay/result opening; an untouched unrelated dialog is not that result.
+    send('GameOver',{});assert state()=={'active':None,'pending':1}
+    call('openPopup');pump(300);assert state()=={'active':None,'pending':1}
+    call('openGameOver');pump(260);active('SS_Sjw_dead');pump(350);assert state()['active'] is None
+    skill('xinghun');assert state()['active'] is None,'Post-game skill events must not restart animations'
+    send('EnterRoom',{});skill('xinghun');active('SS_Sjw_skill1')
+    config('神姜维');send('GameOver',{});send('Fk.HandkillGameStart',{});skill('xinghun');active('SS_Sjw_skill1')
+    config('神姜维');skill('xinghun');send('LogEvent',dict(type='Death',to=2));assert state()['pending']==1
+    send('GameOver',{});assert state()=={'active':None,'pending':1}
+    call('openGameOver');pump(260);active('SS_Sjw_dead');assert state()['pending']==0
+    call('leave');assert state()=={'active':None,'pending':0};call('restore')
+    config('曹髦');send('Animate',dict(type='Death',to=2));active('SS_CM_2025zhenwang_atlasfix1' if repaired else 'SS_CM_zhenwang')
     config('势周瑜');send('Fk.HandkillGameStart',{});pump(715);active('Ss_zy_ruchangzhanshi')
     for card,base in [('slash','SS_szy_sha'),('fire__slash','SS_szy_huosha'),('thunder__slash','SS_szy_leisha'),('jink','SS_szy_shan')]:
         config('势赵云');send('Fk.HandkillCard',dict(player=2,cardName=card));active(base)
@@ -174,7 +202,7 @@ function bad(){return router.resource("ui/anim/caomaozhengwang/SS_CM_2025zhenwan
     result={'passed':True,'skillRoutes':len(cases),'publicBranchOutcomesTested':True,'futuHiddenIdentitiesNeverRead':True,'canonicalAliasCases':4,'deathRoutes':2,'cardRoutes':4,'entryRoutes':1,
             'ordinaryVersionsExcluded':True,'deputyAndOwnedSkillGates':True,'publicActorGate':True,
             'noTableInputBlocking':True,'automaticPlaybackAndCleanupWithUntouchedDialog':True,'disabledAndHiddenAndRoomLeaveCleaned':True,
-            'loadFailureAndMissingResourcesSkipped':True,'unsafeExportsBlocked':True,
+            'loadFailureAndMissingResourcesSkipped':True,'unsafeExportsBlocked':True,'repairedOriginalRoutes':repaired,'repairAbsentOrMetadataInvalidFallsBack':repaired,'finalDeathSurvivesGameOverAndLeavesCleanly':True,
             'nativeRendering':'separate D3D11 probes','deviceAcceptance':False}
     (a.output/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf8')
     print(json.dumps(result));win.close()
