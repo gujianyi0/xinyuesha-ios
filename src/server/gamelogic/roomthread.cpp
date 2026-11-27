@@ -7,6 +7,7 @@
 #include "core/c-wrapper.h"
 #include "core/packman.h"
 #include "server/user/serverplayer.h"
+#include "platform/offlinegenerals.h"
 
 #ifndef FK_SERVER_ONLY
 #include "client/client.h"
@@ -31,6 +32,12 @@ Scheduler::Scheduler(RoomThread *thread) {
 #endif
 
   L->dofile("lua/freekill.lua");
+  if (ServerInstance && ServerInstance->isSinglePlayer() && fkOfflineGenerals::lusuEnabled(".") &&
+      QFile::exists("card-counter/offline-generals/load.lua"))
+  {
+    L->setGlobal("__XinyueshaOfflineLusu", "true");
+    L->dofile("card-counter/offline-generals/load.lua");
+  }
   L->dofile("lua/server/scheduler.lua");
   L->call("InitScheduler", { QVariant::fromValue(thread), QVariant::fromValue(ServerInstance) });
 }

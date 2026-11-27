@@ -9,6 +9,8 @@ from PySide6.QtCore import QUrl,QMetaObject,Q_RETURN_ARG,Q_ARG,QTimer,QEventLoop
 from PySide6.QtGui import QGuiApplication,QFontDatabase,QFont
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow,QQuickItem
+from PySide6.QtTest import QTest
+from PySide6.QtCore import Qt
 p=argparse.ArgumentParser();p.add_argument('--payload',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True)
 logs=[];qInstallMessageHandler(lambda kind,ctx,msg:logs.append(msg));app=QGuiApplication([])
 if Path('C:/Windows/Fonts/msyh.ttc').exists():
@@ -22,7 +24,19 @@ with tempfile.TemporaryDirectory(dir=a.output) as temp:
     put('Fk/qmldir','module Fk\n'+''.join('singleton '+n+' 1.0 '+n+'.qml\n' for n in ['Cpp','Config','Lua','Backend','Mediator']))
     put('Fk/Cpp.qml','pragma Singleton\nimport QtQuick\nQtObject{property string path:"file:///fixture"}')
     put('Fk/Config.qml','pragma Singleton\nimport QtQuick\nQtObject{property var enabledResourcePacks:["奶杀动皮-v1"];property bool banChangeSkin:false;}')
-    put('Fk/Lua.qml','pragma Singleton\nimport QtQuick\nQtObject{function ev(s){return !s.includes("unknown");}function tr(s){return s==="ol__diaochan"?"貂蝉":s==="shen__diaochan"?"神貂蝉":s;}}')
+    put('Fk/Lua.qml',r'''pragma Singleton
+import QtQuick
+QtObject{
+ function ev(s){
+  if(s.includes("table.sort"))return ["diaochan","ol__diaochan","jie__diaochan","shen__diaochan","sunshangxiang"];
+  const match=s.match(/Fk.generals\[("[^"]+")\]/);if(!match)return null;
+  const name=JSON.parse(match[1]);if(name==="unknown")return null;
+  const divine=name==="shen__diaochan",base=name.split("__").pop();
+  const label=base==="diaochan"?"貂蝉":base==="sunshangxiang"?"孙尚香":base;
+  return {name:name,trueName:base,kingdom:divine?"god":"qun",base:label,label:(divine?"神":name.startsWith("jie__")?"界":"")+label};
+ }
+ function tr(s){return s==="ol__diaochan"?"貂蝉":s==="shen__diaochan"?"神貂蝉":s;}
+}''')
     put('Fk/Mediator.qml','pragma Singleton\nimport QtQuick\nQtObject{signal commandGot(var sender,string command,var data)}')
     put('Fk/Backend.qml','pragma Singleton\nimport QtQuick\nQtObject{property bool fail:false;property string preferences:"{}";property var catalog:'+json.dumps({'schema':1,'id':'奶杀动皮-v1','skins':rows},ensure_ascii=False)+'''
  function readFileFromAssets(p){return preferences;}function readJsonObjectFromFile(p){return catalog;}
@@ -65,6 +79,9 @@ Window{id:win;width:820;height:520;visible:true;property bool stockWanted:true
  function replaceGeneral(){photo.general="shen__diaochan";manager.sync();}
  function failSave(){Backend.fail=true;}function failLoad(){TestControl.fail=true;manager.release();manager.sync();}
  function open(){manager.openSettings();}
+ function close(){for(const p of win.contentItem.children)if(p.close)p.close();}
+ function savedReload(){manager.readChoices();manager.reload();}
+ function variant(g){photo.general=g;manager.sync();}
  function stockState(){return JSON.stringify({mainActive:stock.active,mainItem:!!stock.item,deputyActive:stockDeputy.active,deputyItem:!!stockDeputy.item});}
  function maskedSlots(){return manager.states.length===2 && manager.states.every(s=>s.slot.parent===maskSurface && s.slot.width===120 && s.slot.height===180 && s.slot.x===(s.general===photo.deputyGeneral?120:0));}
  function state(){manager.sync();return JSON.stringify({states:manager.states.map(s=>({general:s.general,action:s.effect.action,ready:s.effect.ready})),stock:stock.opacity,deputy:stockDeputy.opacity,choices:manager.choices,error:manager.error,stored:Backend.preferences});}
@@ -77,7 +94,11 @@ Window{id:win;width:820;height:520;visible:true;property bool stockWanted:true
     pump();assert not state()['states'],'Installing a pack must not replace appearances'
     assert not call('choose','shen__diaochan',0);assert not state()['choices'],'Identity mismatch must be rejected'
     assert not call('choose','unknown',0)
-    assert call('choose','ol__diaochan',0);pump();s=state();assert len(s['states'])==1 and s['stock']==0 and s['deputy']==1,s
+    assert call('choose','diaochan',0);pump();s=state();assert len(s['states'])==1 and s['stock']==0 and s['deputy']==1,s
+    action('variant','jie__diaochan');pump();assert state()['states'][0]['general']=='jie__diaochan','Tagged translations must match the engine identity'
+    action('remove','jie__diaochan');assert not state()['states'],'Explicit restoration must override family inheritance'
+    action('variant','ol__diaochan');pump();assert len(state()['states'])==1
+    action('savedReload');pump();assert len(state()['states'])==1,'Saved choices must survive reopening/reloading'
     stock=json.loads(call('stockState'));assert not stock['mainActive'] and not stock['mainItem'] and stock['deputyActive'] and stock['deputyItem'],stock
     assert call('choose','sunshangxiang',1);pump();assert len(state()['states'])==2
     assert call('maskedSlots'),'Main/deputy skeletons must attach to the visible mask surface, within their own half'
@@ -92,7 +113,12 @@ Window{id:win;width:820;height:520;visible:true;property bool stockWanted:true
     action('enable');pump();assert len(state()['states'])==2
     action('hideScene');assert not state()['states'];action('showScene');pump();assert len(state()['states'])==2
     action('ban',True);assert not state()['states'];action('ban',False);pump();assert len(state()['states'])==2
-    action('open');pump();win.grabWindow().save(str(a.output/'picker.png'))
+    button=win.findChild(QQuickItem,'naishaInGameSkinButton');assert button and button.isVisible()
+    pos=button.mapToScene(QPointF(button.width()/2,button.height()/2))
+    QTest.mouseClick(win,Qt.LeftButton,Qt.NoModifier,pos.toPoint());pump()
+    apply=win.findChild(QQuickItem,'naishaApplySkin');assert apply and apply.isVisible(),'Actual in-game action must open the picker'
+    target=win.findChild(QQuickItem,'naishaGeneralChoice');assert target and target.property('count')==1
+    win.grabWindow().save(str(a.output/'picker.png'))
     # A landscape phone has substantially less logical height than a desktop.
     # The preview must stay inside the window and all actions must be reachable
     # by scrolling, rather than overflowing below the modal.
@@ -114,5 +140,5 @@ Window{id:win;width:820;height:520;visible:true;property bool stockWanted:true
     assert json.loads(call('stockState'))['mainActive'] and json.loads(call('stockState'))['mainItem'],'Load failure must restore the stock renderer'
     action('replaceGeneral');assert not state()['states']
     bad=[s for s in logs if any(x in s for x in ['TypeError','ReferenceError','is not a function','Binding loop','Unable to assign','Cannot assign'])];assert not bad,bad
-    result={'passed':True,'qt':__import__('PySide6').__version__,'explicitSelection':True,'identityMismatchRejected':True,'mainDeputyRouting':True,'visibleMaskSurfaceAndSplitSlots':True,'landscapePhoneScrollAndPreviewBounds':True,'restoreOnDisableHideBanLoadFailure':True,'replacedStockRendererActuallyUnloaded':True,'originalActiveBindingRestored':True,'failedSavePreserved':True,'nativeAnimationTest':False}
+    result={'passed':True,'qt':__import__('PySide6').__version__,'explicitSelection':True,'sameIdentityVariantsAndTaggedTranslation':True,'savedChoiceReload':True,'explicitRestoreOverridesFamily':True,'identityMismatchRejected':True,'mainDeputyRouting':True,'visibleMaskSurfaceAndSplitSlots':True,'landscapePhoneScrollAndPreviewBounds':True,'restoreOnDisableHideBanLoadFailure':True,'replacedStockRendererActuallyUnloaded':True,'originalActiveBindingRestored':True,'failedSavePreserved':True,'nativeAnimationTest':False}
     (a.output/'result.json').write_text(json.dumps(result,indent=2),'utf8');print(json.dumps(result))

@@ -8,6 +8,7 @@ import QtQuick.Window
 import QtQuick.Dialogs
 import Fk
 import LunarLtk
+import "LuckGoals.js" as LuckGoals
 Item {
   id: host
   objectName: "fkCounterHost"
@@ -251,7 +252,22 @@ Item {
   property bool hideTitles: false
   property bool preferencesLoaded: false
   property bool directionalLuckEnabled: true
+  property string directionalLuckGoals: "诸葛连弩/丈八蛇矛"
   property string functionSettingsError: ""
+  function setDirectionalLuckGoals(value) {
+    value=String(value).trim();
+    if(!LuckGoals.parse(value)) {functionSettingsError="目标格式不正确，例如：连弩，杀:2";return false;}
+    let features;
+    try {
+      features=JSON.parse(Backend.readFileFromAssets("function-settings.json") || "{}");
+      if(!features || typeof features!=="object" || Array.isArray(features))throw Error("Invalid settings");
+    } catch (_) {functionSettingsError="功能设置读取失败，原文件已保留";return false;}
+    features.directionalLuckGoals=value;
+    if(!Backend.writeFileToAssets("function-settings.json",JSON.stringify(features))) {functionSettingsError="目标保存失败，请重试";return false;}
+    directionalLuckGoals=value;functionSettingsError="";
+    if(luckPanel)luckPanel.useSavedGoals(value);
+    return true;
+  }
   function setDirectionalLuckEnabled(enabled) {
     let features;
     try {
@@ -305,6 +321,7 @@ Item {
       hideTitles = data.hideTitles === true;
       const features = JSON.parse(Backend.readFileFromAssets("function-settings.json") || "{}");
       directionalLuckEnabled = features.directionalLuck !== false;
+      if(typeof features.directionalLuckGoals==="string" && LuckGoals.parse(features.directionalLuckGoals))directionalLuckGoals=features.directionalLuckGoals;
       preferencesLoaded = true;
       requestCompatibility();
     } catch (_) { console.warn("[ClientUI] preferences unreadable; preserving file"); }
@@ -1442,23 +1459,12 @@ Item {
       property int remaining: -1
       property string statusText: "选择目标后点击开始"
       function canonical(s) {
-        s=String(s || "").trim().toLowerCase();
-        return ({"ak":"crossbow","连弩":"crossbow","诸葛连弩":"crossbow","丈八":"spear","丈八蛇矛":"spear","杀":"slash"})[s] || s;
+        return LuckGoals.canonical(s);
       }
       function parseGoals(text) {
-        const parts=String(text).split(/[,，]/);
-        if (!parts.length || parts.length>6) return null;
-        const out=[];
-        for (const part of parts) {
-          const m=part.trim().match(/^([^:：×*]+?)(?:[:：×*]\s*(\d+))?$/);
-          if (!m) return null;
-          const names=m[1].split("/").map(n=>canonical(n));
-          const count=m[2]===undefined ? 1 : Number(m[2]);
-          if (names.some(n=>!n) || !Number.isInteger(count) || count<1 || count>99) return null;
-          out.push({names:names,count:count});
-        }
-        return out;
+        return LuckGoals.parse(text);
       }
+      function useSavedGoals(value) {stopAuto("目标已更新，请点击开始");goalInput.text=value;}
       function matches(cards, rules) {
         return rules.length>0 && rules.every(rule=>cards.filter(card=> {
           const base=String(card.trueName || card.name || "").split("__").pop();
@@ -1563,7 +1569,7 @@ Item {
         }
         TextField {
           id:goalInput;objectName:"autoLuckGoals";Layout.fillWidth:true;enabled:!luck.running
-          text:"诸葛连弩/丈八蛇矛";placeholderText:"例：连弩，杀:2";font.pixelSize:15;maximumLength:160
+          text:host.directionalLuckGoals;placeholderText:"例：连弩，杀:2";font.pixelSize:15;maximumLength:160
         }
         Label {Layout.fillWidth:true;text:"逗号表示同时满足，/ 表示任选；牌名:张数";color:"#d6d2bd";font.pixelSize:12;wrapMode:Text.Wrap}
         RowLayout {

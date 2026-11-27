@@ -13,7 +13,7 @@ class Router;
 class Client : public QObject {
   Q_OBJECT
 public:
-  Client(QObject *parent = nullptr);
+  Client(QObject *parent = nullptr, bool singlePlayer = false);
   ~Client();
 
   void connectToHost(const QString &server, ushort port);

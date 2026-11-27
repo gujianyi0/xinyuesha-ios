@@ -12,6 +12,7 @@
 
 #include <QElapsedTimer>
 #include "platform/requestclock.h"
+#include "platform/offlinegenerals.h"
 #include <openssl/rsa.h>
 #include <openssl/aes.h>
 #include <openssl/pem.h>
@@ -24,7 +25,7 @@ struct ClientPrivate {
   ~ClientPrivate() { RSA_free(rsa); }
 };
 
-Client::Client(QObject *parent) : QObject(parent) {
+Client::Client(QObject *parent, bool singlePlayer) : QObject(parent) {
   QElapsedTimer startupTimer; startupTimer.start();
   ClientInstance = this;
   self = new ClientPlayer(0, this);
@@ -49,6 +50,13 @@ Client::Client(QObject *parent) : QObject(parent) {
 
   qInfo("[Startup] client pre-Lua: %lld ms", static_cast<long long>(startupTimer.elapsed()));
   L->dofile("lua/freekill.lua");
+  // Only a client explicitly connecting to our loopback single-player server
+  // loads the trusted offline rule implementation. Online checksums stay intact.
+  if (singlePlayer && fkOfflineGenerals::lusuEnabled(".") &&
+      QFile::exists("card-counter/offline-generals/load.lua")) {
+    L->setGlobal("__XinyueshaOfflineLusu", "true");
+    L->dofile("card-counter/offline-generals/load.lua");
+  }
   L->dofile("lua/client/client.lua");
   L->call("CreateLuaClient", { QVariant::fromValue(this) });
 

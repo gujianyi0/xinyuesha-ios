@@ -17,6 +17,7 @@ def pump(ms=100):
  l=QEventLoop();QTimer.singleShot(ms,l.quit);l.exec()
 with tempfile.TemporaryDirectory(dir=a.work_dir) as tmp:
  b=Path(tmp)
+ shutil.copyfile(a.payload/'card-counter/LuckGoals.js',b/'LuckGoals.js')
  def put(n,s):
   f=b/n;f.parent.mkdir(parents=True,exist_ok=True);f.write_text(s,encoding='utf8')
  put('Fk/qmldir','module Fk\n'+''.join('singleton '+n+' 1.0 '+n+'.qml\n' for n in ['Config','Lua','Backend','Mediator']))
@@ -39,8 +40,9 @@ import QtQuick.Controls.Material
 import QtQuick.Layouts
 import QtQuick.Window
 import Fk
+import "LuckGoals.js" as LuckGoals
 Window{id:win;width:1000;height:650;visible:true
- Item{id:host;property var currentScene:scene;property bool directionalLuckEnabled:true
+ Item{id:host;property var currentScene:scene;property bool directionalLuckEnabled:true;property string directionalLuckGoals:"诸葛连弩/丈八蛇矛"
  function disposeRoomItem(item){if(item)item.destroy();}
  FRAGMENT
  }

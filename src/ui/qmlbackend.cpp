@@ -289,10 +289,12 @@ void QmlBackend::joinServer(QString address, ushort port) {
   if (ClientInstance != nullptr)
     return;
 
-  auto future = QtConcurrent::run([] {
+  const bool singlePlayer = QHostAddress(address).isLoopback() &&
+      ServerInstance && ServerInstance->isSinglePlayer();
+  auto future = QtConcurrent::run([singlePlayer] {
     QThread::currentThread()->setObjectName("Pool");
 
-    auto ret = new Client;
+    auto ret = new Client(nullptr, singlePlayer);
     ret->moveToThread(qApp->thread());
     return ret;
   });

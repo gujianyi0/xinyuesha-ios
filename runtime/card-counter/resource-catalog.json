@@ -146,6 +146,25 @@
           "fileCount": 102
         }
       ]
+    },
+    {
+      "id": "九雷震鼓鲁肃-v1",
+      "title": "单机武将 · 鲁肃（九雷震鼓，需 .41）",
+      "version": "20261127.41",
+      "scope": "single-player-only",
+      "requiredClient": "20261127.41",
+      "bytes": 805946,
+      "expandedBytes": 808614,
+      "fileCount": 3,
+      "parts": [
+        {
+          "archive": "xinyuesha-offline-lusu-20261127-41-c6d2f4374053.zip",
+          "bytes": 805946,
+          "sha256": "c6d2f4374053a5c238df3bcb4b85446ebde24327d847159b1b4b3e291a58e756",
+          "expandedBytes": 808614,
+          "fileCount": 3
+        }
+      ]
     }
   ]
 }

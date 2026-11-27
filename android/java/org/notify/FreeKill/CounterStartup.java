@@ -29,7 +29,7 @@ public final class CounterStartup {
     private CounterStartup() {}
     private static final String[] ORDER = {
         "card-counter/SkinSetting.qml", "card-counter/CardCounter.qml", "card-counter/SuitIcon.qml", "card-counter/RoleVoiceControl.qml", "card-counter/CounterHost.qml",
-        "card-counter/bootstrap.lua", "card-counter/counter.lua", "card-counter/CounterViewport.qml", "card-counter/EmbeddedPackGate.qml",
+        "card-counter/bootstrap.lua", "card-counter/counter.lua", "card-counter/LuckGoals.js", "card-counter/offline-generals/load.lua", "card-counter/offline-generals/lusu.lua", "card-counter/CounterViewport.qml", "card-counter/EmbeddedPackGate.qml",
         "card-counter/SocialClient.qml", "card-counter/SocialHost.qml", "card-counter/SocialAuth.js",
         "card-counter/known-hand.png", "card-counter/guanning/GuanNingActions.qml", "card-counter/guanning/GuanNingTrail.qml", "card-counter/guanning/GuanNingPreview.qml",
         "card-counter/NaishaLayer.qml", "card-counter/NaishaPortrait.qml", "card-counter/NaishaSkins.qml",

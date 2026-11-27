@@ -124,6 +124,23 @@ Item {
           text:"开启后，在允许刷牌的询问期间显示定向刷牌面板。"
           Layout.fillWidth:true;Layout.leftMargin:16;Layout.rightMargin:16;wrapMode:Text.Wrap
         }
+        ColumnLayout {
+          visible:"directionalLuckGoals" in features.owner && features.owner.directionalLuckEnabled
+          Layout.fillWidth:true;Layout.leftMargin:16;Layout.rightMargin:16
+          Label {text:"要刷的牌";font.bold:true}
+          ComboBox {
+            objectName:"directionalLuckGoalPreset";Layout.fillWidth:true
+            model:["选择常用目标…","诸葛连弩","丈八蛇矛","连弩或丈八","连弩＋两张杀","自定义"]
+            onActivated:{const values=["","诸葛连弩","丈八蛇矛","诸葛连弩/丈八蛇矛","诸葛连弩，杀:2"];if(currentIndex>0 && currentIndex<values.length)luckGoalInput.text=values[currentIndex];}
+          }
+          TextField {
+            id:luckGoalInput;objectName:"directionalLuckGoalInput";Layout.fillWidth:true;maximumLength:160
+            text:"directionalLuckGoals" in features.owner?features.owner.directionalLuckGoals:""
+            placeholderText:"例如：连弩，杀:2"
+          }
+          Label {Layout.fillWidth:true;wrapMode:Text.Wrap;text:"逗号：同时满足；斜杠 /：任选其一；牌名:数量。保存后，下次刷牌沿用此目标。"}
+          Button {objectName:"directionalLuckSaveGoals";text:"保存目标";onClicked:features.owner.setDirectionalLuckGoals(luckGoalInput.text)}
+        }
         Switch {
           objectName:"gameHapticsSwitch"
           visible: features.mobile
