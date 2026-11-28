@@ -413,7 +413,7 @@ static int transfer_progress_cb(const git_indexer_progress *stats,
       stats->indexed_deltas == stats->total_deltas;
   if (Backend != nullptr && progress.clock.isValid() && progress.clock.elapsed() < 100 &&
       !(complete && !progress.complete)) return 0;
-  progress.clock.restart();
+  progress.clock.start();
   progress.complete = complete;
   if (Backend == nullptr) {
     Q_UNUSED(payload);

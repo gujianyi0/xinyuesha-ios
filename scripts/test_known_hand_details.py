@@ -45,7 +45,7 @@ import QtQuick.Controls
 import Fk
 import Fk.Widgets as W
 Window{id:win;width:800;height:500;visible:true;color:"#263339"
- Item{id:scene;anchors.fill:parent;property string seenProps:"";property alias infoPopup:info;property var dataModel:({players:[{id:2,photoItem:photo},{id:3,photoItem:other}]})
+ Item{id:scene;anchors.fill:parent;property string seenProps:"";property alias infoPopup:info;property var extraPhotos:[];property var dataModel:({players:[{id:2,photoItem:photo},{id:3,photoItem:other}].concat(extraPhotos.map((p,i)=>({id:10+i,photoItem:p})))})
   Rectangle{id:photo;x:300;y:140;width:120;height:145;color:"#557766";clip:true;HandcardViewer{}}
   Rectangle{id:other;x:650;y:140;width:120;height:145;color:"#445588";clip:true;HandcardViewer{}}
   W.PopupItem{id:info;width:480;height:380;anchors.centerIn:parent}
@@ -63,6 +63,14 @@ Window{id:win;width:800;height:500;visible:true;color:"#263339"
  function stale(){host.openKnownHands([1,2,3,4],"2");}
  function close(){info.close();}
  function position(x){photo.x=x;host.syncKnownHandBadges();}
+ function crowd(){
+  photo.x=340;photo.y=200;other.visible=false;
+  const rects=[[0,190,335,165],[465,190,335,165],[0,0,800,195],[0,385,800,115]];
+  scene.extraPhotos=rects.map(r=>Qt.createQmlObject('import QtQuick;Rectangle{color:"#5f6570"}',scene));
+  scene.extraPhotos.forEach((p,i)=>{const r=rects[i];p.x=r[0];p.y=r[1];p.width=r[2];p.height=r[3];});
+  host.syncKnownHandBadges();
+ }
+ function geometry(){host.syncKnownHandBadges();return JSON.stringify({badges:host.knownHandBadges.filter(b=>b.visible).map(b=>({x:b.x,y:b.y,width:b.width,height:b.height,compact:b.placement.compact})),photos:scene.dataModel.players.filter(m=>m.photoItem.visible).map(m=>host.knownPhotoBounds(m.photoItem,scene))});}
  function leave(){host.currentScene=null;}
  function models(){const grid=info.item&&Array.from(info.item.children).find(c=>"cellWidth" in c);return JSON.stringify({count:grid?grid.count:-1,models:grid?Array.from(grid.contentItem.children).filter(c=>c.objectName==="cardDataFixture").map(c=>c.dataModel):[]});}
  function state(){const badge=host.knownHandBadges.find(b=>b.photo===photo);return JSON.stringify({open:info.visible,props:scene.seenProps,saved:host.knownHandPopupIds,item:String(info.item),popupName:info.item?info.item.name:"",rawIds:info.item?JSON.stringify(info.item.ids):"",idLength:info.item?info.item.ids.length:0,ids:info.item?Array.from(info.item.ids):[],cards:badge?badge.knownCards:[],rows:badge?badge.knownRows:[],badge:badge?{x:badge.x,y:badge.y,width:badge.width,height:badge.height}:null});}
@@ -93,7 +101,13 @@ Window{id:win;width:800;height:500;visible:true;color:"#263339"
   action('position',x);rect=state()['badge'];assert 0<=rect['x'] and rect['x']+rect['width']<=win.width() and 0<=rect['y'] and rect['y']+rect['height']<=win.height(),state()
   for px in [x,650]:
    assert not (rect['x']<px+120 and rect['x']+rect['width']>px and rect['y']<285 and rect['y']+rect['height']>140),state()
- click();assert state()['open'];action('leave');assert not state()['open'],state()
+ action('crowd');layout=json.loads(QMetaObject.invokeMethod(win,'geometry',Q_RETURN_ARG('QVariant')))
+ assert layout['badges'] and layout['badges'][0]['compact'],layout
+ for badge in layout['badges']:
+  for photo in layout['photos']:
+   assert not (badge['x']<photo['x']+photo['width'] and badge['x']+badge['width']>photo['x'] and badge['y']<photo['y']+photo['height'] and badge['y']+badge['height']>photo['y']),layout
+ for _ in range(10):assert json.loads(QMetaObject.invokeMethod(win,'geometry',Q_RETURN_ARG('QVariant')))==layout,'Placement must stabilize'
+ click(True);assert state()['open'];action('leave');assert not state()['open'],state()
  errors=[m for m in logs if any(s in m for s in ['TypeError','ReferenceError','Cannot assign','Unable to assign','Binding loop','Error:'])];assert not errors,errors
- report=dict(passed=True,qt=__import__('PySide6').__version__,actualBadgePopupAndViewPile=True,mouseAndTouchOpenFourExactCards=True,duplicateNamesKeepSuitAndNumber=True,uncertainAndOtherOwnerExcluded=True,openPopupExpiresOnMoves=True,edgePortraitsNotOverlapped=True,cardDataAndRenderingFixture=True,physicalDevice=False)
+ report=dict(passed=True,qt=__import__('PySide6').__version__,actualBadgePopupAndViewPile=True,mouseAndTouchOpenFourExactCards=True,duplicateNamesKeepSuitAndNumber=True,uncertainAndOtherOwnerExcluded=True,openPopupExpiresOnMoves=True,edgePortraitsNotOverlapped=True,crowdedTableCompactAndClickable=True,placementStable=True,cardDataAndRenderingFixture=True,physicalDevice=False)
  (a.output/'result.json').write_text(json.dumps(report,indent=2),'utf8');print(json.dumps(report));win.close()
