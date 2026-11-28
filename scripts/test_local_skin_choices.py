@@ -12,7 +12,8 @@ with tempfile.TemporaryDirectory(dir=a.output) as tmp:
  d=Path(tmp)
  def put(name,value):
   path=d/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(value,'utf8')
- put('Fk/qmldir','module Fk\n'+''.join('singleton '+n+' 1.0 '+n+'.qml\n' for n in ['Config','Lua']))
+ put('Fk/qmldir','module Fk\n'+''.join('singleton '+n+' 1.0 '+n+'.qml\n' for n in ['Config','Lua','Backend']))
+ put('Fk/Backend.qml','pragma Singleton\nimport QtQuick\nQtObject{property string saved:"{}";property bool fail:false;function readFileFromAssets(p){return saved;}function writeFileToAssets(p,s){if(fail)return false;saved=s;return true;}}')
  put('Fk/Config.qml','pragma Singleton\nimport QtQuick\nQtObject{property var enabledSkins:({});property bool banChangeSkin:false;property string saved:"";function saveConf(){saved=JSON.stringify(enabledSkins);}}')
  put('Fk/Lua.qml',r'''pragma Singleton
 import QtQuick
@@ -48,11 +49,14 @@ Window{id:win;width:800;height:500;visible:true
  function variantId(g){variant.general=g;manager.sync();}
  function ban(value){Config.banChangeSkin=value;manager.sync();}
  function serverSkin(value){enemy.serverSkin=value;}
- function clear(){Config.enabledSkins=({});manager.sync();}
+ function clear(){Config.enabledSkins=({});manager.localChoices=({});manager.sync();}
  function leave(){owner.currentScene=null;}
  function enter(){owner.currentScene=scene;}
  function open(){manager.openSettings();}
  function pickerSelect(){manager.saveSelection(false);}
+ function serverPreferences(){Config.enabledSkins=({lingju:"portraitB"});manager.sync();}
+ function reloadSaved(){manager.localChoices=({});manager.readChoices();manager.sync();}
+ function failSave(){Backend.fail=true;}
  function snapshot(){manager.sync();return JSON.stringify({skins:[self,enemy,variant,god,other].map(p=>({general:p.general,renderGeneral:p.area.general,skin:p.area.skinName})),choices:Config.enabledSkins,saved:Config.saved,targets:manager.targets,available:manager.availableSkins});}
 }''')
  engine=QQmlApplicationEngine();engine.addImportPath(str(d));engine.load(QUrl.fromLocalFile(str(d/'Main.qml')));assert engine.rootObjects(),logs;win=engine.rootObjects()[0]
@@ -72,10 +76,13 @@ Window{id:win;width:800;height:500;visible:true
  act('ban',False);assert state()['skins'][1]['skin']=='portraitA'
  act('open');s=state();assert len(s['available'])==2 and any(t['id']=='ol__lingju' for t in s['targets']),s
  act('pickerSelect');assert json.loads(state()['saved'])['lingju']=='portraitA'
+ act('serverPreferences');assert state()['skins'][1]['skin']=='portraitA','Server preference broadcasts must not erase local choices'
+ act('reloadSaved');assert state()['skins'][1]['skin']=='portraitA','Local file must restore the saved choice'
+ before=state()['choices'];act('failSave');act('pickerSelect');assert state()['choices']==before
  win.grabWindow().save(str(a.output/'in-game-picker.png'))
  act('leave');pump();assert state()['skins'][1]['skin']=='newServerSkin'
  act('enter');pump();assert state()['skins'][1]['skin']=='portraitA'
  act('clear');assert state()['skins'][1]['skin']=='newServerSkin' and state()['skins'][2]['renderGeneral']=='ol__lingju'
  errors=[m for m in logs if any(s in m for s in ['TypeError','ReferenceError','Binding loop','Cannot assign','Unable to assign','non-existent'])];assert not errors,errors
- report=dict(passed=True,sameNameEnemyInherits=True,taggedVariants=['OL','mobile','international'],stockBindingsRestored=True,explicitVersionChoice=True,transientMissingRegistryRecovers=True,normalDivineSeparated=True,inGamePickerSaved=True,fixtureRegistry=True,physicalDevice=False)
+ report=dict(passed=True,sameNameEnemyInherits=True,taggedVariants=['OL','mobile','international'],stockBindingsRestored=True,explicitVersionChoice=True,transientMissingRegistryRecovers=True,normalDivineSeparated=True,inGamePickerSaved=True,savedFileReloadsAndSurvivesServerPreferenceUpdates=True,failedSavePreservesChoice=True,fixtureRegistry=True,physicalDevice=False)
  (a.output/'result.json').write_text(json.dumps(report,indent=2),'utf8');print(json.dumps(report));win.close()

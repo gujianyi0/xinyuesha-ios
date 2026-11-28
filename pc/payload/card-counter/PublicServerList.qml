@@ -7,7 +7,7 @@ Item {
   required property var page
   property var request: null
   property int endpoint: 0
-  readonly property var urls: [
+  property var urls: [
     "https://cdn.jsdelivr.net/gh/Qsgs-Fans/freekill-server-list@master/server-list.json",
     "https://raw.githubusercontent.com/Qsgs-Fans/freekill-server-list/master/server-list.json"
   ]

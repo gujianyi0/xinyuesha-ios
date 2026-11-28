@@ -15,6 +15,16 @@ Item {
   property var states: []
   property var targets: []
   property var availableSkins: []
+  property var localChoices: ({})
+  property bool preferencesReadable: true
+  property string error:""
+  function readChoices() {
+    try {
+      const data=JSON.parse(Backend.readFileFromAssets("local-skin-choices.json") || "{}");
+      if(!data || typeof data!=="object" || Array.isArray(data))throw Error("Invalid choices");
+      localChoices=data;preferencesReadable=true;
+    }catch(_){preferencesReadable=false;error="皮肤选择读取失败，原文件已保留";}
+  }
   function identity(general) {
     if(identities[general])return identities[general];
     let info=null;
@@ -35,7 +45,7 @@ Item {
     return rows;
   }
   function choice(general) {
-    const choices=Config.enabledSkins || {};
+    const choices=Object.assign({},Config.enabledSkins || {},localChoices);
     // An explicit per-version selection takes precedence over inheritance.
     const keys=Object.prototype.hasOwnProperty.call(choices,general)?[general]:Object.keys(choices);
     for(const saved of keys) {
@@ -108,6 +118,7 @@ Item {
   Connections {target:Config;ignoreUnknownSignals:true;function onBanChangeSkinChanged(){manager.sync();}function onEnabledSkinsChanged(){manager.sync();}}
   onSceneChanged:{release();identities=({});registrations=null;Qt.callLater(sync);if(picker.visible)picker.close();}
   Component.onDestruction:release()
+  Component.onCompleted:{readChoices();Qt.callLater(sync);}
   Timer {interval:800;repeat:true;running:!!manager.scene && manager.scene.visible;onTriggered:manager.sync()}
   function openSettings() {
     const ids=new Set();
@@ -132,14 +143,16 @@ Item {
     if(saved){const index=rows.findIndex(row=>row.name===saved.name);if(index>=0)skins.currentIndex=index;}
   }
   function saveSelection(clear) {
-    if(target.currentIndex<0)return;
+    if(!preferencesReadable || target.currentIndex<0)return false;
     const general=targets[target.currentIndex].id,selected=skins.currentIndex>=0?availableSkins[skins.currentIndex]:null;
-    if(!clear && !selected)return;
+    if(!clear && !selected)return false;
     const next=Object.assign({},Config.enabledSkins || {});
     // Only save this version's choice. No network notification or remote model
     // is changed; other versions retain their explicit selections.
     next[general]=clear?"":selected.name;
-    Config.enabledSkins=next;Config.saveConf();sync();
+    const saved=Object.assign({},localChoices);saved[general]=next[general];
+    if(!Backend.writeFileToAssets("local-skin-choices.json",JSON.stringify(saved))){error="保存失败，未更改选择";return false;}
+    localChoices=saved;error="";Config.enabledSkins=next;Config.saveConf();sync();return true;
   }
   Button {
     objectName:"localInGameSkinButton"
@@ -156,6 +169,10 @@ Item {
     ColumnLayout {
       anchors.fill:parent
       RowLayout {Layout.fillWidth:true;Label{text:"局内换皮";font.pixelSize:22;Layout.fillWidth:true}Button{text:"关闭";onClicked:picker.close()}}
+      ScrollView {
+        id:controls;objectName:"localSkinControls";Layout.fillWidth:true;Layout.fillHeight:true;Layout.minimumHeight:0;clip:true;contentWidth:availableWidth
+        ScrollBar.horizontal.policy:ScrollBar.AlwaysOff
+        ColumnLayout {width:controls.availableWidth
       Label {text:"手动选择并保存，只影响本机显示；同名敌方沿用本机选择。";Layout.fillWidth:true;wrapMode:Text.Wrap}
       ComboBox {id:target;objectName:"localSkinGeneralChoice";model:manager.targets;textRole:"label";Layout.fillWidth:true;onActivated:manager.updateSkins()}
       ComboBox {id:skins;objectName:"localSkinChoice";model:manager.availableSkins;textRole:"label";Layout.fillWidth:true}
@@ -165,7 +182,9 @@ Item {
         Button {text:"恢复服务器显示";enabled:target.currentIndex>=0;onClicked:manager.saveSelection(true)}
       }
       Button {text:"奶杀动皮";onClicked:{picker.close();owner.openNaishaSettings();}}
-      Item {Layout.fillHeight:true}
+      Label {text:manager.error;color:"#d0644c";wrapMode:Text.Wrap;Layout.fillWidth:true}
+        }
+      }
     }
   }
 }

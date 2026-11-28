@@ -2,10 +2,15 @@
 package org.notify.FreeKill;
 
 import android.app.Activity;
+import android.app.ActivityManager;
+import android.app.ApplicationExitInfo;
 import android.content.Context;
+import android.os.Build;
 import android.system.Os;
+import android.system.OsConstants;
 import android.util.Log;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -63,6 +68,7 @@ public final class CounterStartup {
             File internal = context.getFilesDir();
             if (internal != null) roots.add(internal.getCanonicalFile());
             if (roots.isEmpty()) throw new IOException("External files unavailable");
+            for (File root : roots) recordExitHistory(context, root, sha(manifest.toString().getBytes("UTF-8")));
             int updated = 0;
             for (File root : roots) {
                 if (!root.isDirectory() && !root.mkdirs()) {
@@ -110,6 +116,32 @@ public final class CounterStartup {
         } catch (Exception error) {
             Log.e("CounterStartup", "UI update stopped; account and game packages retained", error);
         }
+    }
+    private static void recordExitHistory(Context context, File root, String payload) {
+        // Local metadata only: no account, chat, network credentials or memory
+        // dump. A reported update crash can later be distinguished from an OS
+        // low-memory kill without asking players to reproduce it indefinitely.
+        if (Build.VERSION.SDK_INT < 30) return;
+        try {
+            ActivityManager activity = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+            if (activity == null) return;
+            JSONArray exits = new JSONArray();
+            for (ApplicationExitInfo exit : activity.getHistoricalProcessExitReasons(context.getPackageName(), 0, 8))
+                exits.put(new JSONObject().put("time", exit.getTimestamp()).put("reason", exit.getReason())
+                    .put("status", exit.getStatus()).put("pssKiB", exit.getPss()).put("rssKiB", exit.getRss()));
+            JSONObject data = new JSONObject().put("schema", 1).put("sdk", Build.VERSION.SDK_INT)
+                .put("model", Build.MANUFACTURER + " " + Build.MODEL).put("pageSize", Os.sysconf(OsConstants._SC_PAGESIZE))
+                .put("memoryClassMiB", activity.getMemoryClass()).put("lowRam", activity.isLowRamDevice())
+                .put("payload", payload).put("exits", exits);
+            File directory = new File(root, "assets/diagnostics");
+            if (!directory.getCanonicalFile().equals(directory.getAbsoluteFile()) || Files.isSymbolicLink(directory.toPath())) return;
+            if (!directory.isDirectory() && !directory.mkdirs()) return;
+            File target = new File(directory, "android-exit-history.json"), stage = new File(directory, "android-exit-history.json.new");
+            for (File file : new File[]{target, stage})
+                if (!file.getCanonicalFile().equals(file.getAbsoluteFile()) || Files.isSymbolicLink(file.toPath())) return;
+            try (FileOutputStream output = new FileOutputStream(stage)) { output.write(data.toString().getBytes("UTF-8")); output.getFD().sync(); }
+            Os.rename(stage.getAbsolutePath(), target.getAbsolutePath());
+        } catch (Exception error) { Log.w("CounterStartup", "Exit diagnostics unavailable; continuing startup"); }
     }
     private static byte[] read(InputStream input) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();

@@ -106,6 +106,7 @@ jobs:
           python3 scripts/test_resource_pack_client.py --payload '${{ matrix.payload }}' --output "$RUNNER_TEMP/resource-pack-client"
           python3 scripts/test_naisha.py --payload '${{ matrix.payload }}' --output "$RUNNER_TEMP/naisha-ui"
           python3 scripts/test_local_skin_choices.py --payload '${{ matrix.payload }}' --output "$RUNNER_TEMP/local-skin-choices"
+          python3 scripts/test_public_server_list.py --payload '${{ matrix.payload }}' --output "$RUNNER_TEMP/public-server-list"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

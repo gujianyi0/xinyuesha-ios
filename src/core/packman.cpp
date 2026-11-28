@@ -17,6 +17,17 @@ static QString gitFailureMessage(int code) {
     : QString("Git operation failed (%1)").arg(code);
 }
 
+static bool gitOptionsMatchHeaders() {
+  int major = 0, minor = 0, revision = 0;
+  git_libgit2_version(&major, &minor, &revision);
+  // libgit2 has grown nested option/callback structs between minor releases
+  // while retaining the same options version number. In particular the stock
+  // Windows DLL is 1.5.1 and the build headers are 1.9.0. Never write a callback
+  // at a newer offset into an older runtime's options. nullptr asks that
+  // runtime to allocate and initialize its own defaults, including TLS checks.
+  return major == LIBGIT2_VERSION_MAJOR && minor == LIBGIT2_VERSION_MINOR;
+}
+
 PackMan::PackMan(QObject *parent) : QObject(parent) {
   git_libgit2_init();
   db = std::make_unique<Sqlite3>("./packages/packages.db", "./packages/init.sql");
@@ -461,10 +472,12 @@ int PackMan::clone(const QString &u, GitRepo &repo) {
 
   git_repository *raw = nullptr;
   git_clone_options opt;
-  git_clone_init_options(&opt, GIT_CLONE_OPTIONS_VERSION);
-  opt.fetch_opts.proxy_opts.version = 1;
-  opt.fetch_opts.callbacks.transfer_progress = transfer_progress_cb;
-  int err = git_clone(&raw, u.toUtf8(), clonePath.toUtf8(), &opt);
+  const bool typedOptions = gitOptionsMatchHeaders();
+  if (typedOptions) {
+    git_clone_init_options(&opt, GIT_CLONE_OPTIONS_VERSION);
+    opt.fetch_opts.callbacks.transfer_progress = transfer_progress_cb;
+  }
+  int err = git_clone(&raw, u.toUtf8(), clonePath.toUtf8(), typedOptions ? &opt : nullptr);
   if (err < 0) {
     QDir(clonePath).removeRecursively();
     GIT_FAIL;
@@ -481,9 +494,11 @@ int PackMan::pull(git_repository *repo) {
   int err;
   git_remote *remote = NULL;
   git_fetch_options opt;
-  git_fetch_init_options(&opt, GIT_FETCH_OPTIONS_VERSION);
-  opt.proxy_opts.version = 1;
-  opt.callbacks.transfer_progress = transfer_progress_cb;
+  const bool typedOptions = gitOptionsMatchHeaders();
+  if (typedOptions) {
+    git_fetch_init_options(&opt, GIT_FETCH_OPTIONS_VERSION);
+    opt.callbacks.transfer_progress = transfer_progress_cb;
+  }
 
   git_checkout_options opt2 = GIT_CHECKOUT_OPTIONS_INIT;
   opt2.checkout_strategy = GIT_CHECKOUT_FORCE;
@@ -492,7 +507,7 @@ int PackMan::pull(git_repository *repo) {
   err = git_remote_lookup(&remote, repo, "origin");
   GIT_CHK_CLEAN;
 
-  err = git_remote_fetch(remote, NULL, &opt, NULL);
+  err = git_remote_fetch(remote, NULL, typedOptions ? &opt : nullptr, NULL);
   GIT_CHK_CLEAN;
 
   // then git checkout FETCH_HEAD

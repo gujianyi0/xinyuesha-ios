@@ -32,7 +32,7 @@
   "card-counter/offline-generals/load.lua": "fc95a3c1e24efe62273515e32a19b3c4e58dbd9caf61d5c271ed566c7705845e",
   "card-counter/offline-generals/lusu.lua": "64e0805f78af61791a6a880d49f2be8ac3cfb5f257eebb0541713ade79433568",
   "card-counter/resource-catalog.json": "934e253fcf8a75963dc5442f9e6c3f6547812114fb786b90486195dd19605f8b",
-  "card-counter/PublicServerList.qml": "d89dfbab7a1d1a3db1f57083d43df1dbaf9e6e64ddd416a4c294ba784b159621",
-  "card-counter/LocalSkinChoices.qml": "465a3d4cf8db0ea644247c8a3b8aeb7ef7a6ab3db93bab77eb6b04b9f2d79e2b",
+  "card-counter/PublicServerList.qml": "b38d4a63251806db50684bf41dff673919c0d00a3e2a482b5c83c8c157c08feb",
+  "card-counter/LocalSkinChoices.qml": "989df7cc36ac7840fa4434563c94dbb0ed512e0e0e3bbeb2bb0705a27939b14e",
   "card-counter/public-servers.json": "9f7fc995bf7bfe1a7ac60f5f076e18842873e98cd7bece7ab329a6deb86cf6e8"
 }
