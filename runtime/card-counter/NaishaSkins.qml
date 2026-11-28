@@ -27,6 +27,9 @@ Item {
     if (Object.prototype.hasOwnProperty.call(identities,general)) return identities[general];
     let info=null;
     try {info=Lua.ev('(function() local g=Fk.generals['+JSON.stringify(general)+']; if not g then return nil end return {name=g.name,trueName=g.trueName,kingdom=g.kingdom,label=Fk:translate(g.name),base=Fk:translate(g.trueName)} end)()');} catch (_) {}
+    // Startup/reconnect may return an empty QVariantMap before the client VM
+    // has its generals. Never turn that transient result into a permanent miss.
+    if(!info || typeof info.name!=="string" || typeof info.trueName!=="string" || !info.trueName || typeof info.kingdom!=="string")return null;
     identities[general]=info;return info;
   }
   function matches(general,skin) {
@@ -36,8 +39,9 @@ Item {
     if((info.kingdom==="god")!==divine)return false;
     const source=identity(skin.sourceGeneral);
     if(source && info.trueName===source.trueName && (source.kingdom==="god")===divine)return true;
+    const baseCharacter=divine?character.slice(1):character;
     return general===skin.sourceGeneral || plain(info.label)===character ||
-      plain(info.base)===(divine?character.slice(1):character);
+      plain(info.base)===baseCharacter;
   }
   function selectedSkin(general) {
     // Explicit restoration overrides a family choice. Older per-ID files stay valid.
@@ -80,7 +84,7 @@ Item {
     } catch (_) {error="动皮选择读取失败，原文件已保留";}
   }
   function reload() {
-    release(); catalog=[];loaded=false;
+    release(); catalog=[];loaded=false;identities=({});
     if (!(Config.enabledResourcePacks || []).includes(packId) || typeof Backend.readJsonObjectFromFile!=="function") return;
     const data=Backend.readJsonObjectFromFile(dataPath+"catalog.json");
     if (data && data.schema===1 && data.skins && data.id===packId) {
@@ -97,7 +101,7 @@ Item {
     const next=Object.assign({},choices);
     next[general]=skin?skin.id:"";
     if (!Backend.writeFileToAssets("naisha-skins.json",JSON.stringify(next))) {error="保存失败，未更改选择";return false;}
-    choices=next;error="";sync();return true;
+    choices=next;error="";if(typeof owner.refreshLocalSkins==="function")owner.refreshLocalSkins();sync();return true;
   }
   function release() {
     for (const state of states) releaseState(state);
@@ -209,7 +213,7 @@ Item {
   Button {
     objectName:"naishaInGameSkinButton"
     parent:manager.scene || manager
-    visible:!!manager.scene && manager.scene.visible && manager.loaded && !Config.banChangeSkin
+    visible:!!manager.scene && manager.scene.visible && manager.loaded && !Config.banChangeSkin && typeof owner.openLocalSkinSettings!=="function"
     text:"局内换皮";width:96;height:40;z:101
     x:parent ? Math.max(4,parent.width-width-176) : 0;y:8
     onClicked:manager.openSettings()

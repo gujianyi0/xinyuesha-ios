@@ -90,7 +90,9 @@ Window{id:win;width:800;height:500;visible:true;color:"#263339"
  win.grabWindow().save(str(a.output/'expanded-cards.png'));action('reduce');assert state()['ids']==[3,4],state();action('expire');assert not state()['open'],state()
  action('stale');assert not state()['open'],state();action('update',rows);click(True);assert state()['open'] and state()['ids']==[1,2,3,4],(state(),logs);action('close')
  for x in [0,55,300,680]:
-  action('position',x);rect=state()['badge'];assert 0<=rect['x'] and rect['x']+rect['width']<=win.width() and (rect['x']+rect['width']<=x or rect['x']>=x+120),state()
+  action('position',x);rect=state()['badge'];assert 0<=rect['x'] and rect['x']+rect['width']<=win.width() and 0<=rect['y'] and rect['y']+rect['height']<=win.height(),state()
+  for px in [x,650]:
+   assert not (rect['x']<px+120 and rect['x']+rect['width']>px and rect['y']<285 and rect['y']+rect['height']>140),state()
  click();assert state()['open'];action('leave');assert not state()['open'],state()
  errors=[m for m in logs if any(s in m for s in ['TypeError','ReferenceError','Cannot assign','Unable to assign','Binding loop','Error:'])];assert not errors,errors
  report=dict(passed=True,qt=__import__('PySide6').__version__,actualBadgePopupAndViewPile=True,mouseAndTouchOpenFourExactCards=True,duplicateNamesKeepSuitAndNumber=True,uncertainAndOtherOwnerExcluded=True,openPopupExpiresOnMoves=True,edgePortraitsNotOverlapped=True,cardDataAndRenderingFixture=True,physicalDevice=False)

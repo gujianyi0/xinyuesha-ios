@@ -3,12 +3,19 @@
 #include <git2.h>
 #include <git2/errors.h>
 #include <algorithm>
+#include <QElapsedTimer>
 #include "core/packman.h"
 #include "core/c-wrapper.h"
 #include "core/util.h"
 #include "ui/qmlbackend.h"
 
 PackMan *Pacman = nullptr;
+
+static QString gitFailureMessage(int code) {
+  const git_error *error = git_error_last();
+  return error && error->message ? QString::fromUtf8(error->message)
+    : QString("Git operation failed (%1)").arg(code);
+}
 
 PackMan::PackMan(QObject *parent) : QObject(parent) {
   git_libgit2_init();
@@ -91,8 +98,7 @@ void PackMan::loadSummary(const QString &jsonData, bool useThread) {
 #ifndef FK_SERVER_ONLY
           QString msg;
           if (err != 100) {
-            auto error = git_error_last();
-            msg = QString("Error: %1").arg(error->message);
+            msg = QString("Error: %1").arg(gitFailureMessage(err));
           } else {
             msg = "Workspace is dirty.";
           }
@@ -111,8 +117,7 @@ void PackMan::loadSummary(const QString &jsonData, bool useThread) {
 #ifndef FK_SERVER_ONLY
           QString msg;
           if (err != 100) {
-            auto error = git_error_last();
-            msg = QString("Error: %1").arg(error->message);
+            msg = QString("Error: %1").arg(gitFailureMessage(err));
           } else {
             msg = "Workspace is dirty.";
           }
@@ -129,13 +134,13 @@ void PackMan::loadSummary(const QString &jsonData, bool useThread) {
   };
   if (useThread) {
     auto thread = QThread::create(f);
-    thread->start();
     connect(thread, &QThread::finished, [=]() {
       thread->deleteLater();
 #ifndef FK_SERVER_ONLY
       Backend->notifyUI("DownloadComplete", "");
 #endif
     });
+    thread->start();
   } else {
     f();
   }
@@ -167,13 +172,13 @@ int PackMan::downloadNewPack(const QString &url, bool useThread) {
   };
   if (useThread) {
     auto thread = QThread::create(threadFunc);
-    thread->start();
     connect(thread, &QThread::finished, [=]() {
       thread->deleteLater();
 #ifndef FK_SERVER_ONLY
       Backend->notifyUI("DownloadComplete", "");
 #endif
     });
+    thread->start();
     return 0;
   } else {
     return threadFunc();
@@ -375,9 +380,8 @@ bool PackMan::shouldUseCore() {
   return ret;
 }
 
-#define GIT_FAIL                                                               \
-  const git_error *e = git_error_last();                                       \
-  qCritical("Error %d/%d: %s\n", err, e->klass, e->message)
+#define GIT_FAIL \
+  qCritical().noquote() << QString("Git error %1: %2").arg(err).arg(gitFailureMessage(err))
 
 #define GIT_CHK_CLEAN  \
   if (err < 0) {     \
@@ -399,6 +403,18 @@ int PackMan::open(const QString &name, GitRepo &repo) {
 
 static int transfer_progress_cb(const git_indexer_progress *stats,
                                 void *payload) {
+  // libgit2 calls this per object/delta. A queued QJson event for each object
+  // can grow without bound on a slower phone while the render thread is busy.
+  // Limit UI updates, while always delivering a changed completed snapshot.
+  struct ProgressClock { QElapsedTimer clock; bool complete = false; };
+  static thread_local ProgressClock progress;
+  const bool complete = stats->received_objects == stats->total_objects &&
+      stats->indexed_objects == stats->total_objects &&
+      stats->indexed_deltas == stats->total_deltas;
+  if (Backend != nullptr && progress.clock.isValid() && progress.clock.elapsed() < 100 &&
+      !(complete && !progress.complete)) return 0;
+  progress.clock.restart();
+  progress.complete = complete;
   if (Backend == nullptr) {
     Q_UNUSED(payload);
     if (stats->received_objects == stats->total_objects) {

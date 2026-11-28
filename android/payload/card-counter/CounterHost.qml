@@ -17,6 +17,12 @@ Item {
   ResourcePackClient {id:resourcePackClient;owner:host}
   readonly property var resourcePackDownloads:resourcePackClient
   NaishaSkins {id:naishaSkins;owner:host}
+  LocalSkinChoices {id:localSkinChoices;owner:host}
+  function openLocalSkinSettings(){localSkinChoices.openSettings();}
+  function hasNaishaSkin(general){return !!naishaSkins.selectedSkin(general);}
+  function refreshLocalSkins(){localSkinChoices.sync();}
+  Component {id:publicServersComponent;PublicServerList{}}
+  property var publicServerPages: []
   function openNaishaSettings() {naishaSkins.openSettings();}
   property var currentScene: null
   property string revealFocusSkill: ""
@@ -495,6 +501,9 @@ Item {
       property var knownIds: []
       property var knownRows: []
       property string ownerKey: ""
+      property var placement: ({x:0,y:0,compact:false,valid:false})
+      readonly property real normalHeight: Math.min(photoBounds.height,cardNames.implicitHeight+10)
+      onNormalHeightChanged:Qt.callLater(syncPosition)
       readonly property var stockViewer: photo && Array.from(photo.children || []).find(
         item => String(item).indexOf("HandcardViewer_QMLTYPE") === 0) || null
       // Reuse the native viewer's appearance and full-card popup, without
@@ -513,24 +522,22 @@ Item {
         // mapToItem() does not establish a QML binding on the photo's x/y.
         // Refresh after layout changes and the normal knowledge update.
         if (!host.currentScene || !photo) return;
-        const top = photo.mapToItem(host.currentScene, 0, 0);
-        const bottom = photo.mapToItem(host.currentScene, photo.width, photo.height);
-        photoBounds = Qt.rect(Math.min(top.x, bottom.x), Math.min(top.y, bottom.y),
-          Math.abs(bottom.x-top.x), Math.abs(bottom.y-top.y));
+        photoBounds=host.knownPhotoBounds(photo,host.currentScene);
+        const next=host.placeKnownHandBadge(badge,photoBounds,normalHeight);
+        if(JSON.stringify(placement)!==JSON.stringify(next))placement=next;
       }
-      width: 54
-      height: Math.min(photoBounds.height, cardNames.implicitHeight + 10)
+      width: placement.compact ? 72 : 54
+      height: placement.compact ? 28 : normalHeight
       radius: 6
       z: 20
       color: "#CC2E2C27"
       border.color: "#A6967A"
-      visible: knownCount > 0 && photo && photo.visible && !!host.currentScene && host.currentScene.visible
+      visible: placement.valid && knownCount > 0 && photo && photo.visible && !!host.currentScene && host.currentScene.visible
       opacity: photo ? photo.opacity : 1
       // Keep the side list in table coordinates, outside portrait transforms
       // and clipping. It must not become part of the skin image itself.
-      x: Math.max(0, Math.min(parent.width-width,
-        rightSide ? photoBounds.x+photoBounds.width+5 : photoBounds.x-width-5))
-      y: photoBounds.y + (photoBounds.height-height) / 2
+      x:placement.x
+      y:placement.y
       Component.onCompleted: syncPosition()
       Connections {
         target: badge.photo
@@ -541,6 +548,7 @@ Item {
         function onScaleChanged() { badge.syncPosition(); }
       }
       Flickable {
+        visible:!badge.placement.compact
         anchors.fill: parent
         anchors.margins: 5
         clip: true
@@ -579,11 +587,47 @@ Item {
           }
         }
       }
+      Text {
+        anchors.fill:parent;anchors.margins:3;visible:badge.placement.compact
+        text:Array.from(Lua.tr(String(badge.photo.general || "明牌"))).slice(0,2).join("")+"·"+badge.knownCount
+        color:"#E4D5A0";font.pixelSize:12;elide:Text.ElideRight
+        horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter
+      }
       W.TapHandler {
         enabled: badge.knownIds.length > 0
         onTapped: host.openKnownHands(badge.knownIds,badge.ownerKey)
       }
     }
+  }
+  function knownPhotoBounds(photo,scene) {
+    const p=[photo.mapToItem(scene,0,0),photo.mapToItem(scene,photo.width,0),photo.mapToItem(scene,0,photo.height),photo.mapToItem(scene,photo.width,photo.height)];
+    const x=Math.min(...p.map(v=>v.x)),y=Math.min(...p.map(v=>v.y));
+    return Qt.rect(x,y,Math.max(...p.map(v=>v.x))-x,Math.max(...p.map(v=>v.y))-y);
+  }
+  function placeKnownHandBadge(badge,owner,h) {
+    const scene=currentScene,obstacles=[];
+    if(!scene)return {x:0,y:0,compact:false,valid:false};
+    for(const model of Array.from(scene.dataModel && scene.dataModel.players || [])) {
+      const photo=model && model.photoItem;
+      if(photo && photo.visible)obstacles.push(knownPhotoBounds(photo,scene));
+    }
+    for(const other of knownHandBadges)if(other!==badge && other.visible)obstacles.push(Qt.rect(other.x,other.y,other.width,other.height));
+    function free(x,y,w,height) {
+      return x>=2 && y>=2 && x+w<=scene.width-2 && y+height<=scene.height-2 &&
+        !obstacles.some(r=>x<r.x+r.width+3 && x+w>r.x-3 && y<r.y+r.height+3 && y+height>r.y-3);
+    }
+    for(const compact of [false,true]) {
+      const w=compact?72:54,height=compact?28:Math.max(1,h),cy=owner.y+(owner.height-height)/2;
+      const points=[[owner.x-w-5,cy],[owner.x+owner.width+5,cy],[owner.x+(owner.width-w)/2,owner.y-height-5],[owner.x+(owner.width-w)/2,owner.y+owner.height+5]];
+      for(const p of points)if(free(p[0],p[1],w,height))return {x:p[0],y:p[1],compact:compact,valid:true};
+    }
+    let best=null,distance=Infinity;
+    for(let y=2;y+28<=scene.height-2;y+=24)for(let x=2;x+72<=scene.width-2;x+=24) {
+      if(!free(x,y,72,28))continue;
+      const d=Math.pow(x+36-owner.x-owner.width/2,2)+Math.pow(y+14-owner.y-owner.height/2,2);
+      if(d<distance){distance=d;best={x:x,y:y,compact:true,valid:true};}
+    }
+    return best || {x:0,y:0,compact:true,valid:false};
   }
   function knownHandKey(model) {
     if (!model) return "";
@@ -1212,9 +1256,13 @@ Item {
       seen.add(item);
       if ("model" in item) host.prepareSkinMenu(item.model);
       const type = String(item);
+      if ("selectedServer" in item && "serverListUrl" in item && typeof item.appendServers==="function" && publicServerPages.indexOf(item)<0) {
+        publicServerPages=publicServerPages.filter(p=>p && p.parent);
+        if(publicServersComponent.createObject(item,{page:item}))publicServerPages.push(item);
+      }
       if (type.indexOf("ChatBox_QMLTYPE") === 0 || type.indexOf("AvatarChatBox_QMLTYPE") === 0) feedbackFeatures.adaptChat(item);
       if (type.indexOf("EditProfile_QMLTYPE") === 0) host.adaptFunctionSettings(item);
-      if (ios && type.indexOf("SwipeView_QMLTYPE") === 0) host.adaptRoomDrawerSwipe(item);
+      if (type.indexOf("SwipeView_QMLTYPE") === 0) host.adaptRoomDrawerSwipe(item);
       if (type.indexOf("PlayerDetail_QMLTYPE") === 0) host.adaptPlayerDetail(item);
       if (type.indexOf("AvatarChatBox_QMLTYPE") === 0 && typeof item.loadSkills === "function")
         host.attachRoleVoices(item);
